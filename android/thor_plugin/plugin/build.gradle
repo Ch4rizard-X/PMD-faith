@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.library"
+}
+
+// Must match the Godot editor / export templates used to export the game.
+def godotVersion = "4.7.2.stable"
+def pluginName = "ThorScreen"
+def addonBin = file("../../../game/addons/thor_screen/bin")
+
+android {
+    namespace "com.fadhel.thorscreen"
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 21
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildFeatures {
+        buildConfig false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    // Provided by the Godot app at runtime; only needed to compile.
+    compileOnly "org.godotengine:godot:$godotVersion"
+}
+
+// Build both AARs and copy them where res://addons/thor_screen/plugin.gd expects them:
+//   game/addons/thor_screen/bin/debug/ThorScreen-debug.aar
+//   game/addons/thor_screen/bin/release/ThorScreen-release.aar
+tasks.register("copyDebugAARToAddon", Copy) {
+    dependsOn "assembleDebug"
+    from layout.buildDirectory.file("outputs/aar/plugin-debug.aar")
+    into new File(addonBin, "debug")
+    rename { "${pluginName}-debug.aar" }
+}
+tasks.register("copyReleaseAARToAddon", Copy) {
+    dependsOn "assembleRelease"
+    from layout.buildDirectory.file("outputs/aar/plugin-release.aar")
+    into new File(addonBin, "release")
+    rename { "${pluginName}-release.aar" }
+}
+tasks.register("copyAARsToAddon") {
+    dependsOn "copyDebugAARToAddon", "copyReleaseAARToAddon"
+}

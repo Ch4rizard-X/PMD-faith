@@ -1,0 +1,5 @@
+// ThorScreen: Godot 4 (v2) Android plugin that shows the game's second-screen picture on a secondary
+// display (AYN Thor bottom screen) with android.app.Presentation and sends its touches back to Godot.
+plugins {
+    id "com.android.library" version "8.6.1" apply false
+}

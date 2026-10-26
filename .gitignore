@@ -1,0 +1,32 @@
+# Game assets and data are built locally from your own ROMs; never commit them.
+game/assets/
+game/data/
+game/icon.png
+game/base_*.png
+*.nds
+*.gba
+*.sav
+
+# Godot
+.godot/
+game/.godot/
+game/android/
+game/build/
+*.import
+export_credentials.cfg
+
+# Android plugin build output
+android/thor_plugin/build/
+android/thor_plugin/plugin/build/
+android/thor_plugin/.gradle/
+android/thor_plugin/local.properties
+game/addons/thor_screen/bin/
+jdk21/
+
+# Python
+__pycache__/
+*.pyc
+
+# Build logs
+build_thor_log.txt
+build_log_*.txt
