@@ -3,6 +3,29 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.28 (27 Oct 2026): DX recruiting, smarter partners
+
+**Recruiting**
+- New Game Options setting **Recruiting: DX / Red** (DX by default), from *Rescue Team DX*:
+  - The leader can recruit with the final hit from up to 2 tiles away; the recruit rate is Red's.
+  - A defeated Pokémon joins for this dungeon only, up to 8 team members, and doesn't need its Friend Area yet. Like in DX, temporary members use no PP, gain no Exp., hold no items and don't take tactics.
+  - Leaving the dungeon, each temporary member whose Friend Area you have asks to join for good (nickname then). The others, and any you turn down, go home and leave some Poké, more the longer they stayed. If the team faints they're all lost.
+- Recruiting follows Red's story gates: Skarmory, Gengar's gang, the legendary birds, the Regis, Mankey and others can only join after their story event. Latios and Latias never join from a dungeon; they join through the story, and Latios now brings his Friend Area. Mew doesn't join while you're on a friend rescue.
+- Red's base visitor event: a Pokémon sometimes visits the team base and asks to join.
+
+**Smarter "Let's go together!"**
+- New Game Options setting **Partner AI: Smarter / Red** (Smarter by default). It only changes partners on "Let's go together!"; other tactics and wild Pokémon keep Red's AI.
+- Partners attack foes within 3 tiles of you or them, staying within 4 tiles of you. They protect the leader first, then help with the foe you're fighting, then go for the weakest, and leave sleeping foes alone.
+- Moves are picked by estimated damage: no moves the foe is immune to, no status move on a foe that already has it, the normal attack to finish weak foes (saves PP). Line and 2-tile moves are lined up from range.
+- Real pathfinding around walls and teammates, following the leader out of sight, swapping places in corridors, walking around known traps. A partner below 1/4 HP stays back, and a foe the leader could recruit is left for the leader's last hit.
+
+**Controls and screens**
+- Controller: **L + A / B / X / Y** use moves 1-4 (a linked move fires its chain). Holding **L** shows which button uses which move, with PP. The message log moved to **L + Select**.
+- A tap of **R** turns toward the nearest enemy without switching on the grid (Start still does).
+- The HP bar's length follows the leader's max HP, like Red's, reaching the full width at 200 max HP.
+- The set-move, partner-move and set / sticky item marks are the game's own icons from the ROM font.
+- Items show their sprite in the dungeon bag, the Toolbox and the give-item list.
+
 ## v0.6.27 (27 Oct 2026): playable without a controller
 
 Every screen and menu was checked for actions that needed a controller.

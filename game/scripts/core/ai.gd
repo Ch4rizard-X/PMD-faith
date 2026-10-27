@@ -104,6 +104,9 @@ const R_TO_AI_FLAGS := {
 	"floor_all": 0x65, "user": 0x73, "items": 0x73, "team_room": 0x31, "team_floor": 0x61, "special": 0xFF,
 }
 
+## Set by the dungeon around each AI.decide call: PartnerAI.decide (the "Partner AI: Smarter" option).
+static var partner_hook: Callable
+
 ## Data source: set AI.db = <db.gd instance> in tests; otherwise the "DB" autoload is used.
 static var db: Object = null
 
@@ -320,6 +323,11 @@ static func decide(m: Mon, fs: FloorState, memory: Dictionary) -> Dictionary:
 	var it := decide_throw_item(m, fs)
 	if not it.is_empty():
 		return it
+	# Remake option: the smarter "Let's go together!" (dungeon/partner_ai.gd); {} = Red's AI as below.
+	if partner_hook.is_valid():
+		var sm: Dictionary = partner_hook.call(m, memory)
+		if not sm.is_empty():
+			return sm
 	if not iq(m, "dedicated traveler"):
 		var a := choose_ai_move(m, fs, memory)
 		if not a.is_empty():

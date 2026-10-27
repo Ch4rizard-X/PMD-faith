@@ -155,6 +155,44 @@ static func unlock_friend_area(fa: int) -> void:
 	if not k in Game.friend_areas:
 		Game.friend_areas.append(k)
 
+static func unlock_friend_area_of(sp: String) -> void:
+	var k := Services.area_of(sp)
+	if k != "" and not k in Game.friend_areas:
+		Game.friend_areas.append(k)
+
+## Special 0x29 (ground_script.c): pick the Pokémon that comes to visit the base and asks to join. Red skips the
+## legendaries, and, when its Friend Area is already yours, Pokémon you have or whose area is full.
+## Returns 1 (its Friend Area is yours), 2 (it isn't: joining unlocks it) or 0 (nobody can come).
+const NEW_FRIEND_SKIP := ["0144", "0145", "0146", "0383", "0384", "0382", "0249", "0351", "0386", "0150", "0385", "0151",
+	"0380", "0381", "0244", "0243", "0245", "0250", "0377", "0378", "0379", "0251"]
+static func _pick_new_friend(G) -> int:
+	var cands: Array = []
+	for rid in range(2, 0x1A4):
+		var sp := GData.species_of_red(rid)
+		if sp == "" or not DB.species.has(sp) or sp.substr(0, 4) in NEW_FRIEND_SKIP:
+			continue
+		var area := Services.area_of(sp)
+		if area == "":
+			continue
+		if area in Game.friend_areas:
+			if _has_mon(sp):
+				continue
+			var n := 0
+			for f in Game.friends:
+				if str(f.get("area", Services.area_of(str(f.get("sp", ""))))) == area:
+					n += 1
+			if n >= int(Services.fa().get("areas", {}).get(area, {}).get("cap", 99)):
+				continue
+		cands.append(rid)
+	if cands.is_empty():
+		GVars.set_val(null, GVars.NEW_FRIEND_KIND, 0)
+		return 0
+	var pick: int = cands[randi_range(0, cands.size() - 1)]
+	GVars.set_val(null, GVars.NEW_FRIEND_KIND, pick)
+	var psp := GData.species_of_red(pick)
+	G.text.friend_area_name = Services.area_name(Services.area_of(psp))
+	return 1 if Services.has_area_for(psp) else 2
+
 static func friend_area_unlocked(fa: int) -> bool:
 	return fa > 0 and fa_key(fa) in Game.friend_areas
 
@@ -436,16 +474,38 @@ static func special_func(G, act: GAction, idx: int, r2: int, r3: int) -> int:
 		0x23:
 			return 2 if leader_species() == "0250" else (1 if Pokedex.seen_dict().has("0250") else 0)
 		0x25:
+			unlock_friend_area_of("0381")          # Red unlocks Latios's Friend Area first if needed
 			return _recruit_story(G, "0381", G.text.name_buffer, 30, ["Psywave", "Memento", "Helping Hand", "Safeguard"], -1)
 		0x27:
 			return _recruit_story(G, "0380", G.text.name_buffer, 28, ["Psywave", "Wish", "Helping Hand", "Safeguard"], -1)
 		0x28:
 			_give_key("wishstone")
 			return 0
-		0x29, 0x2A:
-			return 0
+		0x29:
+			return _pick_new_friend(G)
+		0x2A:
+			var nf := GVars.get_val(null, GVars.NEW_FRIEND_KIND)
+			if nf == 0:
+				return 0
+			var nsp := GData.species_of_red(nf)
+			G.text.friend_area_name = Services.area_name(Services.area_of(nsp))
+			return 1 if Services.has_area_for(nsp) else 2
 		0x2C:
-			return 0
+			# a Pokémon that came to the base joins (r2 != 0: you said yes), unlocking its Friend Area if needed
+			if r2 == 0:
+				GVars.set_val(null, GVars.NEW_FRIEND_KIND, 0)
+				return 0
+			var nf2 := GVars.get_val(null, GVars.NEW_FRIEND_KIND)
+			if nf2 == 0:
+				return 0
+			var sp2 := GData.species_of_red(nf2)
+			G.text.friend_area_name = Services.area_name(Services.area_of(sp2))
+			unlock_friend_area_of(sp2)
+			var nm2: String = G.text.name_buffer if G.text.name_buffer != "" else str(DB.species.get(sp2, {}).get("name", "?"))
+			if _add_friend(sp2, nm2, 1, []).is_empty():
+				return 0
+			AdventureLog.add("joined")
+			return 1
 		0x2D:
 			return 0
 		0x2E:
@@ -666,6 +726,8 @@ static func special_text(G, kind: int, a1: int, a2: int, s) -> int:
 			await RedReward.receive(root, a2, ik, 1)
 			return 0
 		G.SP_CREDITS_NAME:
+			if Dialog.auto:
+				print("  STORY CREDITS page %d" % a1)        # tests: the ending credits are running
 			await RedCredits.show(root, a1, a2)           # ending staff credits page a1, shown a2 frames
 			return -1
 		G.SP_SCRIPTING_MENU:

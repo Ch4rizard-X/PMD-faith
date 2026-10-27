@@ -264,7 +264,7 @@ static func items_menu(root: Control) -> void:
 	while not Game.bag.is_empty():
 		var rows: Array = []
 		for b in Game.bag:
-			rows.append({"text": _bag_label(b)})
+			rows.append(TeamScreens.item_row(b))
 		var r := await paged(root, "Toolbox", rows, start, Vector2(2 * 8 * P, 2 * 8 * P), 8, 120 * P, 0, true)
 		if r.act == "sort":
 			sort_bag()
@@ -372,7 +372,9 @@ static func take_item(root: Control, e: Dictionary) -> void:
 static func _pick_give(root: Control) -> int:
 	var rows: Array = []
 	for b in Game.bag:
-		rows.append({"text": _bag_label(b), "disabled": str(b.id) == "poke"})
+		var ir := TeamScreens.item_row(b)
+		ir.disabled = str(b.id) == "poke"
+		rows.append(ir)
 	var r := await paged(root, "Toolbox", rows, 0, Vector2(2 * 8 * P, 2 * 8 * P), 8, 120 * P)
 	return int(r.i) if r.act == "pick" else -1
 

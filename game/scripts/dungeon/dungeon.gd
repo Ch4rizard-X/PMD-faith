@@ -47,6 +47,8 @@ var auto_answer := false          # automated tests: menus pick their first opti
 var _auto_target := Vector2i(-1, -1)
 var result_sent := false
 var recruited_names: Array = []
+var partner_ai: PartnerAI = null   # Game Options "Partner AI: Smarter"
+var dx_turns := 0                 # turns taken in this dungeon (DX recruiting: the farewell payment)
 const QOL := preload("res://scripts/dungeon/dungeon_qol.gd")
 var boss: BossScene = null             # fixed-room cutscene of this floor (Red dungeon_cutscene.c)
 var start_floor := 0                   # story: Red splits a dungeon into script dungeons (the boss part starts here)
@@ -746,6 +748,8 @@ func _walk_left(vis) -> float:
 func _process_main(dt: float) -> void:
 	if fs == null:
 		return
+	if _lmoves != null and (menu_open or result_sent or not Input.is_action_pressed("gp_l")):
+		_show_l_moves(false)
 	if fs.leader and fs.leader.visual:
 		cam.position = cam.position.lerp(fs.leader.visual.position, minf(1.0, dt * 14.0))
 	var dg_now := _diag_held()
@@ -829,8 +833,9 @@ func _input(e: InputEvent) -> void:
 			set_zoom(float(Game.settings.get("zoom", 1.25)) * after / before)
 
 ## Controller = Red's GBA buttons (dungeon_main.c):
-## A attack · L+A set move · A+B wait · tap B menu · hold B run · hold R diagonals only ·
-## tap R / Start turn in place · L+B message log · L+R throw set item · Select map · X moves · Y items.
+## A attack · L+A / L+B / L+X / L+Y the leader's moves 1-4 · A+B wait · tap B menu · hold B run ·
+## hold R diagonals only · tap R face the nearest foe · Start turn in place · L+Select message log ·
+## L+R throw set item · Select map · X moves · Y items.
 var _rotate := false
 var _b_t0 := -1.0
 var _b_moved := false
@@ -848,12 +853,12 @@ func _pad_event(e: InputEventJoypadButton) -> void:
 			if _pad_held("gp_b"):
 				leader_action({"type": "wait"})
 			elif _pad_held("gp_l"):
-				use_set_move()
+				use_move_slot(0)
 			else:
 				leader_action({"type": "attack", "move": "", "dir": fs.leader.facing})
 		elif e.is_action("gp_b"):
 			if _pad_held("gp_l"):
-				open_log()
+				use_move_slot(1)
 				_b_t0 = -1.0
 			elif _pad_held("gp_a"):
 				leader_action({"type": "wait"})
@@ -861,6 +866,8 @@ func _pad_event(e: InputEventJoypadButton) -> void:
 			else:
 				_b_t0 = now
 				_b_moved = false
+		elif e.is_action("gp_l"):
+			_show_l_moves(true)
 		elif e.is_action("gp_r"):
 			if _pad_held("gp_l"):
 				throw_set_item()
@@ -872,12 +879,23 @@ func _pad_event(e: InputEventJoypadButton) -> void:
 			if _rotate:
 				_face_nearest_foe()
 		elif e.is_action("gp_select"):
-			_toggle_map()
+			if _pad_held("gp_l"):
+				open_log()
+			else:
+				_toggle_map()
 		elif e.is_action("gp_x"):
-			open_moves()
+			if _pad_held("gp_l"):
+				use_move_slot(2)
+			else:
+				open_moves()
 		elif e.is_action("gp_y"):
-			open_bag()
+			if _pad_held("gp_l"):
+				use_move_slot(3)
+			else:
+				open_bag()
 	else:
+		if e.is_action("gp_l"):
+			_show_l_moves(false)
 		if e.is_action("gp_b") and _b_t0 >= 0.0:
 			if not _b_moved and now - _b_t0 < 0.35:
 				if _rotate:
@@ -887,9 +905,7 @@ func _pad_event(e: InputEventJoypadButton) -> void:
 			_b_t0 = -1.0
 		elif e.is_action("gp_r") and _r_t0 >= 0.0:
 			if now - _r_t0 < 0.3:
-				_set_rotate(not _rotate)
-				if _rotate:
-					_face_nearest_foe()      # Red sub_805E738: a tap of R turns toward an enemy
+				_face_nearest_foe()          # a tap of R turns toward the nearest enemy (the grid is Start's)
 			_r_t0 = -1.0
 
 func _set_rotate(on: bool) -> void:
@@ -1202,7 +1218,11 @@ func _decide(m: Mon) -> Dictionary:
 	if not mem.has(m.uid):
 		mem[m.uid] = {}
 	var t0 := Time.get_ticks_usec()
+	if partner_ai == null:
+		partner_ai = PartnerAI.new(self)
+	AI.partner_hook = Callable(partner_ai, "decide")
 	var r := AI.decide(m, fs, mem[m.uid])
+	AI.partner_hook = Callable()
 	if perf_log:
 		pacc("ai", Time.get_ticks_usec() - t0)
 	return r
@@ -1216,6 +1236,7 @@ func end_of_turn() -> void:
 
 func end_of_turn_i() -> void:
 	fs.turn += 1
+	dx_turns += 1
 	SpecialMoves.tick(self)
 	EosItems.end_of_turn(self)
 	await AbilityFx.end_of_turn(self)
@@ -1290,7 +1311,7 @@ func end_of_turn_i() -> void:
 func execute(m: Mon, a: Dictionary) -> bool:
 	match a.get("type", "wait"):
 		"move":
-			return await do_move(m, int(a.dir))
+			return await do_move(m, int(a.dir), bool(a.get("swap", false)))
 		"attack":
 			var d := int(a.get("dir", m.facing))
 			if d < 0:
@@ -1323,7 +1344,7 @@ func execute(m: Mon, a: Dictionary) -> bool:
 			return true
 	return true
 
-func do_move(m: Mon, d: int) -> bool:
+func do_move(m: Mon, d: int, swap := false) -> bool:
 	m.facing = d
 	if int(m.status.get("shadow_hold", 0)) > 0:
 		if m.is_leader:
@@ -1341,8 +1362,8 @@ func do_move(m: Mon, d: int) -> bool:
 		if m.is_leader and Missions.is_client(o):
 			await Missions.on_talk(self, o)
 			return false
-		if m.is_leader and o.is_team():
-			# swap places with a teammate
+		if (m.is_leader and o.is_team()) or (swap and o.is_team() and not o.is_leader and not Missions.is_client(o)):
+			# swap places with a teammate (partners too, with the smarter partner AI)
 			var oold := o.pos
 			o.pos = m.pos
 			AI.on_moved(o, oold)
@@ -1385,7 +1406,7 @@ func _mon_try_pick_up(m: Mon) -> void:
 		if seen:
 			Audio.sfx("pickup")
 			_msg("%s picked up the %s and put it in the Toolbox." % [nm, iname])
-	elif m.held == "" and str(it.id) != "poke":
+	elif m.held == "" and str(it.id) != "poke" and not is_temp(m):
 		m.held = str(it.id)
 		fs.items.erase(m.pos)
 		if seen:
@@ -1619,7 +1640,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			if int(slot.pp) <= 0:
 				_msg("There's no PP left for %s!" % move_name)
 				return
-			if not (EosItems.has(m, "free_pp") and fs.rng.randi_range(0, 99) < 20):
+			if not is_temp(m) and not (EosItems.has(m, "free_pp") and fs.rng.randi_range(0, 99) < 20):   # DX: temps use no PP
 				slot.pp = maxi(0, int(slot.pp) - IQSky.pp_cost(m, move_name, fs.rng, self))
 	if announce:
 		m.last_move = move_name
@@ -1656,6 +1677,11 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			tw.tween_property(m.visual, "bob", Vector2.ZERO, 0.1)
 	await _pause(0.18)
 	var targets := targets_for(m, mv, d)
+	if m.is_leader:                  # the foe the leader is fighting (the smarter partner AI helps with it)
+		for t_l in targets:
+			if t_l != m and fs.is_foe(m, t_l):
+				m.set_meta("last_target_uid", t_l.uid)
+				break
 	if move_name in AbilityFx.EXPLOSION_MOVES and AbilityFx.damp_on_floor(fs):
 		_msg("Damp prevents explosions!")
 		return
@@ -1663,7 +1689,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 		if AbilityFx.soundproof(t_sp, move_name):
 			_msg("%s's Soundproof suppressed the sound move!" % _nm(t_sp))
 			targets.erase(t_sp)
-	if not slot.is_empty() and announce:
+	if not slot.is_empty() and announce and not is_temp(m):
 		slot.pp = maxi(0, int(slot.pp) - AbilityFx.pressure_extra(m, targets, fs))    # Pressure
 	if move_name != "" and not _quiet:
 		await MoveFx.play(self, m, move_name, mv, d, targets)
@@ -2189,10 +2215,70 @@ func legend_owned(t: Mon) -> bool:
 			return true
 	return false
 
+## MonCutsceneCompleted (dungeon_cutscene.c): these Pokémon can't join before their story event is done.
+const RECRUIT_AFTER := {"0227": "CUTSCENE_FLAG_MT_STEEL_COMPLETE",
+	"0023": "CUTSCENE_FLAG_SINISTER_WOODS_COMPLETE", "0094": "CUTSCENE_FLAG_SINISTER_WOODS_COMPLETE", "0308": "CUTSCENE_FLAG_SINISTER_WOODS_COMPLETE",
+	"0145": "CUTSCENE_FLAG_MT_THUNDER_PEAK_COMPLETE", "0146": "CUTSCENE_FLAG_MT_BLAZE_PEAK_COMPLETE", "0144": "CUTSCENE_FLAG_FROSTY_GROTTO_COMPLETE",
+	"0383": "CUTSCENE_FLAG_MAGMA_CAVERN_PIT_COMPLETE", "0384": "CUTSCENE_FLAG_SKY_TOWER_SUMMIT_COMPLETE", "0150": "CUTSCENE_FLAG_WESTERN_CAVE_COMPLETE",
+	"0244": "CUTSCENE_FLAG_FIERY_FIELD_COMPLETE", "0243": "CUTSCENE_FLAG_LIGHTNING_FIELD_COMPLETE", "0245": "CUTSCENE_FLAG_NORTHWIND_FIELD_COMPLETE",
+	"0250": "CUTSCENE_FLAG_MT_FARAWAY_COMPLETE", "0056": "CUTSCENE_FLAG_UPROAR_FOREST_COMPLETE",
+	"0377": "CUTSCENE_FLAG_REGI_ITEM_OBTAINED", "0378": "CUTSCENE_FLAG_REGI_ITEM_OBTAINED", "0379": "CUTSCENE_FLAG_REGI_ITEM_OBTAINED"}
+const NEVER_RECRUIT := ["0380", "0381"]      # IsMonsterRecruitable: Latias and Latios never join
+
+## The checks Red makes before rolling (IsMonsterRecruitable and TryRecruitMonster), without the roll.
+func recruit_allowed(t: Mon) -> bool:
+	var sp4 := t.sp.substr(0, 4)
+	if sp4 in NEVER_RECRUIT:
+		return false
+	if RECRUIT_AFTER.has(sp4) and not BossScene.get_flag(str(RECRUIT_AFTER[sp4])):
+		return false
+	if sp4 == "0151":                       # Mew doesn't join while you're out on a friend rescue (DUNGEON_MISSION_OUTONRESCUE)
+		for j in Game.jobs:
+			if j.has("sos") and str(j.get("state", "")) == "taken" and str(j.get("dungeon", "")) == dkey:
+				return false
+	return true
+
+## Game Options "Recruiting: DX" (Rescue Team DX): a defeated Pokémon joins for this dungeon only (from up to 2
+## tiles, Red's rate, no Friend Area needed yet, up to 8 members); at the exit you choose who stays.
+const DX_TEAM_MAX := 8
+const DX_RANGE := 2
+
+static func dx_recruiting() -> bool:
+	return int(QOL.opt("qol_recruit")) == 1
+
+static func is_temp(m: Mon) -> bool:
+	return m != null and bool(m.get_meta("temp_recruit", false))
+
+## Smarter partner AI: a foe the leader could recruit with its next hit (low HP, leader in range, allowed,
+## room on the team). Partners leave it alone; not while the leader is in trouble.
+func recruit_candidate(t: Mon) -> bool:
+	if t.is_team() or not t.recruit_ok or not ddata.get("recruit", true):
+		return false
+	if t.hp * 3 > t.max_hp:
+		return false
+	var L := fs.leader
+	if L == null or L.hp * 4 <= L.max_hp:
+		return false
+	var dx := dx_recruiting()
+	if FloorState.cheb(L.pos, t.pos) > (DX_RANGE if dx else 1) + 1:
+		return false
+	if not recruit_allowed(t) or legend_owned(t):
+		return false
+	if int(DB.species.get(t.sp, {}).get("recruit", 0)) == -999 or recruit_rate(L, t) <= 0:
+		return false
+	if dx:
+		return fs.team().size() < DX_TEAM_MAX
+	return Services.has_area_for(t.sp) and fs.team().size() < Services.PARTY_MAX
+
 func try_recruit(r: Mon, t: Mon) -> bool:
 	if not ddata.get("recruit", true) or not t.recruit_ok:
 		return false
-	if FloorState.cheb(r.pos, t.pos) >= 2:
+	var dx := dx_recruiting()
+	if FloorState.cheb(r.pos, t.pos) > (DX_RANGE if dx else 1):
+		return false
+	if not recruit_allowed(t):
+		return false
+	if not fs.can_see(t, r.pos):            # CanSeeTarget(target, attacker)
 		return false
 	var S: Dictionary = DB.species.get(t.sp, {})
 	var rate := int(S.get("recruit", 0))
@@ -2200,13 +2286,17 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 		return false
 	if legend_owned(t):
 		return false
-	if not Services.has_area_for(t.sp):
-		return false
-	var body := 0
-	for m in fs.team():
-		body += maxi(1, int(DB.species.get(m.sp, {}).get("size", 1)))
-	if fs.team().size() >= Services.PARTY_MAX or body + maxi(1, int(S.get("size", 1))) > MAX_TEAM_BODY:
-		return false
+	if dx:
+		if fs.team().size() >= DX_TEAM_MAX:
+			return false
+	else:
+		if not Services.has_area_for(t.sp):
+			return false
+		var body := 0
+		for m in fs.team():
+			body += maxi(1, int(DB.species.get(m.sp, {}).get("size", 1)))
+		if fs.team().size() >= Services.PARTY_MAX or body + maxi(1, int(S.get("size", 1))) > MAX_TEAM_BODY:
+			return false
 	if r.held == "friendbow":
 		rate += 100
 	rate += EosItems.recruit_bonus(r, t)                # Golden Mask, Amber Tear, the EoS instruments
@@ -2231,7 +2321,10 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 	var cyan := "[color=#7fe0ff]%s[/color]" % t.name       # CopyCyanMonsterNametoBuffer
 	var c := 0
 	if not auto_answer:
-		c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nAccept %s as a team member?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
+		if dx:
+			c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nTake %s along on this adventure?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
+		else:
+			c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nAccept %s as a team member?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
 	menu_open = false
 	if c != 0:
 		if t.sp.substr(0, 4) != "0385":                  # Jirachi leaves without the line
@@ -2240,7 +2333,17 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 		return false
 	t.side = "team"
 	t.set_meta("recruited", true)
-	AdventureLog.add("joined")             # IncrementAdventureNumJoined
+	if dx:
+		t.set_meta("temp_recruit", true)
+		t.set_meta("join_turn", dx_turns)
+		t.set_meta("tactic", "lets_go_together")       # DX: temporary members don't follow tactics
+		if t.held != "":                                # ...and hold nothing: its item goes in the Toolbox (or drops)
+			if not Game.bag_add(t.held) and not fs.items.has(t.pos):
+				fs.items[t.pos] = {"id": t.held, "n": 1, "price": 0}
+				obj_layer.queue_redraw()
+			t.held = ""
+	else:
+		AdventureLog.add("joined")             # IncrementAdventureNumJoined
 	Awaken.revert(t)
 	t.set_meta("entry", {"shiny": Shiny.is_shiny(t), "sp": t.sp, "name": t.name, "level": t.level, "exp": t.exp, "moves": t.moves.duplicate(true), "iq": 0, "held": "", "bonus": {}, "area": Services.area_of(t.sp)})
 	team_mons.append(t)
@@ -2377,11 +2480,50 @@ func _end(res: String) -> void:
 	# Red: Pokémon recruited on this expedition only stay if you get home safely
 	if res != "defeated":
 		for m in team_mons:
-			if m.get_meta("recruited", false):
+			if m.get_meta("recruited", false) and not is_temp(m):
 				var e: Dictionary = m.get_meta("entry")
 				Game.friends.append(e)
 				recruited_names.append(m.name)
+		await _dx_farewells()
 	finished.emit(res)
+
+## DX recruiting, leaving the dungeon: each temporary member (still standing or not) may stay if you have its
+## Friend Area; otherwise, or if you say no, it leaves and pays a little for the adventure (more turns, more Poké).
+func _dx_farewells() -> void:
+	var temps: Array = team_mons.filter(func(m): return is_temp(m) and m.hp > 0)
+	if temps.is_empty():
+		return
+	menu_open = true
+	for m in temps:
+		var cyan := "[color=#7fe0ff]%s[/color]" % m.name
+		var keep := -1
+		if legend_owned(m):
+			keep = -1
+		elif Services.has_area_for(m.sp):
+			keep = 0 if auto_answer or Dialog.auto else await Dialog.ask(ui_root,
+					"%s had fun on the adventure!\nAsk %s to join the team for good?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
+		else:
+			await _dx_say("%s would like to stay, but it has no Friend Area to live in..." % cyan)
+		if keep == 0:
+			m.remove_meta("temp_recruit")
+			var e: Dictionary = m.get_meta("entry")
+			Game.friends.append(e)
+			recruited_names.append(m.name)
+			AdventureLog.add("joined")
+			await _join_sequence(m)
+			e.name = m.name
+		else:
+			var pay := clampi((dx_turns - int(m.get_meta("join_turn", dx_turns))) / 2, 10, 500)
+			Game.money += pay
+			Audio.sfx("coin")
+			await _dx_say("%s went home.\nIt left %d Poké as thanks for a fun adventure!" % [cyan, pay])
+	menu_open = false
+
+func _dx_say(t: String) -> void:
+	if auto_answer or Dialog.auto:
+		print("  DX ", t)
+		return
+	await Dialog.say(ui_root, t)
 
 # ================================================================= menus
 ## Red's dungeon main menu (dungeon_main.c ShowMainMenu): Moves / Items / Team / Others / Ground, with
@@ -2544,7 +2686,69 @@ func _moves_menu(start: Mon = null) -> bool:
 	var a := await TeamScreens.moves_menu(ui_root, start if start else fs.leader, true, self)
 	return await _do_menu_action(a)
 
-## L + A: the leader's set move (and the moves linked after it).
+## While L is held: which button uses which move (A / B / X / Y = moves 1-4), with PP; linked moves show
+## their chain. Hidden when L is let go or a menu opens.
+var _lmoves: Control = null
+
+func _show_l_moves(on: bool) -> void:
+	if _lmoves != null and is_instance_valid(_lmoves):
+		_lmoves.queue_free()
+	_lmoves = null
+	if not on or fs == null or fs.leader == null or menu_open or result_sent:
+		return
+	var L := fs.leader
+	var pc := _info_panel()
+	var g := GridContainer.new()
+	g.columns = 3
+	g.add_theme_constant_override("h_separation", 6 * UITheme.PX)
+	g.add_theme_constant_override("v_separation", 0)
+	pc.add_child(g)
+	var glyphs := ["A_BUTTON", "B_BUTTON", "NDS_X_BUTTON", "NDS_Y_BUTTON"]
+	var letters := ["A", "B", "X", "Y"]
+	for i in 4:
+		var key := UITheme.glyph(glyphs[i])
+		g.add_child(TeamScreens._rtl(key if key != "" else "[color=%s]%s[/color]" % [TeamScreens.CYAN, letters[i]]))
+		var nm := "-"
+		var pp := ""
+		if i < L.moves.size() and str(L.moves[i].get("name", "")) != "":
+			var mv: Dictionary = L.moves[i]
+			nm = str(mv.name)
+			if i > 0 and bool(mv.get("linked", false)):
+				nm = "+" + nm                          # fires the chain from the move above
+			var p := int(mv.get("pp", 0))
+			if p <= 0:
+				nm = "[color=%s]%s[/color]" % [TeamScreens.RED, nm]
+			pp = "%d/%d" % [p, int(mv.get("max_pp", p))]
+		g.add_child(TeamScreens._rtl(nm))
+		var r := TeamScreens._rtl(pp)
+		r.custom_minimum_size.x = 40 * UITheme.PX
+		g.add_child(r)
+	pc.position = Vector2(TeamScreens.WIN_X, TeamScreens.WIN_Y)
+	_lmoves = pc
+
+## Controller L + A / B / X / Y: the leader's move in that slot (1-4). A move linked to the one before it
+## fires its whole chain from the first move, like choosing it in the Moves menu.
+func use_move_slot(i: int) -> void:
+	if busy or menu_open or fs == null:
+		return
+	var L := fs.leader
+	if i >= L.moves.size() or str(L.moves[i].get("name", "")) == "":
+		_msg("There's no move in that slot.")
+		return
+	while i > 0 and bool(L.moves[i].get("linked", false)):
+		i -= 1
+	var chain: Array = []
+	for j in TeamScreens.chain_from(L.moves, i):
+		chain.append(str(L.moves[j].name))
+	if int(L.moves[i].get("pp", 0)) <= 0:
+		_msg("There's no PP left for %s!" % chain[0])
+		return
+	_show_l_moves(false)
+	await leader_action({"type": "attack", "move": chain[0], "dir": L.facing, "chain": chain})
+	if _pad_held("gp_l"):
+		_show_l_moves(true)                      # still holding L: show the new PP
+
+## Keyboard (Run + Attack): the leader's set move (and the moves linked after it).
 func use_set_move() -> void:
 	if busy or menu_open:
 		return
@@ -2623,22 +2827,18 @@ func _item_rows(pg: Dictionary) -> Array:
 	match str(pg.kind):
 		"bag":
 			for k in range(int(pg.start), mini(int(pg.start) + 10, Game.bag.size())):
-				var b: Dictionary = Game.bag[k]
-				var I: Dictionary = DB.items.get(b.id, {})
-				var row := {"text": str(I.get("name", b.id)), "icon": TeamScreens.icon("set") if b.get("set", false) else TeamScreens.icon("blank")}
-				if I.get("stack", false):
-					row.right = str(int(b.n))
-				rows.append(row)
+				rows.append(TeamScreens.item_row(Game.bag[k]))
 		"ground":
 			var it: Dictionary = fs.items[fs.leader.pos]
-			var row2 := {"text": DB.item_name(it.id), "icon": TeamScreens.icon("blank")}
+			var row2 := TeamScreens.item_row(it, false)
+			row2.erase("right")
 			if int(it.get("price", 0)) > 0:
 				row2.right = "%d Poké" % int(it.price)
 			elif int(it.get("n", 1)) > 1:
 				row2.right = str(int(it.n))
 			rows.append(row2)
 		"held":
-			rows.append({"text": DB.item_name(pg.mon.held), "icon": TeamScreens.icon("blank")})
+			rows.append(TeamScreens.item_row({"id": pg.mon.held}, false))
 	return rows
 
 func _items_menu(ground_only: bool) -> bool:
@@ -2689,7 +2889,7 @@ func _sort_bag() -> void:
 	BaseMenu.sort_bag()
 
 func _cant_hold(t: Mon) -> bool:
-	return t.get_meta("escort", false) or Missions.is_client(t) or t.get_meta("no_attack", false)
+	return is_temp(t) or t.get_meta("escort", false) or Missions.is_client(t) or t.get_meta("no_attack", false)
 
 func _bag_is_full(id: String) -> bool:
 	if DB.items.get(id, {}).get("stack", false):
@@ -3460,6 +3660,9 @@ func _recruitment_search() -> void:
 		var sp := str(e[0])
 		if seen.has(sp) or not DB.species.has(sp) or int(DB.species[sp].get("recruit", 0)) == -999:
 			continue
+		var sp4 := sp.substr(0, 4)
+		if sp4 in NEVER_RECRUIT or (RECRUIT_AFTER.has(sp4) and not BossScene.get_flag(str(RECRUIT_AFTER[sp4]))):
+			continue                                   # Red's list skips Pokémon that can't join yet (IsMonsterRecruitable)
 		seen[sp] = true
 		var got := false
 		for f in Game.friends:
@@ -3986,7 +4189,7 @@ func _give_ko_exp(team: Array, t: Mon) -> void:
 	var y := int(S.get("exp", 10))
 	var gain := maxi(1, y + (y * (t.level - 1)) / 10)
 	for tm in team:
-		if tm.hp > 0 and fs.mons.has(tm):
+		if tm.hp > 0 and fs.mons.has(tm) and not is_temp(tm):      # DX: temporary members gain no Exp.
 			await gain_exp(tm, IQSky.exp_gain(tm, gain))
 
 ## Exit reason when the leader (or a story Pokémon) faints (GetDungeonExitReasonFromMoveOrItemID etc.).
@@ -4098,6 +4301,9 @@ func _level_up_boxes(m: Mon, before: Dictionary) -> void:
 ## question, "$m0 joined $t to go on adventures!".
 func _join_sequence(t: Mon) -> void:
 	Audio.sfx("join")
+	if is_temp(t):                     # DX: joins for this dungeon; the nickname comes if it stays at the exit
+		_msg("%s joined the team for this adventure!" % _nm(t))
+		return
 	if not (auto_answer or Dialog.auto):
 		await get_tree().create_timer(160.0 / 60.0).timeout
 	menu_open = true

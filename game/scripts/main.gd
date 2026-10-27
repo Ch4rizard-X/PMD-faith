@@ -141,6 +141,425 @@ func _ready() -> void:
 			print("MEANIES after: where=%s scen=%s postgame=%s shop_fa=%d story_vars=%s base_level=%d leader=%s" % [where, str(GVars.scenario(GVars.SCENARIO_MAIN)), RedShops.postgame(), RedShops.shop_areas().size(), Game.story.has("vars"), GVars.get_val(null, GVars.BASE_LEVEL), Game.team[0].sp])
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--partnertest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.story.erase("cutscene_flags")
+			await start_dungeon("thunderwave_cave")
+			await get_tree().create_timer(2.0).timeout
+			var d: Dungeon = dungeon
+			d.auto_answer = true
+			d.test_invincible = true
+			var fs: FloorState = d.fs
+			var L: Mon = fs.leader
+			var P: Mon = null
+			for m in fs.team():
+				if m != L and P == null:
+					P = m
+			var tally := {"ok": 0, "bad": 0}
+			var check := func(what: String, ok: bool, info := ""):
+				tally["ok" if ok else "bad"] += 1
+				print("PARTNERTEST %s %s %s" % ["ok " if ok else "BAD", what, info])
+			# an open spot: the middle of the biggest room, carved out to 11 x 11 floor with no traps (test only)
+			var big: Rect2i = fs.rooms[0]
+			for rr in fs.rooms:
+				if rr.get_area() > big.get_area(): big = rr
+			var c := big.get_center()
+			c.x = clampi(c.x, 7, fs.w - 8)
+			c.y = clampi(c.y, 7, fs.h - 8)
+			for dy in range(-5, 6):
+				for dx in range(-5, 6):
+					var q := c + Vector2i(dx, dy)
+					fs.terrain[fs.idx(q)] = 1
+					fs.traps.erase(q)
+			print("PARTNERTEST open spot ", c)
+			var P_moves := P.moves.duplicate(true)
+			var reset := func(lp: Vector2i, pp: Vector2i):
+				for m in fs.mons.duplicate():
+					if not m.is_team():
+						if m.visual: m.visual.queue_free()
+						fs.mons.erase(m)
+					elif m != L and m != P:
+						fs.mons.erase(m)
+				L.pos = lp
+				P.pos = pp
+				fs.items.clear()
+				P.hp = P.max_hp
+				P.moves = P_moves.duplicate(true)
+				for k in P.status:
+					if P.status[k] is int: P.status[k] = 0
+				d.mem.erase(P.uid)
+				L.remove_meta("last_target_uid")
+			var foe := func(sp: String, p: Vector2i, lv := 5) -> Mon:
+				var f: Mon = DB.make_mon(sp, lv, "enemy")
+				f.pos = p
+				fs.mons.append(f)
+				return f
+			var mv_of := func(names: Array) -> Array:
+				var out: Array = []
+				for n in names:
+					out.append({"name": n, "pp": 20, "max_pp": 20, "on": true, "linked": false})
+				return out
+			var step_to := func(a: Dictionary) -> Vector2i:
+				return P.pos + DB.DIRS[int(a.dir)] if str(a.get("type", "")) == "move" else P.pos
+			for mode in [1, 0]:
+				Game.settings["qol_partner_ai"] = mode
+				var tag := "Smarter" if mode == 1 else "Red    "
+				# 1) a foe 3 tiles from the leader, partner on the other side
+				reset.call(c, c + Vector2i(-1, 0))
+				var f1: Mon = foe.call("0019", c + Vector2i(3, 0))
+				var a1 := d._decide(P)
+				var closer := FloorState.cheb(step_to.call(a1), f1.pos) < FloorState.cheb(P.pos, f1.pos)
+				if mode == 1: check.call("goes for a foe 3 tiles away", closer, str(a1))
+				else: print("PARTNERTEST info Red: goes for a foe 3 tiles away = %s %s" % [closer, a1])
+				# 2) protects the leader: the foe next to the leader before another next to the partner
+				reset.call(c, c + Vector2i(1, 1))
+				var fa: Mon = foe.call("0019", c + Vector2i(1, 0))
+				var fb: Mon = foe.call("0019", c + Vector2i(2, 2))
+				var a2 := d._decide(P)
+				var at_a := str(a2.get("type", "")) == "attack" and int(a2.dir) == AI.dir_toward(P.pos, fa.pos)
+				if mode == 1: check.call("hits the foe next to the leader first", at_a, str(a2))
+				else: print("PARTNERTEST info Red: hits the foe next to the leader = %s %s" % [at_a, a2])
+				# 3) a line move at a foe 3 tiles away in a straight line
+				reset.call(c, c + Vector2i(-1, 0))
+				P.moves = mv_of.call(["Flamethrower"])
+				var f3: Mon = foe.call("0019", c + Vector2i(-1, -3))
+				var a3 := d._decide(P)
+				if mode == 1: check.call("uses a line move from range", str(a3.get("move", "")) == "Flamethrower", str(a3))
+				else: print("PARTNERTEST info Red: line move from range: %s" % a3)
+				# 4) lines up for the line move instead of walking next to the foe
+				reset.call(c, c + Vector2i(-1, 0))
+				P.moves = mv_of.call(["Flamethrower"])
+				var f4: Mon = foe.call("0019", c + Vector2i(0, -3))
+				var a4 := d._decide(P)
+				var np: Vector2i = step_to.call(a4)
+				var lined: bool = d.partner_ai._can_hit_from(np, f4, d.partner_ai._ranged(P)) or str(a4.get("move", "")) == "Flamethrower"
+				if mode == 1: check.call("lines up for a ranged move", lined, str(a4))
+				# 5) no Electric move on a Ground foe
+				var no_imm := true
+				for i in 10:
+					reset.call(c, c + Vector2i(-1, 0))
+					P.moves = mv_of.call(["Thundershock", "Tackle"])
+					foe.call("0074", c + Vector2i(-2, 0))
+					var a5 := d._decide(P)
+					if str(a5.get("move", "")) == "Thundershock": no_imm = false
+				if mode == 1: check.call("never uses a move the foe is immune to", no_imm)
+				else: print("PARTNERTEST info Red: avoided the immune move = %s" % no_imm)
+				# 6) no paralysis move on a paralysed foe
+				var no_dup := true
+				for i in 20:
+					reset.call(c, c + Vector2i(-1, 0))
+					P.moves = mv_of.call(["Thunder Wave"])
+					var f6: Mon = foe.call("0019", c + Vector2i(-2, 0))
+					f6.status["para"] = 9
+					var a6 := d._decide(P)
+					if str(a6.get("move", "")) == "Thunder Wave": no_dup = false
+				if mode == 1: check.call("no status move on a foe that already has it", no_dup)
+				else: print("PARTNERTEST info Red: skipped the useless status move = %s" % no_dup)
+				# 7) leaves a recruitable foe to the leader
+				Game.settings["qol_recruit"] = 1
+				reset.call(c, c + Vector2i(-1, 1))
+				var f7: Mon = foe.call("0019", c + Vector2i(-2, 1))
+				f7.recruit_ok = true
+				f7.hp = maxi(1, f7.max_hp / 6)
+				if not Services.has_area_for("0019"): Game.friend_areas.append(Services.area_of("0019"))
+				var a7 := d._decide(P)
+				var hit7 := str(a7.get("type", "")) == "attack" and int(a7.dir) == AI.dir_toward(P.pos, f7.pos)
+				if mode == 1: check.call("leaves a recruitable foe to the leader", not hit7 and d.recruit_candidate(f7), str(a7))
+				else: print("PARTNERTEST info Red: left the recruit to the leader = %s" % (not hit7))
+				# 8) a hurt partner stays back
+				reset.call(c, c + Vector2i(-1, 0))
+				P.hp = maxi(1, P.max_hp / 5)
+				var f8: Mon = foe.call("0019", c + Vector2i(3, 0))
+				var a8 := d._decide(P)
+				var stays := FloorState.cheb(step_to.call(a8), f8.pos) >= FloorState.cheb(P.pos, f8.pos)
+				if mode == 1: check.call("stays back when hurt", stays, str(a8))
+				# 9) finds its way around a wall to the leader
+				reset.call(c, c + Vector2i(4, 0))
+				var walls := [c + Vector2i(2, -1), c + Vector2i(2, 0), c + Vector2i(2, 1), c + Vector2i(2, -2), c + Vector2i(2, 2)]
+				for wq in walls: fs.terrain[fs.idx(wq)] = 0
+				var steps := 0
+				for i in 10:
+					if FloorState.cheb(P.pos, L.pos) <= 1: break
+					var a9 := d._decide(P)
+					if str(a9.get("type", "")) == "move" and fs.can_step(P.pos, int(a9.dir), P) and fs.mon_at(P.pos + DB.DIRS[int(a9.dir)]) == null:
+						P.pos += DB.DIRS[int(a9.dir)]
+					steps += 1
+				for wq in walls: fs.terrain[fs.idx(wq)] = 1
+				var got := FloorState.cheb(P.pos, L.pos) <= 1
+				if mode == 1: check.call("walks around a wall back to the leader", got, "in %d turns" % steps)
+				else: print("PARTNERTEST info Red: around the wall = %s in %d turns" % [got, steps])
+				# 10) a foe far away (6 tiles from the leader): stays with the leader
+				reset.call(c, c + Vector2i(-1, 0))
+				var f10: Mon = foe.call("0019", c + Vector2i(4, 4))
+				var a10 := d._decide(P)
+				if mode == 1: check.call("doesn't wander off after far foes", FloorState.cheb(step_to.call(a10), L.pos) <= 1, str(a10))
+			Game.settings["qol_partner_ai"] = 1
+			# 11) timing: decisions per partner per turn
+			reset.call(c, c + Vector2i(-1, 0))
+			foe.call("0019", c + Vector2i(3, 2))
+			foe.call("0019", c + Vector2i(-3, 3))
+			var t0 := Time.get_ticks_usec()
+			for i in 200:
+				d.mem.erase(P.uid)
+				d._decide(P)
+			var us := (Time.get_ticks_usec() - t0) / 200.0
+			var pa: PartnerAI = d.partner_ai
+			for part in ["foes", "bfs", "attack", "target"]:
+				var t1 := Time.get_ticks_usec()
+				for i in 100:
+					match part:
+						"foes": pa._foes(P)
+						"bfs": pa._bfs(P, PartnerAI.NEAR_DEPTH)
+						"attack": pa.best_attack(P, pa._foes(P))
+						"target": pa.pick_target(P, pa._foes(P))
+				print("PARTNERTEST part %s %.0f us" % [part, (Time.get_ticks_usec() - t1) / 100.0])
+			check.call("decision time under 4 ms", us < 4000.0, "%.0f us" % us)
+			# 12) controller L + A/B/X/Y = moves 1-4
+			reset.call(c, c + Vector2i(-3, 0))
+			L.moves = mv_of.call(["Scratch", "Growl", "Ember", "Smokescreen"])
+			var btns := [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y]
+			Input.action_press("gp_l")
+			var evl := InputEventJoypadButton.new()
+			evl.button_index = JOY_BUTTON_LEFT_SHOULDER
+			evl.pressed = true
+			d._pad_event(evl)
+			await get_tree().create_timer(0.3).timeout
+			get_viewport().get_texture().get_image().save_png("user://l_moves.png")
+			check.call("holding L shows the move window", d._lmoves != null)
+			for k in 4:
+				Input.action_press("gp_l")
+				var ev := InputEventJoypadButton.new()
+				ev.button_index = btns[k]
+				ev.pressed = true
+				d.busy = false
+				d.menu_open = false
+				d._pad_event(ev)
+				await get_tree().create_timer(1.5).timeout
+				Input.action_release("gp_l")
+				var ev2 := InputEventJoypadButton.new()
+				ev2.button_index = btns[k]
+				ev2.pressed = false
+				d._pad_event(ev2)
+				check.call("L+%s uses move %d" % [["A", "B", "X", "Y"][k], k + 1], L.last_move == str(L.moves[k].name), "last=" + L.last_move)
+			print("PARTNERTEST summary ok=%d bad=%d" % [tally.ok, tally.bad])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--recruittest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.story.erase("cutscene_flags")      # a fresh adventure: no story events done yet
+			Game.settings["qol_recruit"] = 0         # Red recruiting first; DX further down
+			await start_dungeon("thunderwave_cave")
+			await get_tree().create_timer(2.0).timeout
+			var d := dungeon
+			d.auto_answer = true
+			var L: Mon = d.fs.leader
+			var tally := {"ok": 0, "bad": 0}
+			var check := func(what: String, got, want):
+				tally["ok" if got == want else "bad"] += 1
+				print("RECRUITTEST %s %s: got %s, want %s" % ["ok " if got == want else "BAD", what, got, want])
+			# --- the rate (Red: species rate + Friend Bow 100 + gRecruitRateByLevel[leader level], out of 1000)
+			var t := DB.make_mon("0019", 5, "enemy")
+			var base := int(DB.species["0019"].recruit)
+			for lv in [5, 29, 30, 45, 55, 65, 75, 85, 95]:
+				L.level = lv
+				var want: int = base + int({5: 0, 29: 0, 30: 50, 45: 75, 55: 100, 65: 125, 75: 150, 85: 175, 95: 240}[lv])
+				check.call("rate Rattata, leader Lv%d" % lv, d.recruit_rate(L, t), want)
+			L.level = 5
+			L.held = "friendbow"
+			check.call("rate with Friend Bow", d.recruit_rate(L, t), base + 100)
+			L.held = ""
+			# --- rules
+			var mk := func(sp: String) -> Mon:
+				var m := DB.make_mon(sp, 10, "enemy")
+				m.recruit_ok = true
+				return m
+			check.call("Gengar before Team Meanies", d.recruit_allowed(mk.call("0094")), false)
+			check.call("Skarmory before Mt. Steel", d.recruit_allowed(mk.call("0227")), false)
+			check.call("Mankey before Uproar Forest", d.recruit_allowed(mk.call("0056")), false)
+			check.call("Zapdos before its fight", d.recruit_allowed(mk.call("0145")), false)
+			check.call("Regirock before the Regi item", d.recruit_allowed(mk.call("0377")), false)
+			BossScene.set_flag("CUTSCENE_FLAG_MT_STEEL_COMPLETE")
+			BossScene.set_flag("CUTSCENE_FLAG_UPROAR_FOREST_COMPLETE")
+			check.call("Skarmory after Mt. Steel", d.recruit_allowed(mk.call("0227")), true)
+			check.call("Mankey after Uproar Forest", d.recruit_allowed(mk.call("0056")), true)
+			check.call("Latias never", d.recruit_allowed(mk.call("0380")), false)
+			check.call("Latios never", d.recruit_allowed(mk.call("0381")), false)
+			check.call("Rattata always", d.recruit_allowed(mk.call("0019")), true)
+			check.call("Tiny Woods allows recruiting (Red: no)", DB.dungeons.dungeons["tiny_woods"].get("recruit", true), false)
+			# --- end to end: knock out a wild Pokémon next to the leader
+			var setup := func(sp: String, area: bool, rate: int) -> Mon:
+				for m in dungeon.fs.mons.duplicate():
+					if not m.is_team():
+						if m.visual: m.visual.queue_free()
+						dungeon.fs.mons.erase(m)
+				var a := Services.area_of(sp)
+				Game.friend_areas.erase(a)
+				if area: Game.friend_areas.append(a)
+				DB.species[sp].recruit = rate
+				var p := Vector2i(-1, -1)
+				for dv in DB.DIRS:
+					var q: Vector2i = dungeon.fs.leader.pos + dv
+					if dungeon.fs.walkable(q, null) and dungeon.fs.mon_at(q) == null:
+						p = q
+						break
+				var w: Mon = dungeon._spawn_wild(p)
+				print("RECRUITTEST spawned %s at %s (leader %s) recruit_ok=%s" % [w.sp, w.pos, dungeon.fs.leader.pos, w.recruit_ok])
+				return w
+			var orig := int(DB.species["0019"].recruit)
+			# a) no Friend Area: never joins
+			var w1: Mon = setup.call("0019", false, 999)
+			var sp1 := w1.sp
+			DB.species[sp1].recruit = 999
+			Game.friend_areas.erase(Services.area_of(sp1))
+			w1.hp = 1
+			var r1: bool = await d.try_recruit(L, w1)
+			check.call("joins without its Friend Area", r1, false)
+			# b) Friend Area owned, rate certain: joins, and is in the team
+			Game.friend_areas.append(Services.area_of(sp1))
+			var r2: bool = await d.try_recruit(L, w1)
+			check.call("joins with its Friend Area", r2, true)
+			check.call("joined Pokémon is on the team", w1.is_team(), true)
+			# c) full team: no more joins
+			var p3 := Vector2i(-1, -1)
+			for dv in DB.DIRS:
+				if d.fs.walkable(L.pos + dv, null) and d.fs.mon_at(L.pos + dv) == null:
+					p3 = L.pos + dv
+					break
+			var w3: Mon = d._spawn_wild(p3)
+			DB.species[w3.sp].recruit = 999
+			Game.friend_areas.append(Services.area_of(w3.sp))
+			while d.fs.team().size() < Services.PARTY_MAX:
+				var extra: Mon = DB.make_mon("0019", 5, "team")
+				d.fs.mons.append(extra)
+			var r3: bool = await d.try_recruit(L, w3)
+			check.call("joins when the team is full", r3, false)
+			# d) the roll: rate 100 at Lv5 joins about 10% of the time
+			DB.species[sp1].recruit = 100
+			var hits := 0
+			for i in 4000:
+				if d.fs.rng.randi_range(0, 999) < d.recruit_rate(L, w3) - int(DB.species[w3.sp].recruit) + 100:
+					hits += 1
+			print("RECRUITTEST roll: rate 100 -> %.1f%% (Red: 10%%)" % [hits / 40.0])
+			# e) kept only when the team gets home
+			var friends0 := Game.friends.size()
+			d._end("cleared")
+			await get_tree().create_timer(0.5).timeout
+			check.call("recruit kept after clearing", Game.friends.size() - friends0 >= 1, true)
+			DB.species["0019"].recruit = orig
+			# f) a lost expedition loses its recruit (Red keeps recruits only when you get home)
+			await start_dungeon("thunderwave_cave")
+			await get_tree().create_timer(2.0).timeout
+			d = dungeon
+			d.auto_answer = true
+			L = d.fs.leader
+			var w5: Mon = setup.call("0019", true, 999)
+			DB.species[w5.sp].recruit = 999
+			if not Services.has_area_for(w5.sp):
+				Game.friend_areas.append(Services.area_of(w5.sp))
+			var n5 := Game.friends.filter(func(f): return str(f.sp) == w5.sp).size()
+			var r5: bool = await d.try_recruit(L, w5)
+			d._end("defeated")
+			await get_tree().create_timer(0.5).timeout
+			check.call("recruit lost when the team faints", r5 and Game.friends.filter(func(f): return str(f.sp) == w5.sp).size() == n5, true)
+			# h) DX recruiting: joins for the dungeon from 2 tiles without a Friend Area; choice at the exit
+			Game.settings["qol_recruit"] = 1
+			await start_dungeon("thunderwave_cave")
+			await get_tree().create_timer(2.0).timeout
+			d = dungeon
+			d.auto_answer = true
+			L = d.fs.leader
+			var spawn_at := func(dist: int, sp: String, area: bool) -> Mon:
+				var dd: Dungeon = dungeon
+				var LL: Mon = dd.fs.leader
+				for m in dd.fs.mons.duplicate():
+					if not m.is_team():
+						if m.visual: m.visual.queue_free()
+						dd.fs.mons.erase(m)
+				var p := Vector2i(-1, -1)
+				for dv in DB.DIRS:
+					var q: Vector2i = LL.pos + dv * dist
+					var mid: Vector2i = LL.pos + dv
+					if dd.fs.walkable(q, null) and dd.fs.mon_at(q) == null and dd.fs.walkable(mid, null) and dd.fs.can_see(LL, q):
+						p = q
+						break
+				if p.x < 0:
+					return null
+				var w: Mon = dd._spawn_wild(p)
+				w.sp = sp
+				w.recruit_ok = true
+				DB.species[sp].recruit = 999
+				Game.friend_areas.erase(Services.area_of(sp))
+				if area: Game.friend_areas.append(Services.area_of(sp))
+				return w
+			var money0 := Game.money
+			var f0 := Game.friends.size()
+			var wx: Mon = spawn_at.call(3, "0019", false)
+			if wx: check.call("DX: no join from 3 tiles", await d.try_recruit(L, wx), false)
+			var wa: Mon = spawn_at.call(2, "0016", false)
+			var ra: bool = wa != null and await d.try_recruit(L, wa)
+			check.call("DX: joins from 2 tiles with no Friend Area", ra, true)
+			check.call("DX: it's a temporary member", ra and wa.is_team() and Dungeon.is_temp(wa), true)
+			if ra:
+				var e0 := wa.exp
+				await d._give_ko_exp([wa], DB.make_mon("0019", 20, "enemy"))
+				check.call("DX: temporary members gain no Exp.", wa.exp, e0)
+				check.call("DX: temporary members can't hold items", d._cant_hold(wa), true)
+			var wb: Mon = spawn_at.call(1, "0019", true)
+			var sp_b := wb.sp if wb else ""
+			var rb: bool = wb != null and await d.try_recruit(L, wb)
+			check.call("DX: second temporary member", rb, true)
+			while d.fs.team().size() < Dungeon.DX_TEAM_MAX:
+				var extra2: Mon = DB.make_mon("0019", 5, "team")
+				d.fs.mons.append(extra2)
+			var wc: Mon = spawn_at.call(1, "0019", true)
+			if wc: check.call("DX: no join with 8 on the team", await d.try_recruit(L, wc), false)
+			var nb := Game.friends.filter(func(f): return str(f.sp) == sp_b).size()
+			d._end("cleared")
+			await get_tree().create_timer(1.0).timeout
+			check.call("DX: the one with a Friend Area stays", Game.friends.size() - f0, 1)
+			check.call("DX: ...and it's the right one", Game.friends.filter(func(f): return str(f.sp) == sp_b).size(), nb + 1)
+			check.call("DX: the one without leaves and pays", Game.money > money0, true)
+			# lost expedition: temporary members don't stay
+			await start_dungeon("thunderwave_cave")
+			await get_tree().create_timer(2.0).timeout
+			d = dungeon
+			d.auto_answer = true
+			L = d.fs.leader
+			var wd: Mon = spawn_at.call(1, "0019", true)
+			var f1 := Game.friends.size()
+			var rd: bool = wd != null and await d.try_recruit(L, wd)
+			d._end("defeated")
+			await get_tree().create_timer(0.5).timeout
+			check.call("DX: temporary member lost when the team faints", rd and Game.friends.size() == f1, true)
+			Game.settings["qol_recruit"] = 0
+			GData.load_all()
+			# g) story joins: Latios (special 0x25) unlocks his Friend Area; the base visitor (0x29 / 0x2C)
+			var ts := GDScript.new()
+			ts.source_code = "extends RefCounted\nvar name_buffer := \"\"\nvar friend_area_name := \"\"\nvar names := [\"\", \"\", \"\", \"\"]\n"
+			ts.reload()
+			var gs := GDScript.new()
+			gs.source_code = "extends RefCounted\nvar text\n"
+			gs.reload()
+			var G = gs.new()
+			G.text = ts.new()
+			Game.friend_areas.erase(Services.area_of("0381"))
+			G.text.name_buffer = "Latios"
+			Story.special_func(G, null, 0x25, 0, 0)
+			check.call("Latios joins through the story", Story._has_mon("0381"), true)
+			check.call("Latios's Friend Area unlocked", Services.has_area_for("0381"), true)
+			var res29: int = Story.special_func(G, null, 0x29, 0, 0)
+			var vsp := GData.species_of_red(GVars.get_val(null, GVars.NEW_FRIEND_KIND))
+			check.call("a visitor is chosen (0x29)", res29 in [1, 2] and vsp != "", true)
+			G.text.name_buffer = ""
+			var had := Story._has_mon(vsp)
+			Story.special_func(G, null, 0x2C, 1, 0)
+			check.call("the visitor joins (0x2C) and its area opens", Story._has_mon(vsp) and Services.has_area_for(vsp) and not had, true)
+			print("RECRUITTEST visitor was %s (%s), area %s" % [vsp, DB.species.get(vsp, {}).get("name", "?"), Services.area_of(vsp)])
+			print("RECRUITTEST summary ok=%d bad=%d" % [tally.ok, tally.bad])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--touchaudit"):
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
@@ -414,6 +833,9 @@ func _ready() -> void:
 			tap.call(m2._rows[1], m2._rows[1].size / 2.0, true)
 			tap.call(m2._rows[1], m2._rows[1].size / 2.0, false)
 			print("BAGTEST tap picked: finished=%s act=%s i=%s" % [m2.finished, m2.result.get("act", ""), m2.result.get("i", "")])
+			for k in ["set", "star", "sticky", "blank", "heart_r3"]:
+				var tx: Texture2D = TeamScreens.icon(k)
+				print("BAGTEST icon %s size=%s rom=%s" % [k, tx.get_size() if tx else "null", TeamScreens._rom_icon(k) != null])
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--walktest"):
@@ -3095,6 +3517,9 @@ func _storytest() -> void:
 				_st_sig = sig
 			if _st_same == 25 or (_st_same > 0 and _st_same % 120 == 0) or ("--dumpat=%d" % t) in OS.get_cmdline_user_args():
 				ground.dump_actions()
+			if _st_same > 0 and _st_same % 90 == 0:
+				_ap_counts.clear()          # no story progress for a while: try every target again (test autopilot only)
+				print("  TEST autopilot: no progress for %ds, retrying every target" % _st_same)
 			print("STORY t=%d map=%d(%s) scen=%d,%d req=%d f=%d p=%s lives=%d" % [t, ground.vis_map, ground.map_file, sc.x, sc.y, ground.req, ground._frame, ground.is_processing(),
 				ground.lives.filter(func(L): return L.kind_id != -1).size()])
 			if OS.get_cmdline_user_args().has("--lives"):

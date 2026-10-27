@@ -140,9 +140,9 @@ static func menu(root: Control) -> void:
 				await _remap_list(root, true)
 			2:
 				await Dialog.talk(root, [
-					"Controller (Red's GBA controls):\nA: attack / talk.  L+A: use the set move.\nA+B together: wait a turn.",
-					"Tap B: menu.  Hold B + direction: run.\nHold R: diagonal moves only.\nTap R or Start: turn in place.",
-					"L+B: message log.  L+R: throw the set item.\nSelect: map.  X: moves.  Y: items."])
+					"Controller (Red's GBA controls):\nA: attack / talk.  A+B together: wait a turn.\nL+A / L+B / L+X / L+Y: use move 1 / 2 / 3 / 4.",
+					"Tap B: menu.  Hold B + direction: run.\nHold R: diagonal moves only.\nTap R: face the nearest foe.  Start: turn in place.",
+					"L+Select: message log.  L+R: throw the set item.\nSelect: map.  X: moves.  Y: items."])
 			3:
 				reset()
 				Game.save_game()

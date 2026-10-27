@@ -75,6 +75,7 @@ func set_status(floor_txt: String, m: Mon, belly: int) -> void:
 	top_draw.queue_redraw()
 
 const P := UITheme.PX
+const BAR_MAX := 200         # full width at 200 max HP (Red stops at 96; raised so it keeps growing)
 func _glyph(i: int, x: float, y: float, w := 8) -> float:
 	top_draw.draw_texture_rect_region(_hudfont, Rect2(x, y, w * P, 8 * P), Rect2(i * 8, 0, w, 8))
 	return x + w * P
@@ -105,8 +106,11 @@ func _draw_top() -> void:
 	x = _num(maxi(0, _hp), x, y)
 	x = _glyph(5, x - P, y) - P
 	x = _num(_maxhp, x, y) + 2 * P
-	var bw := minf(get_viewport_rect().size.x, 360.0 * P) - x - 2 * P
-	if bw >= 12:
+	# Like Red (dungeon_tilemap.c sub_803FA4C) the bar's length follows the max HP, so it grows as the leader
+	# levels up; Red caps it at 96 max HP, here it reaches the full width at BAR_MAX.
+	var room := minf(get_viewport_rect().size.x, 360.0 * P) - x - 2 * P
+	var bw: float = maxf(2.0, round(room * float(clampi(_maxhp, 1, BAR_MAX)) / BAR_MAX / P)) * P   # BAR_MAX+ max HP reaches the edge
+	if bw >= 2 * P:
 		var by := y + P
 		var fw: float = round(bw * clampf(float(_hp) / maxf(1, _maxhp), 0, 1) / P) * P
 		top_draw.draw_rect(Rect2(x, by, bw, 6 * P), Color.BLACK)

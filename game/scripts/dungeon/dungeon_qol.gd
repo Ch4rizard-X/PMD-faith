@@ -7,12 +7,15 @@ extends Node
 ##   Pokémon info (long-press, hover or right-click a Pokémon), map markers + an always-on corner minimap,
 ##   auto-pickup filter, low-HP warning (red screen-edge pulse, beep, blinking HP bar),
 ##   team item prompts (an ally gets low / poisoned / faints: offer the matching Toolbox item),
-##   burn / poison wear off after a while (later PMD games; Red keeps them until cured or the next floor).
+##   burn / poison wear off after a while (later PMD games; Red keeps them until cured or the next floor),
+##   DX recruiting (Rescue Team DX: defeated Pokémon join for the dungeon from 2 tiles; keep them at the exit).
 
 const DEFAULTS := {"qol_run": true, "qol_tap": true, "qol_preview": true, "qol_info": true,
-	"qol_minimap": false, "qol_pickup": 0, "qol_lowhp": true, "qol_itemask": true, "qol_statusfade": true}
-const KEYS := ["qol_run", "qol_tap", "qol_preview", "qol_info", "qol_minimap", "qol_pickup", "qol_lowhp", "qol_itemask", "qol_statusfade"]
+	"qol_minimap": false, "qol_pickup": 0, "qol_lowhp": true, "qol_itemask": true, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1}
+const KEYS := ["qol_run", "qol_tap", "qol_preview", "qol_info", "qol_minimap", "qol_pickup", "qol_lowhp", "qol_itemask", "qol_statusfade", "qol_recruit", "qol_partner_ai"]
 const PICKUP_NAMES := ["All", "No thrown", "Poké+food", "None"]
+const PARTNER_AI_NAMES := ["Red", "Smarter"]   # Smarter: dungeon/partner_ai.gd for Let's go together!
+const RECRUIT_NAMES := ["Red", "DX"]     # Red: joins for good; DX: joins for the dungeon, choose at the exit
 const LONG_PRESS := 0.5
 const HOVER_TIME := 0.35
 const TAP_SLOP := 12.0
@@ -902,6 +905,8 @@ func option_values() -> Dictionary:
 	for k in KEYS:
 		v[k] = opt(k)
 	v.qol_pickup = clampi(int(v.qol_pickup), 0, PICKUP_NAMES.size() - 1)
+	v.qol_recruit = clampi(int(v.qol_recruit), 0, RECRUIT_NAMES.size() - 1)
+	v.qol_partner_ai = clampi(int(v.qol_partner_ai), 0, PARTNER_AI_NAMES.size() - 1)
 	return v
 
 func option_row(k: String, v: Dictionary) -> Dictionary:
@@ -916,6 +921,8 @@ func option_row(k: String, v: Dictionary) -> Dictionary:
 		"qol_lowhp": return {"text": "Low-HP warning", "right": oo.call(v[k])}
 		"qol_itemask": return {"text": "Team item prompts", "right": oo.call(v[k])}
 		"qol_statusfade": return {"text": "Burn/poison wear off", "right": oo.call(v[k])}
+		"qol_partner_ai": return {"text": "Partner AI", "right": "%s %s %s" % [TeamScreens.ARROW_L, PARTNER_AI_NAMES[int(v[k])], TeamScreens.ARROW_R]}
+		"qol_recruit": return {"text": "Recruiting", "right": "%s %s %s" % [TeamScreens.ARROW_L, RECRUIT_NAMES[int(v[k])], TeamScreens.ARROW_R]}
 	return {"text": k}
 
 ## Left/Right on an option row. Returns false for keys this module doesn't own.
@@ -924,6 +931,10 @@ func option_change(k: String, v: Dictionary, d: int) -> bool:
 		return false
 	if k == "qol_pickup":
 		v[k] = (int(v[k]) + d + PICKUP_NAMES.size()) % PICKUP_NAMES.size()
+	elif k == "qol_recruit":
+		v[k] = (int(v[k]) + d + RECRUIT_NAMES.size()) % RECRUIT_NAMES.size()
+	elif k == "qol_partner_ai":
+		v[k] = (int(v[k]) + d + PARTNER_AI_NAMES.size()) % PARTNER_AI_NAMES.size()
 	else:
 		v[k] = not bool(v[k])
 	return true

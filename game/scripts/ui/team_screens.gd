@@ -177,10 +177,69 @@ static func _pix(rows: Array, fill: Color, outline: Color, fill_rows := 99) -> I
 
 ## "star" (Red's STAR_BULLET), "set" (ICON_SET), "heart_r0".."heart_r3" / "heart_y0".."heart_y3"
 ## (HEART_*_TINY..LARGE: HP quarters), "blank".
+const ICON_GLYPH := {"star": "STAR_BULLET", "set": "ICON_SET", "sticky": "ICON_STICKY", "blank": "ICON_BLANK",
+	"heart_r0": "HEART_RED_TINY", "heart_r1": "HEART_RED_SMALL", "heart_r2": "HEART_RED_MEDIUM", "heart_r3": "HEART_RED_LARGE",
+	"heart_y0": "HEART_YELLOW_TINY", "heart_y1": "HEART_YELLOW_SMALL", "heart_y2": "HEART_YELLOW_MEDIUM", "heart_y3": "HEART_YELLOW_LARGE"}
+
+## Red's icon from the ROM font (assets/ui/front/glyphs.png), scaled like the text; null if it isn't there.
+static func _rom_icon(kind: String) -> Texture2D:
+	if not ICON_GLYPH.has(kind):
+		return null
+	var meta: Dictionary = UITheme._glyph_meta()
+	var g = meta.get(ICON_GLYPH[kind])
+	var src: Texture2D = load("res://assets/ui/front/glyphs.png") if g != null and ResourceLoader.exists("res://assets/ui/front/glyphs.png") else null
+	if src == null:
+		return null
+	var im := src.get_image().get_region(Rect2i(int(g[0]), 0, maxi(1, int(g[1])), 12))
+	im.resize(im.get_width() * P, im.get_height() * P, Image.INTERPOLATE_NEAREST)
+	return ImageTexture.create_from_image(im)
+
+## The item's sprite (assets/ui/items.png, the floor sprite) sized for a menu row; items without their own
+## sprite use another item's with the same Red sprite number. Blank when there is none.
+static func item_icon(id: String) -> Texture2D:
+	var key := "item:" + id
+	if _icons.has(key):
+		return _icons[key]
+	var a = DB.item_icons.get(id)
+	if a == null:
+		var I: Dictionary = DB.items.get(id, {})
+		for k in DB.items:
+			var J: Dictionary = DB.items[k]
+			if DB.item_icons.has(k) and int(J.get("sprite", -1)) == int(I.get("sprite", -2)):
+				a = DB.item_icons[k]
+				break
+	var t: Texture2D = null
+	var src: Texture2D = DB.tex("res://assets/ui/items.png")
+	if a != null and src != null:
+		var im := src.get_image().get_region(Rect2i(int(a[0]), int(a[1]), 16, 16))
+		im.resize(12 * P, 12 * P, Image.INTERPOLATE_NEAREST)
+		t = ImageTexture.create_from_image(im)
+	else:
+		t = ImageTexture.create_from_image(Image.create(12 * P, 12 * P, false, Image.FORMAT_RGBA8))
+	_icons[key] = t
+	return t
+
+## A Toolbox row: the item's sprite, then Red's sticky / set marks in front of the name (items.c), count right.
+static func item_row(b: Dictionary, show_set := true) -> Dictionary:
+	var id := str(b.get("id", ""))
+	var I: Dictionary = DB.items.get(id, {})
+	var nm := DB.item_name(id)
+	if bool(b.get("sticky", false)):
+		nm = UITheme.glyph("ICON_STICKY") + nm
+	if show_set and bool(b.get("set", false)):
+		nm = UITheme.glyph("ICON_SET") + nm
+	var row := {"text": nm, "icon": item_icon(id)}
+	if I.get("stack", false) and int(b.get("n", 1)) > 0:
+		row.right = str(int(b.get("n", 1)))
+	return row
+
 static func icon(kind: String) -> Texture2D:
 	if _icons.has(kind):
 		return _icons[kind]
-	var t: Texture2D
+	var t: Texture2D = _rom_icon(kind)
+	if t != null:
+		_icons[kind] = t
+		return t
 	if kind == "star":
 		t = _pix(_STAR, Color("f8e040"), Color("583000"))
 	elif kind == "set":
@@ -1378,7 +1437,7 @@ static func team_menu(root: Control, members: Array, in_dungeon := false, dungeo
 		if not lead and in_dungeon:
 			opts.append("Talk")
 		opts.append("Check IQ")
-		if not lead:
+		if not lead and not (x is Object and x.has_meta("temp_recruit")):     # DX temporary members: no tactics
 			opts.append("Tactics")
 		# Red post-game (QUEST_CAN_CHANGE_LEADER): pick another team member to lead
 		if not lead and not in_dungeon and x in Game.team and Game.story.has("vars") and GVars.quest(GVars.QUEST_CAN_CHANGE_LEADER):

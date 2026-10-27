@@ -10,7 +10,7 @@ extends RefCounted
 ## changes asks Red's "Change settings?".
 
 const P := UITheme.PX
-const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true}
+const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1}
 const ROWS := {
 	"msg_speed": ["Speed", ["Slow", "Normal", "Fast"]],
 	"far_off_pals": ["Far-off pals", ["Self", "Look"]],
@@ -21,8 +21,10 @@ const ROWS := {
 	"window_color": ["Windows", ["Blue", "Red", "Green"]],
 	"prepare_screen": ["Prepare screen", ["Off", "On"]],     # remake: the Prepare screen after the world map
 	"qol_statusfade": ["Burn/poison wear off", ["Off", "On"]],   # remake: as in the later PMD games
+	"qol_recruit": ["Recruiting", ["Red", "DX"]],
+	"qol_partner_ai": ["Partner AI", ["Red", "Smarter"]],       # remake: smarter Let's go together!               # remake: Rescue Team DX's temporary recruits
 }
-const PAGES := {"Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale"]}
+const PAGES := {"Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale"]}
 
 static func value(k: String) -> int:
 	var v = Game.settings.get(k, DEFAULTS.get(k, 0))

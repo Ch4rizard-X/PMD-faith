@@ -24,7 +24,7 @@ const FS_SKIP := ["mons", "leader", "rng", "_red_exits_cache"]
 const MON_SKIP := ["visual"]
 const META_SKIP := ["fainting"]
 ## Dungeon vars stored as-is (plain data).
-const DUNGEON_VARS := ["dkey", "dname", "floor_i", "belly", "belly_max", "belly_state", "wind_state", "spawn_timer", "mem", "recruited_names"]
+const DUNGEON_VARS := ["dkey", "dname", "floor_i", "belly", "belly_max", "belly_state", "wind_state", "spawn_timer", "mem", "recruited_names", "dx_turns"]
 ## Game fields that change inside a dungeon (snapshotted so the suspend file is self-consistent).
 const GAME_VARS := ["team", "bag", "money", "jobs", "flags", "rank_points", "storage"]
 
