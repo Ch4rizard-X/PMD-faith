@@ -1,199 +1,337 @@
 #!/usr/bin/env python3
-"""Export the walkable-town data of the old HTML remake into the Godot project.
+"""The walkable town (Pokemon Square, Post Office, Makuhita Dojo, Whiscash Pond, team bases) for scripts/town/town.gd:
+game/assets/town/* and game/data/town.json, built from Red's own ground maps in the pret/pmd-red decomp.
 
-Reads TOWN_MAPS / TOWN_GRIDS / TOWN_OPEN / TOWN_BLOCKS / BASE_SHAPE / MAPFILES straight out of the old
-index.html (evaluated with node), bakes the walk grids (traced grid + TOWN_OPEN patches, Cubone's base =
-intersection of the other bases, as gridFor/baseInterGrid did), precomputes the animated map layers
-(packs/anim/*.json) into steady per-frame tile states, copies the map art (HD webp when it exists) into
-res://assets/town/ and writes res://data/town.json.
+  pictures   the ground map (gen_ground_bg.map_state: data/map_bg *.bpl/.bpc/.bma/.bpa) rendered with all its layers
+             at animation frame 0, xBRZ 3x, lossless WebP (k = 3). Team bases use the "basic" house.
+  anim       the map's own animation (BPA tile slots 0/1 + BPL palette cycling, ticked at 60 Hz exactly like
+             sub_80A4764): every change over one common period becomes a frame; 'd' lists the 8x8 tiles that
+             change going into the next frame with their picture in anim_<map>.webp (tiles cut from the xBRZ 3x
+             frame, deduplicated, 64 per row). Format as AnimLayer in town.gd expects.
+  grid       walkable 4 px cells: Red's collision layer (bit 0x80 = solid, sub_80A5204) plus the remake's
+             hand-placed OPEN patches (paths into the yards / the Dojo maze entrance the remake adds).
+  flags.png  the 32 team flags (flag00p..flag16p, flag100p..flag114p ornaments, gen_ornaments.py) 6 frames each.
+  LAYOUT     the remake's own town design (spawn points, NPC stalls, interaction areas, exits, music) - authored
+             data of this project, kept here as source.
 """
-import base64, json, os, re, shutil, subprocess, sys
+import json
+import base64
+import math
+import os
+import sys
 
-OLD = "/tmp/claude-0/rt/app/src/main/assets/www"
-GAME = "/tmp/claude-0/pmd1/game"
-HTML = open(os.path.join(OLD, "index.html"), encoding="utf-8").read()
+import numpy as np
+from PIL import Image
+
+TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, TOOLS)
+sys.path.insert(0, os.path.join(TOOLS, "ground"))
+import common  # noqa: E402
+import gen_ground_bg as GB  # noqa: E402
+
+OUT = os.path.join(common.ASSETS, "town")
+K = 3
+PERIOD_CAP = 3600            # ticks (60 s): longest animation period baked into a town map
+GROUND = {"square": ("pokemon_square", "pokemon_square"), "post_office": ("pelipper_post_office", "post_office"),
+          "dojo": ("makuhita_dojo", "makuhita_dojo"), "whiscash": ("whiscash_pond", "whiscash_pond")}
+BASES = {"0001": "bulbasaur", "0004": "charmander", "0007": "squirtle", "0025": "pikachu", "0155": "cyndaquil",
+         "0258": "mudkip", "0066": "cubone"}
+FLAGS = ["flag%02dp" % i for i in range(17)] + ["flag%dp" % (100 + i) for i in range(15)]
+# walkable patches [x0, y0, x1, y1] (px) on top of Red's collision
+OPEN = {
+    "square": [[700, 486, 774, 534]],
+    "whiscash": [[216, 222, 242, 320]],                         # stepping stones out to Whiscash's rock
+    "dojo": [[480, 264, 560, 300], [560, 284, 648, 384], [520, 340, 648, 384]],   # path to the Dojo maze exits
+    "0066": [[258, 200, 296, 300], [262, 286, 292, 318], [200, 222, 360, 292]],
+    "0004": [[190, 222, 365, 286], [260, 204, 294, 224], [262, 284, 292, 312], [254, 296, 300, 322]],
+    "0155": [[190, 222, 365, 286], [260, 204, 294, 224], [262, 284, 292, 312], [254, 296, 300, 322]],
+    "0001": [[198, 212, 358, 280], [258, 200, 292, 224], [262, 278, 292, 312]],
+    "0007": [[262, 204, 292, 254], [240, 270, 310, 324], [150, 222, 218, 264], [214, 226, 340, 264], [148, 188, 170, 312],
+             [334, 222, 400, 264], [380, 188, 402, 312]],
+    "0258": [[262, 204, 292, 254], [240, 270, 310, 324], [150, 222, 218, 264], [214, 226, 340, 264], [148, 188, 170, 312],
+             [334, 222, 400, 264], [380, 188, 402, 312]],
+}
+
+# the remake's town design (positions in map pixels; f = facing 0..7)
+LAYOUT = {'maps': {'square': {'music': '007',
+                     'spawn': [520, 356, 0],
+                     'npcs': [{'id': 'kecleon_shop',
+                               'sp': '0352',
+                               'x': 285,
+                               'y': 245,
+                               'f': 0,
+                               'reach': [266, 256, 299, 292]},
+                              {'id': 'kecleon_wares',
+                               'sp': '0352p',
+                               'x': 314,
+                               'y': 245,
+                               'f': 0,
+                               'reach': [299, 256, 332, 292]},
+                              {'id': 'persian_bank',
+                               'sp': '0053',
+                               'x': 658,
+                               'y': 268,
+                               'f': 0,
+                               'reach': [622, 292, 702, 324]},
+                              {'id': 'kangaskhan_storage',
+                               'sp': '0115',
+                               'x': 335,
+                               'y': 500,
+                               'f': 0,
+                               'reach': [298, 512, 372, 532]},
+                              {'id': 'gulpin_shop',
+                               'sp': '0316',
+                               'x': 661,
+                               'y': 490,
+                               'f': 0,
+                               'reach': [622, 506, 702, 528]},
+                              {'id': 'wigglytuff',
+                               'sp': '0040',
+                               'x': 783,
+                               'y': 268,
+                               'f': 0,
+                               'reach': [748, 292, 818, 324]}],
+                     'spots': [{'id': 'nohome', 'reach': [376, 262, 420, 284]}],
+                     'blocks': [],
+                     'exits': [{'r': [495, 0, 545, 6], 'to': 'whiscash', 'back': [520, 18, 0]},
+                               {'r': [0, 302, 8, 342], 'to': 'base', 'back': [18, 322, 2]},
+                               {'r': [520, 708, 560, 720], 'to': 'dojo', 'back': [540, 694, 4]},
+                               {'r': [950, 302, 960, 342], 'to': 'post_office', 'back': [936, 322, 6]}],
+                     'arrive': {'post_office': [936, 322, 6],
+                                'dojo': [540, 694, 4],
+                                'whiscash': [520, 18, 0],
+                                'base': [18, 322, 2]},
+                     'xblocks': []},
+          'post_office': {'music': '007',
+                          'spawn': [22, 322, 2],
+                          'npcs': [{'id': 'pelipper_board',
+                                    'sp': '0279',
+                                    'x': 386,
+                                    'y': 276,
+                                    'f': 0,
+                                    'reach': [350, 262, 424, 312]}],
+                          'spots': [{'id': 'pelipper_board', 'reach': [266, 300, 326, 322]}],
+                          'blocks': [],
+                          'exits': [{'r': [0, 300, 8, 342], 'to': 'square', 'back': [22, 322, 2]}],
+                          'arrive': {'square': [22, 322, 2]},
+                          'xblocks': []},
+          'dojo': {'music': '110',
+                   'spawn': [372, 18, 0],
+                   'npcs': [{'id': 'makuhita_dojo',
+                             'sp': '0296',
+                             'x': 278,
+                             'y': 238,
+                             'f': 0,
+                             'reach': [252, 246, 304, 272]}],
+                   'spots': [],
+                   'blocks': [],
+                   'exits': [{'r': [350, 0, 395, 6], 'to': 'square', 'back': [372, 18, 0]},
+                             {'r': [640, 280, 648, 384], 'to': 'dojo_maze', 'back': [618, 330, 6]},
+                             {'r': [520, 376, 648, 384], 'to': 'dojo_maze', 'back': [590, 356, 4]}],
+                   'arrive': {'square': [372, 18, 0]},
+                   'xblocks': []},
+          'whiscash': {'music': '007',
+                       'spawn': [231, 600, 4],
+                       'npcs': [{'id': 'whiscash',
+                                 'sp': '0340',
+                                 'x': 229,
+                                 'y': 204,
+                                 'f': 0,
+                                 'reach': [206, 212, 252, 250]}],
+                       'spots': [],
+                       'blocks': [],
+                       'exits': [{'r': [200, 616, 262, 624], 'to': 'square', 'back': [231, 600, 4]}],
+                       'arrive': {'square': [231, 600, 4]},
+                       'xblocks': []},
+          'base': {'music': '001',
+                   'spawn': [276, 250, 0],
+                   'npcs': [],
+                   'spots': [{'id': 'bed', 'reach': [250, 210, 302, 234]},
+                             {'id': 'mailbox', 'reach': [228, 260, 280, 294]}],
+                   'blocks': [[252, 268, 9]],
+                   'exits': [{'r': [544, 305, 552, 398], 'to': 'square', 'back': [536, 352, 6]},
+                             {'r': [0, 305, 8, 398], 'to': 'friend_areas', 'back': [22, 350, 2]},
+                             {'r': [236, 544, 308, 552], 'to': 'world_map', 'back': [272, 530, 4]}],
+                   'arrive': {'square': [536, 352, 6]}}},
+ 'bases': {'0001': {'xblocks': []},
+           '0004': {'xblocks': [[200, 272, 12], [357, 272, 12]]},
+           '0007': {'xblocks': []},
+           '0025': {'xblocks': []},
+           '0155': {'xblocks': [[200, 272, 12], [357, 272, 12]]},
+           '0258': {'xblocks': []},
+           '0066': {'xblocks': []}},
+ 'base_shape': {'0152': '0001',
+                '0252': '0001',
+                '0255': '0155',
+                '0133': '0025',
+                '0052': '0025',
+                '0300': '0025',
+                '0158': '0007',
+                '0054': '0007',
+                '0104': '0066'},
+ 'follow_gap': 30,
+ 'speed': 84,
+ 'flag': {'tex': 'flags.png', 'x': 198, 'y': 116, 'w': 32, 'h': 32, 'frames': 6, 'ms': 140}}
 
 
-def js_literal(name):
-    """Text of `const NAME = {...}` (balanced braces, strings skipped)."""
-    m = re.search(r"\bconst %s\s*=\s*" % re.escape(name), HTML)
-    if not m:
-        sys.exit("missing " + name)
-    i = m.end()
-    assert HTML[i] == "{", name
-    depth, j, q = 0, i, None
-    while True:
-        c = HTML[j]
-        if q:
-            if c == "\\":
-                j += 1
-            elif c == q:
-                q = None
-        elif c in "'\"`":
-            q = c
-        elif c == "/" and HTML[j + 1] == "/":
-            j = HTML.index("\n", j)
-            continue
-        elif c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                return HTML[i:j + 1]
-        j += 1
-
-
-def js_eval(names):
-    src = "const out = {};\n"
-    for n in names:
-        src += "out[%r] = (%s);\n" % (n, js_literal(n))
-    src += "process.stdout.write(JSON.stringify(out));\n"
-    r = subprocess.run(["node", "-e", src], capture_output=True, text=True, check=True)
-    return json.loads(r.stdout)
-
-
-D = js_eval(["TOWN_MAPS", "TOWN_GRIDS", "TOWN_OPEN", "TOWN_BLOCKS", "BASE_SHAPE", "MAPFILES"])
-TM, TG, TOPEN, TBLK, SHAPE, MAPFILES = (D[k] for k in ["TOWN_MAPS", "TOWN_GRIDS", "TOWN_OPEN", "TOWN_BLOCKS", "BASE_SHAPE", "MAPFILES"])
-
-# old map key -> Godot map key (= the exit id the town emits)
-KEYMAP = {"square": "square", "post": "post_office", "dojo": "dojo", "pond": "whiscash", "base": "base"}
-# old action -> interact id
-ACTS = {"shop": "kecleon_shop", "wares": "kecleon_wares", "bank": "persian_bank", "storage": "kangaskhan_storage",
-        "link": "gulpin_shop", "wiggly": "wigglytuff", "dojo": "makuhita_dojo", "post": "pelipper_board",
-        "board": "pelipper_board", "whiscash": "whiscash", "base": "bed", "mailbox": "mailbox", "nohome": "nohome"}
-# exits that start something instead of changing town map
-EXIT_ACTS = {("dojo", "dungeon"): "dojo_maze", ("base", "dungeon"): "world_map", ("base", "friendwalk"): "friend_areas"}
-# Which song plays where (music.js, checked against pmd-red's song table)
-MUSIC = {"square": "007", "post_office": "007", "whiscash": "007", "base": "001", "dojo": "110"}
-MUSIC_FILES = {"001": "001 Rescue Team Base.mp3", "007": "007 Pokemon Square.mp3", "110": "110 Makuhita Dojo.mp3",
-               "017": "017 Kecleon Shop.mp3"}
-
-
-def grid_for(key):
-    if key in TG:
-        g = TG[key]
-        bits = bytearray(base64.b64decode(g["b64"]))
-    else:   # base_0066: walkable on every other base map
-        ks = [k for k in TG if k.startswith("base_")]
-        g = TG[ks[0]]
-        B = [base64.b64decode(TG[k]["b64"]) for k in ks]
-        bits = bytearray(255 for _ in B[0])
-        for b in B:
-            for i in range(len(bits)):
-                bits[i] &= b[i]
-    C, W, H = g["C"], g["W"], g["H"]
-    for x0, y0, x1, y1 in TOPEN.get(key, []):
-        for gy in range(y0 // C, -(-y1 // C)):
-            for gx in range(x0 // C, -(-x1 // C)):
-                i = gy * W + gx
-                bits[i >> 3] |= 1 << (i & 7)
-    return {"C": C, "W": W, "H": H, "b64": base64.b64encode(bytes(bits)).decode()}
-
-
-def anim_for(file):
-    jp = os.path.join(OLD, "assets/packs/anim/%s.json" % file)
-    if not os.path.exists(jp):
-        return None
-    j = json.load(open(jp))
-    d = j["d"]
-    if not d:
-        return None
-    # each frame lists the 8x8 tiles that change [pos, atlas index, ...]; Town replays them on top of
-    # the picture (the steady state of frame f = one full lap of changes + the changes of frames 0..f-1)
-    hd = os.path.exists(os.path.join(OLD, "assets/hd/packs/anim/%s.webp" % file))
-    return {"t": j["t"], "tw": j["tw"], "per": j["per"], "dur": j["dur"], "d": d,
-            "atlas": "anim_%s.%s" % (file, "webp" if hd else "png"), "k": 3 if hd else 1}
-
-
-out_dir = os.path.join(GAME, "assets/town")
-os.makedirs(out_dir, exist_ok=True)
-
-
-def copy(src, dst_name):
-    dst = os.path.join(out_dir, dst_name)
-    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
-        shutil.copy2(src, dst)
-
-
-def image_entry(file):
-    """Copy a map picture (HD webp preferred) and its animated layer; return the json entry."""
-    from PIL import Image
-    png = os.path.join(OLD, "assets/maps/%s.png" % file)
-    w, h = Image.open(png).size
-    hdp = os.path.join(OLD, "assets/hd/maps/%s.webp" % file)
-    e = {"w": w, "h": h}
-    if os.path.exists(hdp):
-        copy(hdp, file + ".webp")
-        e["tex"] = file + ".webp"
-        e["k"] = Image.open(hdp).size[0] // w
-    else:
-        copy(png, file + ".png")
-        e["tex"] = file + ".png"
-        e["k"] = 1
-    a = anim_for(file)
-    if a:
-        src = os.path.join(OLD, "assets/hd/packs/anim/%s.webp" % file) if a["k"] == 3 else os.path.join(OLD, "assets/packs/anim/%s.png" % file)
-        copy(src, a["atlas"])
-        e["anim"] = a
-    return e
-
-
-def act_id(a):
-    return ACTS.get(a, a)
-
-
-maps = {}
-for ok, M in TM.items():
-    key = KEYMAP[ok]
-    m = {"music": MUSIC.get(key, "007"), "spawn": [M["spawn"]["x"], M["spawn"]["y"], M["spawn"]["f"]],
-         "npcs": [{"id": act_id(n["act"]), "sp": n["sp"], "x": n["x"], "y": n["y"], "f": 0, "reach": n["reach"]} for n in M["npcs"]],
-         "spots": [{"id": act_id(s["act"]), "reach": s["reach"]} for s in M["spots"]],
-         "blocks": [[b["x"], b["y"], b["r"]] for b in M.get("blocks", [])],
-         "exits": [], "arrive": {}}
-    for ex in M["exits"]:
-        if "to" in ex:
-            m["exits"].append({"r": ex["r"], "to": KEYMAP[ex["to"]]})
+# ----------------------------------------------------------------------------------- rendering
+def _compose(st, vram, pal):
+    """all layers, bottom (last tilemap = BG3) to top (BG2)"""
+    out = None
+    for tm in reversed(st["tilemaps"]):
+        img = GB.render_tilemap(tm, vram, pal, st["W"], st["H"])
+        if out is None:
+            out = img.copy()
         else:
-            m["exits"].append({"r": ex["r"], "to": EXIT_ACTS[(ok, ex["act"])], "back": ex["back"]})
-    if key != "base":
-        m.update(image_entry(MAPFILES[ok]))
-        m["grid"] = grid_for(ok)
-        m["xblocks"] = []
-    maps[key] = m
+            m = img[..., 3] > 0
+            out[m] = img[m]
+    return out
 
-# arrival points: where you appear on map B when you come from map A (the exit's sx, sy, f)
-for ok, M in TM.items():
-    for ex in M["exits"]:
-        if "to" in ex:
-            maps[KEYMAP[ex["to"]]]["arrive"][KEYMAP[ok]] = [ex["sx"], ex["sy"], ex["f"]]
-# exits to other maps put you back at the arrival point from that map if the switch doesn't happen
-for key, m in maps.items():
-    for ex in m["exits"]:
-        if "back" not in ex and ex["to"] in m["arrive"]:
-            ex["back"] = m["arrive"][ex["to"]]
 
-# team bases: one picture/grid per house shape
-bases = {}
-for mk, file in MAPFILES.items():
-    if not mk.startswith("base_"):
-        continue
-    shape = mk[5:]
-    e = image_entry(file)
-    e["grid"] = grid_for(mk)
-    e["xblocks"] = [[b["x"], b["y"], b["r"]] for b in TBLK.get(mk, [])]
-    bases[shape] = e
+def _timeline(st):
+    """[(state, ticks)] over one common period: state = (bpa frame per slot, palette frame per row)"""
+    cycles = []
+    for ta in st["tile_anims"]:
+        cycles.append([t for t in ta["frame_ticks"]])
+    for pa in st["pal_anim"]:
+        cycles.append([max(1, pa["duration"])] * len(pa["frames"]))
+    if not cycles:
+        return []
+    period = 1
+    for c in cycles:
+        period = period * sum(c) // math.gcd(period, sum(c))
+    period = min(period, PERIOD_CAP)
 
-copy(os.path.join(OLD, "assets/packs/flags.png"), "flags.png")
+    def frame_at(c, t):
+        t %= sum(c)
+        for i, d in enumerate(c):
+            if t < d:
+                return i
+            t -= d
+        return 0
+    out = []
+    for t in range(period):
+        s = tuple(frame_at(c, t) for c in cycles)
+        if out and out[-1][0] == s:
+            out[-1][1] += 1
+        else:
+            out.append([s, 1])
+    if len(out) > 1 and out[-1][0] == out[0][0]:
+        out[0][1] += out.pop()[1]
+    return out
 
-data = {"maps": maps, "bases": bases, "base_shape": SHAPE, "follow_gap": 30, "speed": 84,
-        "flag": {"tex": "flags.png", "x": 198, "y": 116, "w": 32, "h": 32, "frames": 6, "ms": 140}}
-with open(os.path.join(GAME, "data/town.json"), "w") as f:
-    json.dump(data, f, separators=(",", ":"))
 
-mdir = os.path.join(GAME, "assets/music")
-for mid, fn in MUSIC_FILES.items():
-    src = os.path.join(OLD, "assets/music", fn)
-    if os.path.exists(src) and not os.path.exists(os.path.join(mdir, mid + ".mp3")):
-        shutil.copy2(src, os.path.join(mdir, mid + ".mp3"))
+def _render_state(st, s):
+    vram = st["vram"].copy()
+    pal = st["pal"].copy()
+    k = 0
+    for ta in st["tile_anims"]:
+        fr = ta["frames"][s[k]]
+        vram[ta["first_tile"]:ta["first_tile"] + len(fr)] = fr
+        k += 1
+    for pa in st["pal_anim"]:
+        pal[pa["palette"], 1:, :3] = np.array(pa["frames"][s[k]], np.uint8)
+        k += 1
+    return _compose(st, vram, pal)
 
-print("maps:", ", ".join(maps), "| bases:", ", ".join(bases), "| town.json", os.path.getsize(os.path.join(GAME, "data/town.json")), "bytes")
+
+def _hd(arr):
+    a = arr.copy()
+    a[a[..., 3] == 0] = 0
+    return np.array(common.xbrz_scale(Image.fromarray(a, "RGBA"), K))
+
+
+def _webp(arr, name):
+    Image.fromarray(arr, "RGBA").save(common.p(OUT, name), "WEBP", lossless=True, quality=100, method=4)
+
+
+def picture(ground, out_name):
+    st = GB.map_state(ground)
+    base = _compose(st, st["vram"], st["pal"])
+    e = {"w": st["W"], "h": st["H"], "tex": out_name + ".webp", "k": K}
+    _webp(_hd(base), out_name + ".webp")
+    tl = _timeline(st)
+    if len(tl) > 1:
+        e["anim"] = anim(st, tl, out_name)
+    return e, st
+
+
+def anim(st, tl, out_name, T=8, per=64):
+    W, H = st["W"], st["H"]
+    tw = W // T
+    frames = [_render_state(st, s) for s, _ in tl]
+    n = len(frames)
+    atlas_tiles, index = [], {}
+    d = []
+    for i in range(n):
+        a, b = frames[i], frames[(i + 1) % n]
+        ch = np.nonzero((a != b).any(axis=2).reshape(H // T, T, tw, T).any(axis=(1, 3)))
+        up = None
+        lst = []
+        for ty, tx in zip(*ch):
+            if up is None:
+                up = _hd(b)
+            tile = up[ty * T * K:(ty + 1) * T * K, tx * T * K:(tx + 1) * T * K]
+            key = tile.tobytes()
+            if key not in index:
+                index[key] = len(atlas_tiles)
+                atlas_tiles.append(tile)
+            lst += [int(ty * tw + tx), index[key]]
+        d.append(lst)
+    rows = (len(atlas_tiles) + per - 1) // per
+    atlas = np.zeros((rows * T * K, per * T * K, 4), np.uint8)
+    for j, t in enumerate(atlas_tiles):
+        atlas[(j // per) * T * K:(j // per + 1) * T * K, (j % per) * T * K:(j % per + 1) * T * K] = t
+    _webp(atlas, "anim_%s.webp" % out_name)
+    # 60 Hz ticks -> ms, rounded on the running total so the lap length stays exact
+    dur, acc = [], 0
+    for _, ticks in tl:
+        dur.append(int(round((acc + ticks) * 1000 / 60.0)) - int(round(acc * 1000 / 60.0)))
+        acc += ticks
+    return {"t": T, "tw": tw, "per": per, "dur": dur, "d": d, "atlas": "anim_%s.webp" % out_name, "k": K}
+
+
+def grid(st, ground, key, C=4):
+    coll = None
+    path = os.path.join(common.TMP, "ground_bg", ground + "_collision.json")
+    if os.path.exists(path):
+        coll = np.array(json.load(open(path)), np.uint8)
+    else:                       # same data straight from the map (gen_ground_bg.process writes it)
+        raise SystemExit("missing %s (run gen_ground_bg.py first)" % path)
+    W, H = st["W"] // C, st["H"] // C
+    walk = np.repeat(np.repeat((coll & 0x80) == 0, 8 // C, 0), 8 // C, 1)[:H, :W]
+    for x0, y0, x1, y1 in OPEN.get(key, []):
+        walk[y0 // C:-(-y1 // C), x0 // C:-(-x1 // C)] = True
+    bits = np.packbits(walk.ravel().astype(np.uint8), bitorder="little")
+    return {"C": C, "W": W, "H": H, "b64": base64.b64encode(bits.tobytes()).decode()}
+
+
+def flags():
+    orn = os.path.join(common.ASSETS, "ground", "orn")
+    rows = [np.array(Image.open(common.need(os.path.join(orn, f + ".png"), "ornament " + f)).convert("RGBA"))
+            for f in FLAGS]
+    Image.fromarray(np.concatenate(rows, axis=0), "RGBA").save(common.p(OUT, "flags.png"))
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    data = json.loads(json.dumps(LAYOUT))
+    for key, (ground, name) in GROUND.items():
+        e, st = picture(ground, name)
+        e["grid"] = grid(st, ground, key)
+        data["maps"][key].update(e)
+        print("town", key, e["w"], e["h"], "anim frames", len(e.get("anim", {}).get("dur", [])), flush=True)
+    for shape, sp in BASES.items():
+        ground = "team_base_%s_basic" % sp
+        e, st = picture(ground, "base_" + sp)
+        e["grid"] = grid(st, ground, shape)
+        e["xblocks"] = data["bases"][shape].get("xblocks", [])
+        data["bases"][shape] = e
+        print("base", shape, sp, "anim frames", len(e.get("anim", {}).get("dur", [])), flush=True)
+    flags()
+    common.save_json(os.path.join(common.DATA, "town.json"), data)
+    print("town.json", os.path.getsize(os.path.join(common.DATA, "town.json")), "bytes")
+
+
+if __name__ == "__main__":
+    main()

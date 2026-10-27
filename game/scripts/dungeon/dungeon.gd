@@ -311,6 +311,9 @@ func _spawn_fixed(gen: Dictionary) -> void:
 		m.facing = 0
 		var b := str(e.behavior)
 		m.set_meta("behavior", b)
+		if b != "BEHAVIOR_FIXED_ENEMY":          # story Pokémon are never generated asleep
+			for k in ["sleep", "napping", "nightmare"]:
+				m.status[k] = 0
 		if b in BossScene.NEUTRAL:
 			m.side = "client"
 			m.set_meta("story_npc", true)
@@ -1148,9 +1151,16 @@ func world_turn() -> void:
 			if a.get("ally_skip", false):
 				skipped.append(m)
 				break
-			if a.get("type", "wait") != "move":
+			# Only something shown on screen (an attack, a throw) waits for the steps to finish first; a Pokémon
+			# that just waits or picks something up doesn't stop the leader mid-stride (that made walking stutter
+			# at random, whenever anyone on the floor was asleep or idle).
+			# Off screen (attacker and the tile it faces): the action resolves at once, with no animation
+			# pauses, so a fight somewhere else on the floor doesn't hold up the leader's walk.
+			_quiet = not m.is_leader and not _on_screen(m.pos) and not _on_screen(m.pos + DB.DIRS[int(a.get("dir", m.facing)) & 7])
+			if str(a.get("type", "wait")) in ["attack", "throw"] and not _quiet:
 				await _flush_walks()
 			await execute(m, a)
+			_quiet = false
 	# Red re-runs allies that were blocked, nearest to the leader first (up to 3 passes)
 	for pass_i in 3:
 		if skipped.is_empty() or result_sent:
@@ -1172,6 +1182,21 @@ func world_turn() -> void:
 	if result_sent:
 		return
 	await end_of_turn()
+
+var _quiet := false        # the acting Pokémon is off screen: skip animation pauses
+
+func _pause(sec: float) -> void:
+	if _quiet:
+		return
+	await get_tree().create_timer(sec).timeout
+
+## Is tile p (or the tile next to it) inside the visible part of the floor?
+func _on_screen(p: Vector2i) -> bool:
+	if cam == null:
+		return true
+	var half := get_viewport_rect().size / cam.zoom * 0.5 + Vector2(T, T)
+	var d := (_px(p) - cam.position).abs()
+	return d.x <= half.x and d.y <= half.y
 
 func _decide(m: Mon) -> Dictionary:
 	if not mem.has(m.uid):
@@ -1293,14 +1318,8 @@ func execute(m: Mon, a: Dictionary) -> bool:
 			await _throw_id(m, id, a.get("target", Vector2i(-1, -1)))
 			return true
 		"item":
-			if fs.items.has(m.pos) and int(fs.items[m.pos].get("price", 0)) == 0:
-				var it: Dictionary = fs.items[m.pos]
-				if m.held == "" and it.id != "poke":
-					m.held = it.id
-					fs.items.erase(m.pos)
-					obj_layer.queue_redraw()
-					if fs.can_see(fs.leader, m.pos):
-						_msg("%s picked up the %s." % [_nm(m), DB.item_name(it.id)])
+			if fs.items.has(m.pos):
+				_mon_try_pick_up(m)      # teammates: Poké to the money, items to the Toolbox (held only when it's full)
 			return true
 	return true
 
@@ -1615,7 +1634,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			_msg(CHARGE_TEXT.get(move_name, "%s began charging power!") % _nm(m))
 			if m.visual:
 				m.visual.play("Charge")
-			await get_tree().create_timer(0.25).timeout
+			await _pause(0.25)
 			_update_hud()
 			return
 		m.status.charge_move = ""
@@ -1635,7 +1654,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			var tw := create_tween()
 			tw.tween_property(m.visual, "bob", dv, 0.07)
 			tw.tween_property(m.visual, "bob", Vector2.ZERO, 0.1)
-	await get_tree().create_timer(0.18).timeout
+	await _pause(0.18)
 	var targets := targets_for(m, mv, d)
 	if move_name in AbilityFx.EXPLOSION_MOVES and AbilityFx.damp_on_floor(fs):
 		_msg("Damp prevents explosions!")
@@ -1646,7 +1665,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			targets.erase(t_sp)
 	if not slot.is_empty() and announce:
 		slot.pp = maxi(0, int(slot.pp) - AbilityFx.pressure_extra(m, targets, fs))    # Pressure
-	if move_name != "":
+	if move_name != "" and not _quiet:
 		await MoveFx.play(self, m, move_name, mv, d, targets)
 	var hits := maxi(1, int(mv.get("hits", 1)))
 	if int(mv.get("hits", 1)) == 0:
@@ -1759,7 +1778,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			if m.hp <= 0:
 				await faint(m, null)
 				return
-		await get_tree().create_timer(0.12).timeout
+		await _pause(0.12)
 	m.remove_meta("pb_hit")
 	_update_hud()
 
@@ -2101,11 +2120,12 @@ func faint(t: Mon, killer: Mon) -> void:
 		_msg("%s fainted!" % _nm(t))
 	AbilityFx.on_faint(self, t, killer)              # Aftermath / Moxie
 	EosItems.on_ko(self, t, killer)                  # Amulet Coin and money exclusives
-	if t.visual:
+	if t.visual and not (_quiet and not _on_screen(t.pos)):
 		t.visual.play("Faint", true)
 		var tw := create_tween()
 		tw.tween_property(t.visual, "fade", 0.0, 0.45).set_delay(0.25)
 		await tw.finished
+	if t.visual:
 		if t.visual:
 			t.visual.queue_free()
 			t.visual = null

@@ -8,9 +8,15 @@ import json, os, re, struct, sys
 import numpy as np
 from PIL import Image
 
-DECOMP = "/tmp/claude-0/pmdred_full"
-GAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common  # noqa: E402
+
+DECOMP = common.PMDRED
+GAME = common.GAME
 OUT = os.path.join(GAME, "assets", "worldmap")
+# dungeon / friend-area keys come from data/dungeons.json and data/friend_areas.json (tools/data build);
+# PMD_DATA_IN can point at another data folder that has them (only used to read those two key lists)
+DATA_IN = os.environ.get("PMD_DATA_IN") or common.DATA
 ROM = open(os.path.join(DECOMP, "baserom.gba"), "rb").read()
 BASE = 0x08000000
 
@@ -292,7 +298,7 @@ def main():
     names = dungeon_enum()
     coords = dungeon_coords()
     rules = dungeon_rules()
-    keys = list(json.load(open(os.path.join(GAME, "data/dungeons.json")))["dungeons"].keys())
+    keys = list(json.load(open(common.need(os.path.join(DATA_IN, "dungeons.json"), "data/dungeons.json (build tools/data first)")))["dungeons"].keys())
     dun = {}
     for i, n in enumerate(names[:64]):
         if i >= len(keys):
@@ -302,7 +308,7 @@ def main():
         if n in rules: e.update(rules[n])
         dun[keys[i]] = e
     fl = friend_locations()
-    fa_keys = list(json.load(open(os.path.join(GAME, "data/friend_areas.json")))["areas"].keys())
+    fa_keys = list(json.load(open(common.need(os.path.join(DATA_IN, "friend_areas.json"), "data/friend_areas.json (build tools/data first)")))["areas"].keys())
     for l in fl:
         ks = []
         for a in l["areas"]:
@@ -322,7 +328,7 @@ def main():
 
 
 # ================================================================ Explorers of Sky world maps (MAP_BG s01p01a etc.)
-EOS = "/tmp/claude-0/eos"
+EOS = common.EOS
 
 def eos_bpc_image(d, pos, size):
     """skytemple-rust compression/bpc_image.rs BpcImageDecompressor."""
@@ -501,7 +507,7 @@ def eos_render(name):
 
 def eos_maps():
     import xml.etree.ElementTree as ET
-    xml = open("/tmp/claude-0/ref/skytemple-files/skytemple_files/_resources/ppmdu_config/pmd2scriptdata.xml").read()
+    xml = open(common.need(common.SKYTEMPLE_XML, "SkyTemple pmd2scriptdata.xml")).read()
     na = xml[xml.index("EoS NA ONLY"):]
     lv = {}
     for m in re.finditer(r'<Level _id="\s*(\d+)" name="(\w+)"', na):

@@ -108,6 +108,66 @@ func _mon_of(who) -> Mon:
 			return m
 	return null
 
+## sub_8085B4C / sub_8085B80: scripted walks. Each path is rows of {direction, pixels per frame, frames, 0};
+## the row with 0 frames ends it: face its direction and stand on tile (row[5], row[6]). All walkers move at once.
+func _march(list: Array, visual: bool) -> void:
+	var walkers: Array = []
+	for e in list:
+		var m := _mon_of(e[0])
+		if m == null:
+			continue
+		var rows: Array = e[1]
+		walkers.append({"m": m, "rows": rows, "i": 0, "left": int(rows[2]) if rows.size() > 2 else 0, "off": Vector2.ZERO})
+	if walkers.is_empty():
+		return
+	var animate: bool = visual and not Dialog.auto and not (dg.autoplay and dg.auto_answer)
+	var busy := true
+	while busy:
+		busy = false
+		for w in walkers:
+			if w.get("done", false):
+				continue
+			var rows: Array = w.rows
+			var i: int = w.i
+			if int(w.left) <= 0:
+				i += 4
+				w.i = i
+				if i + 2 >= rows.size() or int(rows[i + 2]) == 0:
+					w.done = true
+					continue
+				w.left = int(rows[i + 2])
+			busy = true
+			var d := int(rows[i]) & 7
+			var step := Vector2(DB.DIRS[d]) * float(rows[i + 1])
+			w.off += step
+			w.left = int(w.left) - 1
+			var m: Mon = w.m
+			m.facing = d
+			if animate and m.visual and is_instance_valid(m.visual):
+				m.visual.position = dg._px(m.pos) + w.off
+				if m.visual.anim != "Walk":
+					m.visual.play("Walk")
+		if busy and animate:
+			await dg.get_tree().process_frame
+	for w in walkers:
+		var m: Mon = w.m
+		var rows: Array = w.rows
+		var i: int = w.i
+		var tgt := m.pos
+		if i + 6 < rows.size():
+			tgt = Vector2i(int(rows[i + 5]), int(rows[i + 6]))
+			m.facing = int(rows[i]) & 7
+		var occ: Mon = dg.fs.mon_at(tgt)
+		if occ != null and occ != m:
+			var free: Vector2i = dg.fs.free_tile_near(tgt, m, 3)
+			if free.x >= 0:
+				tgt = free
+		m.pos = tgt
+		if m.visual and is_instance_valid(m.visual):
+			m.visual.position = dg._px(m.pos)
+			m.visual.play("Idle")
+			m.visual.queue_redraw()
+
 func _partner() -> Mon:
 	for m in dg.fs.mons:
 		if m.is_team() and not m.is_leader and m.get_meta("story", false):
@@ -250,7 +310,7 @@ func _step(st: Array, visual: bool) -> void:
 			if visual:
 				await _wait(mini(int(st[1]), 90))
 		"bgm":
-			var id := int(st[1]) if str(st[1]).is_valid_int() else -1
+			var id := int(st[1]) if (st[1] is int or st[1] is float or str(st[1]).is_valid_int()) else -1   # JSON numbers arrive as floats
 			if id == 999 or id < 0:
 				Audio.stop_music()
 			else:
@@ -284,12 +344,14 @@ func _step(st: Array, visual: bool) -> void:
 				if m3.visual:
 					m3.visual.queue_redraw()
 		"team_face":
-			var d2 = DIRS.get(str(st[1]), int(st[1]) if str(st[1]).is_valid_int() else -1)
+			var d2 = DIRS.get(str(st[1]), int(st[1]) if (st[1] is int or st[1] is float or str(st[1]).is_valid_int()) else -1)
 			if int(d2) >= 0 and int(d2) < 8:
 				for m4 in dg.fs.team():
 					m4.facing = int(d2)
 					if m4.visual:
 						m4.visual.queue_redraw()
+		"march":
+			await _march(st[1], visual)
 		"hide":
 			var m5 := _mon_of(st[1])
 			if m5:

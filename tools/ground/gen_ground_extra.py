@@ -15,11 +15,14 @@ the few tables that only exist as raw bytes in data/*.s are parsed here.
   effect_types  gGroundEffectTypes (first 64) [type, w, h]
   enums: dungeons (DUNGEON_*), rescue dungeons, friend areas, monsters, items, ground places
 """
-import json, os, re, subprocess, sys
+import csv, json, os, re, subprocess, sys
 
-DEC = "/tmp/claude-0/pmdred_full"
-OUT = "/tmp/claude-0/pmd1/game/data/ground/extra.json"
-WORK = "/tmp/claude-0/-home-claude/gsextra"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common as CM  # noqa: E402
+
+DEC = CM.PMDRED
+OUT = CM.p(CM.DATA, "ground", "extra.json")
+WORK = os.path.join(CM.TMP, "gsextra")
 os.makedirs(WORK, exist_ok=True)
 
 
@@ -208,11 +211,12 @@ def names_from_s(path, prefix):
 
 
 norm = lambda x: re.sub(r"[^a-z0-9]", "", x.lower())
-SP = json.load(open("/tmp/claude-0/pmd1/game/data/species.json"))
+# species key = 4-digit national dex number (as in data/species.json); English names from PokeAPI
 by_name = {}
-for k, v in SP.items():
-    if len(k) == 4 and k < "1000":
-        by_name.setdefault(norm(v["name"]), k)
+with open(os.path.join(CM.POKEAPI_CSV, "pokemon_species_names.csv"), encoding="utf-8") as f:
+    for row in csv.DictReader(f):
+        if row["local_language_id"] == "9" and int(row["pokemon_species_id"]) < 1000:
+            by_name.setdefault(norm(row["name"]), "%04d" % int(row["pokemon_species_id"]))
 mnames = names_from_s(DEC + "/data/monster/monster_names.s", "MonsterName")
 mdata = json.load(open(DEC + "/data/monster/monster_data.json"))
 red_mon = {}

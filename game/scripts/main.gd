@@ -26,6 +26,121 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--qoltest"):
 		_qoltest.call_deferred()
+	if OS.get_cmdline_user_args().has("--poketest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(2.0).timeout
+			var d := dungeon
+			var w: Mon = null
+			for m in d.fs.mons:
+				if not m.is_team():
+					w = m
+					break
+			if w == null:
+				print("POKETEST no wild"); get_tree().quit(); return
+			for k in w.status.keys():
+				if w.status[k] is int:
+					w.status[k] = 0
+			w.held = ""
+			d.fs.items[w.pos] = {"id": "poke", "n": 50}
+			var mem := {}
+			var acts := []
+			for i in 3:
+				var r := AI.decide(w, d.fs, mem)
+				acts.append(str(r.get("type", "")) + ":" + str(r.get("action", r.get("dir", ""))))
+			print("POKETEST wild_actions=", acts, " pickup_any=", acts.any(func(x): return x.begins_with("item:pickup")))
+			var pt: Mon = d.fs.mons.filter(func(x): return x.is_team() and not x.is_leader)[0]
+			pt.held = ""
+			var bag0 := Game.bag.size()
+			d.fs.items[pt.pos] = {"id": "oranberry", "n": 1}
+			await d.execute(pt, {"type": "item", "action": "pickup"})
+			print("POKETEST partner held=", pt.held, " bag ", bag0, "->", Game.bag.size(), " item_left=", d.fs.items.has(pt.pos))
+			get_tree().quit()).call_deferred()
+	if OS.get_cmdline_user_args().has("--steptest"):
+		(func():
+			# Holding a direction with other Pokémon on the floor (some asleep far away): count the frames the
+			# hero stands still between steps.
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Engine.max_fps = 60
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(2.0).timeout
+			var d := dungeon
+			var cor: Array = []
+			for tries in 8:
+				_qclear()
+				cor = _qcorridor(7)
+				if not cor.is_empty():
+					break
+				d.busy = true
+				await d.build_floor()
+				await get_tree().create_timer(0.3).timeout
+			var L: Mon = d.fs.leader
+			_qplace(L, cor[0])
+			var nfoe := 0
+			for y in d.fs.h:
+				for x in d.fs.w:
+					var p := Vector2i(x, y)
+					if nfoe < 5 and d.fs.room_at(p) != 255 and d.fs.walkable(p, null) and d.fs.mon_at(p) == null and FloorState.cheb(p, L.pos) > 12:
+						var f := _qfoe(p)
+						f.status["sleep"] = 99
+						nfoe += 1
+			await get_tree().create_timer(0.3).timeout
+			var act: String = {0: "move_down", 2: "move_right", 4: "move_up", 6: "move_left"}.get(int(cor[1]), "move_right")
+			Input.action_press(act)
+			var last: Vector2 = L.visual.position
+			var stalls := 0
+			var frames := 0
+			var p0 := L.pos
+			while frames < 120 and L.pos.distance_to(Vector2(p0)) < 6:
+				await get_tree().process_frame
+				frames += 1
+				if L.visual.position.distance_to(last) < 0.01 and frames > 2:
+					stalls += 1
+					print("  stall partner=%s on=%s view=%s f=%d pos=%s busy=%s menu=%s walkers=%d dt=%.3f msgs=%d log=%s" % [d.fs.team()[1].pos, d._on_screen(d.fs.team()[1].pos), d.get_viewport_rect().size / d.cam.zoom / 24.0, frames, L.pos, d.busy, d.menu_open, d._walkers.size(), get_process_delta_time(), d.hud.msg_count, str(d.hud.log_all.back()).left(80) if not d.hud.log_all.is_empty() else ""])
+				last = L.visual.position
+			Input.action_release(act)
+			print("STEPTEST foes=%d tiles=%d frames=%d stall_frames=%d" % [nfoe, int(L.pos.distance_to(Vector2(p0))), frames, stalls])
+			get_tree().quit()).call_deferred()
+	if OS.get_cmdline_user_args().has("--meaniestest"):
+		(func():
+			# Lose the Team Meanies fight the way the story enters it, then report where the game went.
+			Dialog.auto = true
+			ListMenu.auto = true
+			Ground.turbo = 6
+			Game.load_game()
+			GData.load_all()
+			var key := "sinister_woods"
+			var did: int = DB.dungeons.get("dungeons", {}).keys().find(key)
+			var sd := -1
+			for i in GData.extra.dungeons.size():
+				var inf: Dictionary = GData.dungeon_info(i)
+				if int(inf.dungeon) == did and int(inf.get("u11", 1)) == 0:
+					sd = i
+			print("MEANIES scen=%s sd=%d leader=%s base_kind=%d base_level=%d" % [str(GVars.scenario(GVars.SCENARIO_MAIN)), sd, Game.team[0].sp, GVars.get_val(null, GVars.BASE_KIND), GVars.get_val(null, GVars.BASE_LEVEL)])
+			GVars.set_val(null, GVars.DUNGEON_ENTER, sd)
+			for a2 in OS.get_cmdline_user_args():
+				if a2.begins_with("--basekind="):
+					GVars.set_val(null, GVars.BASE_KIND, int(a2.substr(11)))
+			Dungeon.test_invincible = false
+			_on_ground_finished(7)
+			for i in 30:
+				await get_tree().create_timer(0.5).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 6:
+					break
+			print("MEANIES in dungeon=%s floor=%d" % [dungeon.dkey if is_instance_valid(dungeon) else "-", dungeon.floor_i if is_instance_valid(dungeon) else -1])
+			dungeon._end("defeated")
+			for i in 60:
+				await get_tree().create_timer(1.0).timeout
+				if is_instance_valid(ground):
+					ground.text.auto = true
+				if i % 10 == 9:
+					print("MEANIES t=%d where=%s" % [i, ("town:" + town.map_key) if is_instance_valid(town) else (("ground:%d" % ground.vis_map) if is_instance_valid(ground) else "?")])
+			get_viewport().get_texture().get_image().save_png("user://meanies_after.png")
+			var where := "town:" + town.map_key if is_instance_valid(town) else ("ground:%d" % ground.vis_map if is_instance_valid(ground) else "?")
+			print("MEANIES after: where=%s scen=%s postgame=%s shop_fa=%d story_vars=%s base_level=%d leader=%s" % [where, str(GVars.scenario(GVars.SCENARIO_MAIN)), RedShops.postgame(), RedShops.shop_areas().size(), Game.story.has("vars"), GVars.get_val(null, GVars.BASE_LEVEL), Game.team[0].sp])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--walktest"):
 		_walktest.call_deferred()
 	if OS.get_cmdline_user_args().has("--perftest"):
@@ -103,6 +218,128 @@ func _ready() -> void:
 				print("TAPTEST tap at %.1f s" % (Time.get_ticks_msec() / 1000.0))).call_deferred()
 	if OS.get_cmdline_user_args().has("--eostest"):
 		_eostest.call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--drawprobe"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(3.0).timeout
+			var d := dungeon
+			var measure := func(tag: String):
+				var t0 := Time.get_ticks_usec()
+				for i in 30:
+					await get_tree().process_frame
+				var ms := (Time.get_ticks_usec() - t0) / 30000.0
+				print("DRAWPROBE %-28s %.1f ms/frame  draws=%d objs=%d prims=%d nodes=%d" % [tag, ms, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
+			await measure.call("baseline")
+			var hide := func(n: Node):
+				if n is CanvasItem: n.visible = false
+				elif n is CanvasLayer: n.visible = false
+			var tops := []
+			for c in d.get_children():
+				tops.append(c)
+			for c in d.get_children():
+				print("DRAWPROBE child ", c.name, " ", c.get_class(), " kids=", c.get_child_count())
+			for c in tops:
+				var was = c.visible if "visible" in c else null
+				if was == null: continue
+				c.visible = false
+				await measure.call("hide " + str(c.name))
+				c.visible = was
+			for c in root.get_children():
+				if c != d and "visible" in c:
+					var was2 = c.visible
+					c.visible = false
+					await measure.call("hide root/" + str(c.name))
+					c.visible = was2
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--bossfight"):
+		(func():
+			var key := "sinister_woods"
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--boss="):
+					key = a.substr(7)
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for e in Game.team:
+				e.level = 30
+				e.exp = DB.exp_at(str(e.sp), 30)
+			Dialog.auto = true
+			var n: int = DB.dungeons.dungeons[key].floors.size()
+			start_dungeon(key, n - 1)
+			var d := dungeon
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if i > 6 and not d.busy:
+					break
+			var info := func(tag: String):
+				var out := []
+				for m in d.fs.mons:
+					out.append("%s@%s hp%d hid=%s side=%s beh=%s" % [m.name, m.pos, m.hp, m.get_meta("cs_hidden", false), m.side, m.get_meta("behavior", "")])
+				print("BOSSFIGHT %s turn=%d busy=%s menu=%s music=%s playing=%s : %s" % [tag, d.fs.turn, d.busy, d.menu_open, Audio.current, Audio.music.playing, " | ".join(out)])
+			info.call("after scene")
+			get_viewport().get_texture().get_image().save_png("user://bossfight_%s_1.png" % key)
+			if OS.get_cmdline_user_args().has("--probe"):
+				# Boss check: the team only waits (and is healed every turn); did each boss move or hit someone?
+				var start := {}
+				var nen := 0
+				for m in d.fs.mons:
+					if not m.is_team():
+						start[m] = m.pos
+						nen += 1
+						m.max_hp = 9999         # so the partner can't end the fight before we see the bosses act
+						m.hp = 9999
+					else:
+						m.max_hp = 9999         # and the team can't faint (that would switch to the defeat music)
+						m.hp = 9999
+				var dmg := 0
+				var turns := 0
+				for t in 10:
+					if d.fs == null or d.result_sent:
+						break
+					var hp0 := 0
+					for m in d.fs.mons:
+						if m.is_team():
+							hp0 += m.hp
+					await d.leader_action({"type": "wait"})
+					await get_tree().create_timer(0.3).timeout
+					turns += 1
+					if d.fs == null:
+						break
+					var hp1 := 0
+					for m in d.fs.mons:
+						if m.is_team():
+							hp1 += m.hp
+							m.hp = m.max_hp
+					dmg += maxi(0, hp0 - hp1)
+				var moved := 0
+				for m in start:
+					if is_instance_valid(m) and m.pos != start[m]:
+						moved += 1
+				print("BOSSPROBE %s music=%s playing=%s enemies=%d moved=%d team_dmg=%d turns=%d" % [key, Audio.current, Audio.music.playing, nen, moved, dmg, turns])
+				var lg: Array = d.hud.log_all
+				for i in range(maxi(0, lg.size() - 16), lg.size()):
+					print("BOSSLOG ", str(lg[i]).left(160))
+				get_tree().quit()
+				return
+			for t in 6:
+				await d.leader_action({"type": "wait"})
+				await get_tree().create_timer(0.4).timeout
+			info.call("after 6 turns")
+			var lg: Array = d.hud.log_all
+			for i in range(maxi(0, lg.size() - 14), lg.size()):
+				print("BOSSLOG ", lg[i])
+			for m in d.fs.mons:
+				if not m.is_team():
+					var st := {}
+					for k in m.status:
+						if m.status[k] is int and int(m.status[k]) > 0:
+							st[k] = m.status[k]
+					var mem2 := {}
+					AI._init_memory(m, mem2)
+					print("BOSSFIGHT dbg ", m.name, " status=", st, " pre=", AI._status_prevents_acting(m, d.fs, mem2), " move=", AI.choose_ai_move(m, d.fs, mem2), " canmove=", AI.species_can_move(m), " walk=", AI.ai_movement(m, d.fs, mem2, true), " see=", AI.can_see_target(d.fs, m, d.fs.leader), " treat=", AI.treatment(m, d.fs.leader, false, true), " run=", AI.should_run_away(m, mem2), " patient=", AI.tactic_set(m, "be_patient", mem2), " wait_there=", AI.tactic_set(m, "wait_there", mem2), " target=", AI._choose_target_position(m, d.fs, mem2), " mem=", mem2, " dm=", AI._decide_movement(m, d.fs, mem2), " walk9=", d.fs.walkable(m.pos + Vector2i(0, 1), m), " tactic=", m.get_meta("tactic", "-"), " cam=", AI.can_ai_move(d.fs, m, 0), " flag=", d.fs.flags[d.fs.idx(m.pos + Vector2i(0, 1))], " step=", d.fs.can_step(m.pos, 0, m))
+			get_viewport().get_texture().get_image().save_png("user://bossfight_%s_2.png" % key)
+			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--legendtest"):
 		(func():
@@ -2168,6 +2405,7 @@ func _perftest() -> void:
 ## --walktest: hold a direction down a corridor and log the leader's per-frame motion (stalls = clunky walking)
 func _walktest() -> void:
 	Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+	Dungeon.perf_log = OS.get_cmdline_user_args().has("--perf")
 	for k in DungeonQoL.DEFAULTS:
 		Game.settings[k] = DungeonQoL.DEFAULTS[k]
 	await start_dungeon("tiny_woods")
@@ -2462,6 +2700,46 @@ func _storytest() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--force="):
 			force = a.substr(8)          # cleared / defeated: end every dungeon at once
+	var defeat_at := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--defeatat="):
+			defeat_at = a.substr(11)     # lose this dungeon once (the boss floor), then report the state after
+	if defeat_at != "":
+		var snap := func(tag: String):
+			print("DEFEATAT %s leader=%s team=%s scen=%s sub1=%s postgame=%s shop_fa=%d owned_fa=%d cleared=%s rank=%d flag_kind=%d" % [tag,
+				str(Game.team[0].get("sp", "?")) if Game.team.size() > 0 else "-", str(Game.team.map(func(e): return str(e.get("sp", "")))),
+				str(GVars.scenario(GVars.SCENARIO_MAIN)) if Game.story.has("vars") else "-", str(GVars.scenario(GVars.SCENARIO_SUB1)) if Game.story.has("vars") else "-",
+				RedShops.postgame(), RedShops.shop_areas().size(), Game.friend_areas.size(), str(Game.cleared), Game.rank_points,
+				GVars.get_val(null, GVars.FLAG_KIND) if Game.story.has("vars") else -1])
+		var take_timer := Timer.new()
+		take_timer.wait_time = 2.0
+		take_timer.autostart = true
+		add_child(take_timer)
+		take_timer.timeout.connect(func():
+			# reach the story job in that dungeon: take any board job there (the story one included)
+			if Game.story.has("vars") and GVars.quest(GVars.QUEST_CAN_ACCESS_JOBS):
+				Missions.refresh_board_if_new_day()
+				for j in Game.board.duplicate():
+					if str(j.get("dungeon", "")) == defeat_at and not Missions.in_job_list(j):
+						if Missions.accept(j):
+							for k in Game.jobs:
+								if str(k.id) == str(j.id):
+									Missions.take(k)
+							print("  TEST took %s job in %s story=%s" % [j.get("kind", ""), defeat_at, j.has("story")]))
+		get_tree().process_frame.connect(func():
+			if is_instance_valid(dungeon) and dungeon.dkey == defeat_at and not has_meta("defeat_done") and dungeon.floor_i >= DB.dungeons.dungeons[defeat_at].floors.size() - 1 and dungeon.fs != null:
+				set_meta("defeat_done", true)
+				snap.call("before")
+				Dungeon.test_invincible = false
+				(func():
+					await get_tree().create_timer(2.0).timeout
+					if is_instance_valid(dungeon):
+						dungeon._end("defeated")
+					for i in 40:
+						await get_tree().create_timer(1.0).timeout
+						if i in [10, 25, 39]:
+							snap.call("after%d" % i)
+					get_tree().quit()).call())
 	if force != "":
 		get_tree().process_frame.connect(func():
 			if is_instance_valid(dungeon) and not dungeon.has_meta("forced"):

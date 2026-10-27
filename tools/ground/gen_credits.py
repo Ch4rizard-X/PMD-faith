@@ -1,11 +1,14 @@
 """Red's ending staff credits (credits1.c DrawCredits, gCreditsTable @ 0x80E591C, 27 pages of CreditsData
 {s16 type, s16 x, s16 y, text}) -> data/red_credits.json, plus the two title-bracket glyphs (0x82A0 / 0x82A2 of the
 kanji_a font) -> assets/ground/credits/bracket_l.png / bracket_r.png."""
-import json, struct, sys
+import json, os, struct, sys
 import numpy as np
 from PIL import Image
-ROM = open('/tmp/claude-0/pmdred_full/baserom.gba', 'rb').read()
-G = '/tmp/claude-0/pmd1/game/'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common  # noqa: E402
+ROM = open(common.need(os.path.join(common.PMDRED, 'baserom.gba'), 'Red ROM in the decomp'), 'rb').read()
+G = common.GAME + '/'
+os.makedirs(G + 'assets/ground/credits', exist_ok=True)
 B = 0x08000000
 u32 = lambda o: struct.unpack_from('<I', ROM, o)[0]
 u16 = lambda o: struct.unpack_from('<H', ROM, o)[0]

@@ -1,15 +1,19 @@
 """Render Red's efbg (BG effect) animations (weather) to frame strips, following graphics_memory.c sub_8009A7C."""
 import struct, glob, json, re
+import os, sys
 import numpy as np
 from PIL import Image
-E = '/tmp/claude-0/pmdred_full/data/effects/'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common
+E = os.path.join(common.PMDRED, 'data', 'effects') + os.sep
+SRC = os.path.join(common.PMDRED, 'src', 'data', 'effects') + os.sep
 
 def load_pal(e):
     L = open(E + 'efbg%s.pal' % e).read().split('\n')[3:]
     return [tuple(int(x) for x in l.split()) for l in L if l.strip()]
 
 def frames(e):
-    src = open('/tmp/claude-0/pmdred_full/src/data/effects/efbg%s.c' % e).read()
+    src = open(SRC + 'efbg%s.c' % e).read()
     hdrs = re.findall(r'const u16 (gUnknown_[0-9A-F]+)\[\] = \{\s*([-\d,\s]+)\};\s*const u16 \1_tilemap\[\] = INCBIN_U16\("data/effects/(efbg\d+_\d+)\.bin"\)', src)
     order = re.search(r'const u16 \*const gUnknown_[0-9A-F]+\[\] = \{([^}]*)\}', src).group(1)
     names = [x.strip() for x in order.split(',') if x.strip()]

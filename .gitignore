@@ -30,3 +30,8 @@ __pycache__/
 # Build logs
 build_thor_log.txt
 build_log_*.txt
+
+# Local build settings, downloads and your ROMs
+build_config.json
+build_work/
+roms/

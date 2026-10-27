@@ -1,7 +1,9 @@
 """Render contact sheets purely from moves.json + sheets/*.json/png (validates the deliverable format)."""
-import json, sys
+import json, os, sys
 from PIL import Image, ImageDraw
-ROOT='/tmp/claude-0/eos/moveanim/'
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tables import MOVEANIM
+ROOT=MOVEANIM+os.sep
 moves=json.load(open(ROOT+'moves.json'))
 def frames_of(fx,dirn):
     meta=json.load(open(f'{ROOT}sheets/fx_{fx:04d}.json')); sheet=Image.open(ROOT+'sheets/'+meta['image'])
@@ -41,6 +43,7 @@ def sheet_for(name,out):
         d.text((2,y),label,fill=(200,220,255,255)); y+=12; x=0
         for c,_ in cells: img.paste(c,(x,y)); x+=c.width+2
         y+=max(c.height for c,_ in cells)+2
+    os.makedirs(os.path.dirname(out),exist_ok=True)
     img=img.resize((img.width*2,img.height*2),Image.NEAREST); img.save(out)
 for n in sys.argv[1:]:
     sheet_for(n,ROOT+'check/'+n.replace(' ','_')+'.png')

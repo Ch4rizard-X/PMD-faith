@@ -13,9 +13,11 @@ Everything here is what ValidateWonderMail (src/code_80958E8.c) needs, by Red id
 Usage: python3 gen_wondermail.py [pmdred] [game]
 """
 import json, os, re, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
 
-RED = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/pmdred"
-GAME = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "game")
+RED = common.PMDRED
+GAME = common.GAME
 OUT = os.path.join(GAME, "scripts/core/wonder_mail.gd")
 
 
@@ -203,5 +205,5 @@ if os.path.exists(OUT):
         open(OUT, "w", encoding="utf-8").write(cur)
         print("updated", OUT)
         sys.exit(0)
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "wondermail_tables.gd.txt"), "w").write(block)
+open(common.p(common.TMP, "wondermail_tables.gd.txt"), "w").write(block)
 print("wrote wondermail_tables.gd.txt (paste into wonder_mail.gd)")

@@ -1,7 +1,13 @@
+"""moves.json (move name -> how to play its animation) -> tmp/eos/moveanim."""
 import json, os
-from tables import vanilla, remixed
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tables import MOVEANIM, T_EOS, common, _EOS, _RX
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'eos'))
+from extract import strings
+from tables import vanilla, remixed, SHEETS
 vM,vE,vS=vanilla(); rM,rE,rS=remixed()
-V=json.load(open('/tmp/claude-0/eos/strings_e.json')); R=json.load(open('strings_rx.json'))
+V=common.load_json(os.path.join(T_EOS,'strings_e.json')); R=strings(_RX,'replace')
 MOVE_BASE=8173; NMOVES=559
 V_MON=8734; R_MON=18451
 POINT={0:'head',1:'left_hand',2:'right_hand',3:'center',-1:'none'}
@@ -25,7 +31,7 @@ def steps_for(m,E,move_id):
         w='screen' if e['type']==5 else where
         return dict(fx=fx,role=role,where=w,attach=attach if w!='screen' else 'screen',
                     direction=dirn if w!='screen' else None,blocking=not e['nonblock'],loop=bool(e['loop']),
-                    sfx=None if e['sfx']<0 else e['sfx'],sheet=f'sheets/fx_{fx:04d}.png' if os.path.exists(f'/tmp/claude-0/eos/moveanim/sheets/fx_{fx:04d}.png') else None)
+                    sfx=None if e['sfx']<0 else e['sfx'],sheet=f'sheets/fx_{fx:04d}.png' if os.path.exists(os.path.join(SHEETS,f'fx_{fx:04d}.png')) else None)
     upt=POINT.get(m['point'],m['point'])
     if a1>0: out.append(st(a1,'charge','user',upt,'user_facing'))
     if a2>0:
@@ -87,8 +93,5 @@ for mid in range(1,NMOVES):
     e=entry(mid,vM,vE,vS,'vanilla',V_MON,V,ALT_V)
     e['note']='Not present (by name) in Explorers Remixed; vanilla EoS animation data.'
     moves[nm if nm not in moves else f'{nm} (vanilla)']=e
-json.dump(moves,open('/tmp/claude-0/eos/moveanim/moves.json','w'),indent=1,ensure_ascii=False)
+json.dump(moves,open(os.path.join(MOVEANIM,'moves.json'),'w'),indent=1,ensure_ascii=False)
 print(len(moves),'moves;', sum(1 for v in moves.values() if v['src']=='vanilla'),'vanilla-only;',sum(1 for v in moves.values() if v.get('remixed_only')),'remixed-only')
-import collections; print(collections.Counter(v['where'] for v in moves.values()))
-print([k for k,v in moves.items() if v['src']=='vanilla'])
-print([k for k,v in moves.items() if v.get('remixed_only')])

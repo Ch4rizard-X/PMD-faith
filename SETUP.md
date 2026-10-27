@@ -1,85 +1,59 @@
-# Setup: building the assets and data
+# Setup
 
-The engine needs two folders that are **not** in this repository:
-
-- `game/assets/` — sprites, portraits, tiles, ground maps, music, sound effects, move animations, UI graphics.
-- `game/data/` — JSON tables: species, moves, items, dungeons, text, scripts and so on.
-
-Everything in them comes from the original games and community resources, so you generate it yourself with the tools in `tools/`.
-
-> **Status:** the tools were written while developing the game and still have their input/output paths set at the top of each file (they point at the original development folders). Before running a tool, edit those paths. There is no one-command build yet.
+The game needs two folders that are **not** in this repository: `game/assets/` (sprites, portraits, tiles, maps, music, sound effects, move animations, UI graphics) and `game/data/` (species, moves, items, dungeons, text, story scripts…). You build both yourself, from your own ROMs and free community resources, with one command.
 
 ## What you need
 
-| Input | Used for |
-|---|---|
-| Your own *Red Rescue Team* (GBA, US) ROM | Dungeon tiles, arena tilesets, status icons, UI graphics |
-| Your own *Explorers of Sky* (NDS, US) ROM | *Explorers of Sky* dungeons, fixed rooms, move animations, music |
-| Your own *Explorers Remixed* patched *Explorers of Sky* ROM | Move data, abilities, items, dungeon spawn/item lists for added content |
-| [pret/pmd-red](https://github.com/pret/pmd-red) checkout (built `baserom` not required for the data tools) | Rules, text, ground scripts, map backgrounds, fixed rooms, IQ, quiz, missions, Wonder Mail tables, music sequences |
-| [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) | Pokémon sprites, portraits, shiny colours |
-| [PokeAPI](https://github.com/PokeAPI/pokeapi) CSV data (`data/v2/csv`) | Stats, types and abilities for species outside the original |
-| Python 3.11+ with Pillow and numpy; ffmpeg | Running the tools; music rendering |
+- Your own ROMs (dumped from cartridges you own):
+  - *Red Rescue Team* (GBA, US)
+  - *Explorers of Sky* (NDS, US)
+  - *Explorers Remixed* (the *Explorers of Sky* ROM with the Remixed patch applied)
+- Python 3.11 or newer, with **Pillow** and **NumPy** (`pip install pillow numpy`)
+- **git**, **FFmpeg** (on your PATH), a **C compiler** (gcc or clang; for one fixed-room step) and a **C++ compiler** (g++ or clang++; to build the xBRZ scaler, unless you `pip install xbrz.py`)
+- About 4 GB of free disk space
+- [Godot 4.7.2](https://godotengine.org/download) to run the game
 
-## Tools and what they produce
+## Build in three steps
 
-### Data tables (`tools/data/`)
+1. **Point the build at your ROMs.** Copy `build_config.example.json` to `build_config.json` and fill in the three paths:
 
-| Tool | Writes (in `game/data/`) |
-|---|---|
-| `gen_data.py` | `species.json`, `growth.json`, `evo.json`, `types.json`, base `moves.json` / `items.json` |
-| `gen_red_evo.py` | `red_evo.json` (Luminous Cave evolutions) |
-| `gen_iq.py`, then `gen_iq_sky.py` | `iq.json` (original IQ skills + *Explorers of Sky* add-ons) |
-| `gen_quiz.py` | `quiz.json` (personality test) |
-| `gen_missions.py`, `gen_wondermail.py` | `missions.json`, `friend_areas.json`, Wonder Mail tables |
-| `gen_dungeons.py` | `dungeons.json` (original dungeons) |
-| `gen_fixed_rooms.py` | `fixed_rooms.json` (fixed rooms, boss scenes) |
-| `gen_world_map.py` | `world_map.json` |
-| `gen_town.py` | `town.json` |
-| `extract_text.py`, `gen_menu_text.py` | `red_town_text.json`, `menu_text.json` |
-| `kec_sets.py`, `icons.py` | `kecleon_sets.json`, `item_icons.json` |
-| `ndsget.py`, `ndsx.py` | Extract files from an NDS ROM (used by the *Explorers* tools) |
-| `gen_eos_items.py` | *Explorers of Sky* / Remixed items added to `items.json` |
-| `convert_remix.py` | *Explorers Remixed* dungeons and abilities into `dungeons.json` / `species.json` |
-| `gen_extra_spread.py` | Places added species into fitting dungeons |
-| `gen_megas_dx.py` | Mega/Primal forms (species, sprites) |
-| `gen_shiny.py` | `shiny.json` (shiny colour tables from SpriteCollab) |
-| `prep_assets.py` | `sprites.json`, `marks.json`, `tilesets.json` and the sprite sheets in `game/assets/sp` |
+   ```json
+   {
+     "red_rom": "roms/red.gba",
+     "eos_rom": "roms/sky.nds",
+     "remix_rom": "roms/remixed.nds"
+   }
+   ```
 
-Run order: `gen_data.py` → `gen_red_evo.py` → `gen_iq.py` → `gen_iq_sky.py` → `gen_quiz.py` → `gen_missions.py` → `gen_wondermail.py` → `gen_dungeons.py` → `gen_fixed_rooms.py` → `gen_world_map.py` → `gen_town.py` → text/icon tools → `tools/eos/*` → `gen_eos_items.py` → `convert_remix.py` → `gen_extra_spread.py` → `gen_megas_dx.py` → `gen_shiny.py`.
+   Relative paths are relative to this folder. A `roms/` folder here is ignored by git. You can also set `RED_ROM`, `EOS_ROM`, `REMIX_ROM` (and `WORK_DIR`) as environment variables instead.
 
-> **Known gap:** `gen_data.py` and `prep_assets.py` read base tables exported from the project's earlier prototype (`dump.py` / `dump2.py`). Rebuilding those base tables straight from the decompilation and PokeAPI is not automated yet.
+2. **Build everything:**
 
-### *Explorers of Sky* (`tools/eos/`)
+   ```
+   python build_all.py
+   ```
 
-`convert_dungeons.py` (dungeons and spawn tables), `fixed_rooms.py` (`eos_fixed.json`), `tilesets.py`, `eoslib.py` (shared readers).
+   This downloads the public resources (pret/pmd-red, pret/pmd-sky, SpriteCollab, PokeAPI, SkyTemple's script data, xbrz.py) into `build_work/`, extracts your ROMs there, and writes `game/assets/`, `game/data/` and `game/icon.png`. It takes one to two hours, mostly music rendering and sprite packing. If it stops, fix the problem and continue where it left off with `python build_all.py --from <step>`.
 
-### Ground maps and story (`tools/ground/`)
+3. **Open `game/project.godot` in Godot 4.7.2** and press Play. The first import takes a few minutes.
 
-`gen_ground_bg.py` (map backgrounds from the decomp's `data/map_bg`), `gen_ground_scripts.py` and `gen_ground_extra.py` (story scripts → `game/data/ground/`), `gen_ground_assets.py`, `gen_ornaments.py`, `gen_front_assets.py` (boot/title screens), `gen_credits.py` (`red_credits.json`), `gen_maze_tiles.py`, `titlen.py`.
+## Build steps
 
-### Dungeon graphics (`tools/dungeon/`)
+| Step | Tool | Makes |
+|---|---|---|
+| `fetch` | `tools/fetch.py` | Downloads and ROM extraction (into `build_work/`) |
+| `data` | `tools/data/build.py` | Base tables from the decompilation and PokeAPI: species, moves, items, Red's dungeons, fixed rooms, IQ, quiz, missions, text, Wonder Mail tables |
+| `eos` | `tools/eos/build.py` | *Explorers of Sky* / *Remixed* content on top: dungeons, boss arenas, items, abilities, Mega forms, move animations |
+| `sprites` | `tools/sprites/build.py` | Pokémon sprites, portraits, shiny colours, shadow markers, the app icon (from SpriteCollab) |
+| `dungeon` | `tools/dungeon/build.py` | Dungeon tilesets and dungeon graphics (from the ROMs) |
+| `ground` | `tools/ground/build.py` | Story maps and scripts, the town, UI graphics and font, world maps, music and sound effects |
 
-`gen_dungeon_gfx.py` (`dungeon_gfx.json`, `dungeon_talk.json`, `fx.json`, arena tilesets, status icons from the GBA ROM), with `redrom.py`, `dtiles.py`, `efbg.py`, `zmap.py`.
+Run a single step with `python build_all.py --only <step>`. Each area also has a `compare.py` for checking its output against another build.
 
-### Move animations (`tools/fx/`)
+## Android APK (optional)
 
-`export_fx.py`, `build_data.py`, `build_moves.py` (*Explorers of Sky* / Remixed move effects → `game/assets/fx`, `move_fx.json`), with helpers.
+`build_thor.bat` (Windows) builds the ThorScreen second-screen plugin in `android/thor_plugin`, installs Godot's Android build template and exports `game/build/PMDRed-Thor.apk`. It needs the Android SDK (set `ANDROID_HOME`), JDK 21 and Godot's export templates; see the comments at the top of the file. The debug variant is `build_thor_debug.bat`.
 
-### Sprites (`tools/sprites/`)
+## Please don't share the built files
 
-`gen_allanims.py` packs every SpriteCollab animation per species; `mapkeys.py`, `verify.py`.
-
-### Music (`tools/music/`)
-
-- `red/render.py`: renders the original GBA soundtrack from the decomp's song data (MP2K/m4a).
-- `eos/make.py` (+ `render.py`, `dse.py`, `samples.py`): renders *Explorers of Sky* music (DSE) to OGG.
-- `loops/`: finds seamless loop points (`eos_loops.json`).
-
-## Building the APK
-
-See the comments at the top of `build_thor.bat`. It builds the ThorScreen plugin in `android/thor_plugin`, installs Godot's Android build template and exports `game/build/PMDRed-Thor.apk`.
-
-## Don't commit assets
-
-`.gitignore` keeps `game/assets/`, `game/data/` and builds out of git. Please keep it that way in forks: no ROM-derived files in the repository.
+Everything in `game/assets/`, `game/data/` and `build_work/` comes from the original games. `.gitignore` keeps them out of git; keep it that way in forks, and don't upload or share builds that contain them.

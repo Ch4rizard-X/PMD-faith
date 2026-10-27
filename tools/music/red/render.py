@@ -24,7 +24,9 @@ import sys
 
 import numpy as np
 
-ROOT = os.environ.get('PMD_ROOT', '/tmp/claude-0/pmdred_full')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import common  # noqa: E402
+ROOT = os.environ.get('PMD_ROOT', common.PMDRED)
 OUT_RATE = 44100
 # Nominal 60 Hz frame rate (tick rate = BPM*24/60 /s); real hardware is 59.7275 Hz,
 # the shipped rips (and the app's loop markers) use 60 Hz.

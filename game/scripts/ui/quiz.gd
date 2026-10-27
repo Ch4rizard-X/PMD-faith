@@ -2,7 +2,7 @@ class_name Quiz
 extends Node
 ## PMD Red's personality test, ported from the pret/pmd-red decomp (personality_test1.c / personality_test2.c).
 ## Data (Red's English text, answer points, starter table, partner list) lives in res://data/quiz.json, which
-## /tmp/claude-0/pmd1/gen_quiz.py exports from the decomp.
+## tools/data/gen_quiz.py exports from the decomp.
 ##
 ## Red's rules:
 ##  - 8 questions (MAX_ASKED_QUESTIONS). Each pick is a random index among the 55 questions that is not used yet;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Export PMD Red's personality test (pret/pmd-red decomp) to game/data/quiz.json.
 
-Sources (in /tmp/claude-0/pmdred):
+Sources (pret/pmd-red, common.PMDRED):
   src/data/locale/personality_test1_usa.h  - all English strings
   src/data/personality_test1.h             - questions, answers, per-answer nature points, starter table
   src/data/personality_test2.h             - partner list
@@ -9,9 +9,11 @@ Sources (in /tmp/claude-0/pmdred):
   data/scripts/personality_test.inc        - the intro lines spoken before the test
 """
 import json, os, re, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
 
-DECOMP = "/tmp/claude-0/pmdred"
-GAME = "/tmp/claude-0/pmd1/game"
+DECOMP = common.PMDRED
+GAME = common.GAME
 OUT = os.path.join(GAME, "data", "quiz.json")
 
 NATURES = ["Hardy", "Docile", "Brave", "Jolly", "Impish", "Naive", "Timid", "Hasty", "Sassy", "Calm", "Relaxed", "Lonely", "Quirky"]

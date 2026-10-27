@@ -1,15 +1,19 @@
-"""Red dungeon tilesets missing from assets/tiles (dojo mazes and a few special floors): r01/05/08/20/22/26/32/33.
+"""NOTE: superseded by tools/dungeon/gen_tilesets.py (the dungeon worker's build writes assets/tiles/r01..r33,
+hd_rNN and data/tilesets.json), so tools/ground/build.py does NOT run this file; kept for reference / --check.
+
+Red dungeon tilesets missing from assets/tiles (dojo mazes and a few special floors): r01/05/08/20/22/26/32/33.
 1x block sheet (10 cols of 24px blocks, like the other r*.webp), xBRZ 3x HD sheet (hd_rNN.webp, same as the
 arena / t14 HD sheets) and the auto-tile rules (bNNcex, 0x930 bytes) into data/tilesets.json."""
-import sys, json, types
+import os, sys, json
 import numpy as np
-sys.path.insert(0, '/tmp/claude-0/pmd1/tools_dungeon')
-import redrom as R, dtiles as D
-from PIL import Image
-G = '/tmp/claude-0/pmd1/game/'
-sys.modules.setdefault('_xbrz', types.SimpleNamespace(__file__='/tmp/claude-0/libxbrz.so'))
-sys.path.insert(0, '/tmp/claude-0/x_xbrz.py')
-import xbrz as X
+TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, TOOLS)
+sys.path.insert(0, os.path.join(TOOLS, 'dungeon'))
+import common  # noqa: E402
+import redrom as R, dtiles as D  # noqa: E402
+from PIL import Image  # noqa: E402
+G = common.GAME + '/'
+X = common.xbrz_module()
 
 def build(ts):
     d = D.load(ts)

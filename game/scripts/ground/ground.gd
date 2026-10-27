@@ -866,7 +866,8 @@ func _fade_update() -> void:
 # ------------------------------------------------------------------ map
 func adjusted_map(m: int) -> int:
 	if m == GData.map_id("MAP_TEAM_BASE") or m == GData.map_id("MAP_TEAM_BASE_INSIDE"):
-		return m + GVars.get_val(null, GVars.BASE_KIND) * 3 + GVars.get_val(null, GVars.BASE_LEVEL)
+		# GetAdjustedGroundMap: TEAM_BASE_MAPS_PER_SPECIES = 6 (3 outside + 3 inside: basic, construction, final)
+		return m + GVars.get_val(null, GVars.BASE_KIND) * 6 + GVars.get_val(null, GVars.BASE_LEVEL)
 	if m == GData.map_id("MAP_WHISCASH_POND") and GVars.quest(GVars.QUEST_REACHED_POSTGAME):
 		return GData.map_id("MAP_WHISCASH_POND_OPEN")
 	return m

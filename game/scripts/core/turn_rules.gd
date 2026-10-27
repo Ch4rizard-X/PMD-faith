@@ -549,7 +549,7 @@ static func can_spawn(fs: FloorState) -> bool:
 			var fl := 0
 			if fs.flags.size() == fs.w * fs.h:
 				fl = fs.flags[fs.idx(o.pos)]
-			if (fl & 1) == 0:
+			if (fl & 2048) == 0:          # TrySpawnWildMonster skips Pokémon on TERRAIN_TYPE_UNBREAKABLE tiles
 				n += 1
 	return n < max_wild(fs)
 

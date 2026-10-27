@@ -10,12 +10,15 @@ Outputs in game/assets/ui/front/:
   glyphs.png      special text glyphs (kanji_a icons) in one row; glyphs.json {NAME: [x, width]} (height 12)
   fontsp.png      the 16 OBJ tiles of fontsp (text arrow, menu arrows, saving icon ...) with fontsppa, 128x8
 """
-import json, os, struct
+import json, os, struct, sys
 import numpy as np
 from PIL import Image
 
-ROM = open("/tmp/claude-0/pmdred_full/baserom.gba", "rb").read()
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game", "assets", "ui", "front")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common  # noqa: E402
+
+ROM = open(common.need(os.path.join(common.PMDRED, "baserom.gba"), "Red ROM in the decomp"), "rb").read()
+OUT = os.path.join(common.ASSETS, "ui", "front")
 B = 0x08000000
 u32 = lambda o: struct.unpack_from("<I", ROM, o)[0]
 u16 = lambda o: struct.unpack_from("<H", ROM, o)[0]

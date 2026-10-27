@@ -1,8 +1,11 @@
+"""WAN sprite reader / renderer for EFFECT/effect.bin (byte-identical in vanilla and Remixed)."""
 import struct, sys
-sys.path.insert(0,'/tmp/claude-0/eos/tools')
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'eos'))
+from paths import EOS as _EOS, REMIX as _RX, MOVEANIM, SHEETS, T_EOS, T_RX, common  # noqa: E402
 from eoslib import pack_entries
 import numpy as np
-EFFECT='/tmp/claude-0/eos/fs/EFFECT/effect.bin'
+EFFECT=os.path.join(_EOS,'fs','EFFECT','effect.bin')
 _P=None
 def entries():
     global _P

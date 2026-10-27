@@ -1,13 +1,14 @@
 """Export every effect animation referenced by move animations into sheets/fx_NNNN.png + .json."""
 import json, os, sys, hashlib
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image
 from tables import vanilla, remixed
 from wanfx import load, base_rows, rows_of, compose
 from screenfx import load_screen, render_frame
 
-OUT='/tmp/claude-0/eos/moveanim/sheets'
-os.makedirs(OUT,exist_ok=True)
+from tables import SHEETS, MOVEANIM
+OUT=SHEETS
 POINT={0:'head',1:'left_hand',2:'right_hand',3:'center',-1:'none'}
 TYPE={1:'wan_file0',2:'wan_file1',3:'wan',4:'wat',5:'screen',6:'wba'}
 
@@ -99,10 +100,11 @@ def export_screen(fx,e):
               animations={'0':frames})
     return sheet,meta
 
-def main():
+def main(only=None):
+    os.makedirs(OUT,exist_ok=True)
     vM,vE,vS=vanilla(); rM,rE,rS=remixed()
     ref=sorted(set(a for M in (vM,rM) for m in M for a in m['anim'] if a>0))
-    if len(sys.argv)>1: ref=[int(x) for x in sys.argv[1].split(',')]
+    if only: ref=only
     index={}
     for fx in ref:
         e=rE[fx]
@@ -116,6 +118,9 @@ def main():
         sheet.save(f'{OUT}/fx_{fx:04d}.png',optimize=True)
         json.dump(meta,open(f'{OUT}/fx_{fx:04d}.json','w'),indent=1)
         index[fx]=dict(kind=meta['kind'],directional=meta['directional'],frames=len(meta['animations']['0']))
-    json.dump(index,open('/tmp/claude-0/eos/moveanim/work/fx_index.json','w'),indent=1)
-    print(len(index),'exported')
-main()
+    os.makedirs(os.path.join(MOVEANIM,'work'),exist_ok=True)
+    json.dump(index,open(os.path.join(MOVEANIM,'work','fx_index.json'),'w'),indent=1)
+    print(len(index),'effect sheets exported')
+
+if __name__=='__main__':
+    main([int(x) for x in sys.argv[1].split(',')] if len(sys.argv)>1 else None)

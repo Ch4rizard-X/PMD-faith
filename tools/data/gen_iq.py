@@ -18,9 +18,11 @@ Red has no per-species IQ groups (that is Explorers): every Pokemon unlocks the 
 same IQ, and skills sharing an sIQSkillGroups slot cannot be switched on together.
 """
 import json, re, os, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
 
-RED = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/pmdred"
-GAME = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "game")
+RED = common.PMDRED
+GAME = common.GAME
 
 
 def read(p):
@@ -211,8 +213,4 @@ with open(dst, "w", encoding="utf-8") as f:
     json.dump(out, f, ensure_ascii=False, indent=1)
 print("wrote", dst, len(skills), "skills", len(tactics), "tactics", len(red_types), "red species types")
 
-# Explorers of Sky add-on skills (gen_iq_sky.py) are merged on top when the pmd-sky clone is present.
-_sky = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_iq_sky.py")
-if os.path.exists(_sky) and os.path.isdir("/tmp/claude-0/pmdsky/src"):
-    import subprocess
-    subprocess.run([sys.executable, _sky, "/tmp/claude-0/pmdsky", GAME], check=True)
+# Explorers of Sky add-on skills: gen_iq_sky.py (run after this by build.py) merges them on top.

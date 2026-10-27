@@ -1,7 +1,10 @@
 # Builds res://data/menu_text.json (Red's menu strings) from the pret/pmd-red decomp.
-import json, re, sys
-R = "/tmp/claude-0/pmdred/"
-G = "/tmp/claude-0/pmd1/game/"
+import json, re
+import os, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
+R = common.PMDRED + os.sep
+G = common.GAME + os.sep
 
 def unesc(s):
     return bytes(s, "utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8")
@@ -78,6 +81,6 @@ for m in re.finditer(r'\[TRAP_(\w+)\]\s*=\s*_\("([^"]*)"\)', ds):
         d["name"] = val
 out["traps"] = traps
 out["stairs_desc"] = "Stairs leading to the next floor.\nIf you are on the final floor, you will\nescape from the dungeon."
-json.dump(out, open(G + "data/menu_text.json", "w"), ensure_ascii=False, indent=0)
+json.dump(out, open(G + "data/menu_text.json", "w", encoding="utf-8"), ensure_ascii=False, indent=0)
 print(len(moves), len(ab), len(out["statuses"]), len(cat), traps.keys())
 print(moves.get("Iron Tail"), ab.get("blaze"), out["statuses"]["1"], cat.get("0004"), traps.get("wonder"))

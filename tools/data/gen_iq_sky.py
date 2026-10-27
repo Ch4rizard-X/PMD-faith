@@ -19,9 +19,11 @@ unused 9999-IQ entries (Lock-Picker, Cautious Creeper, Parry Expert, No-Defeatis
 Absolute Mover is Red's Super Mobile and is already in Red's list.
 """
 import json, os, re, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
 
-SKY = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/pmdsky"
-GAME = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "game")
+SKY = common.PMDSKY
+GAME = common.GAME
 DST = os.path.join(GAME, "data/iq.json")
 
 
@@ -37,7 +39,7 @@ def c_list(src, name):
 
 
 def strings():
-    d = open(os.path.join(SKY, "files/language-specific/US/MESSAGE/text_e.str"), "rb").read()
+    d = open(common.need(os.path.join(common.EOS, "fs", "MESSAGE", "text_e.str"), "extracted Explorers of Sky text_e.str"), "rb").read()
     n = int.from_bytes(d[0:4], "little") // 4
     out = []
     for i in range(n):

@@ -552,6 +552,8 @@ static func _can_take_item(m: Mon, fs: FloorState, mem: Dictionary) -> bool:
 	var it: Dictionary = fs.items[m.pos]
 	if int(it.get("price", 0)) > 0:          # ITEM_FLAG_IN_SHOP
 		return false
+	if str(it.get("id", "")) == "poke" and not m.is_team():   # wild Pokémon can't take Poké: walk on instead of
+		return false                                           # trying (and failing) to pick it up every turn
 	if fs.is_wall(m.pos) and not m.is_team():
 		return false
 	return true

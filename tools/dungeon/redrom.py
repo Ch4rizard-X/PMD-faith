@@ -1,6 +1,9 @@
 """Minimal PMD Red ROM reader: pksdir archives, AT3PX/AT4PX decompression (decompress_at.c), SIRO deref."""
 import struct
-ROM_PATH = '/tmp/claude-0/pmdred_full/baserom.gba'
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common
+ROM_PATH = os.path.join(common.PMDRED, 'baserom.gba')
 _rom = None
 
 def rom():

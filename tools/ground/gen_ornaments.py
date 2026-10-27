@@ -14,8 +14,11 @@ json per ornament: {"poses": [[sx, sy, w, h, ox, oy], ...], "anims": [[[ [pose, 
 import json, os, re, sys
 from PIL import Image
 
-RED = "/tmp/claude-0/pmdred_full"
-OUT = "/tmp/claude-0/pmd1/game/assets/ground/orn"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common as CM  # noqa: E402
+
+RED = CM.PMDRED
+OUT = os.path.join(CM.ASSETS, "ground", "orn")
 
 KINDS = {  # file -> palette value (ground_sprite_data.c)
     **{f"flag{n:02d}p": 0x100 + n for n in range(17)},
@@ -265,7 +268,7 @@ def effect_table():
 
 
 def used_effect_ids():
-    s = json.load(open("/tmp/claude-0/pmd1/game/data/ground/scripts.json"))
+    s = json.load(open(os.path.join(CM.DATA, "ground", "scripts.json")))  # gen_ground_scripts.py output
     ids = set(range(88, 95))
     for v in s.values():
         for c in v:
@@ -324,4 +327,5 @@ def main():
     print(len(data), "ornaments")
 
 
-main()
+if __name__ == "__main__":
+    main()

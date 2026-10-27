@@ -20,7 +20,7 @@
 ##              Raw Red value: wall tiles inside a room rectangle (maze walls,
 ##              imperfections) keep the room index.
 ##   "flags":   PackedInt32Array [y*w+x], bits:
-##                 1 FLAG_IMPASSABLE   impassable / unbreakable wall (map border)
+##                 1 FLAG_IMPASSABLE   TERRAIN_TYPE_IMPASSABLE_WALL (map border); the AI won't step there
 ##                 2 FLAG_JUNCTION     natural junction (room tile next to hallway,
 ##                                     or hallway tile with >2 open neighbours)
 ##                 4 FLAG_SHOP         in Kecleon shop (after Red's shop shrink)
@@ -35,6 +35,7 @@
 ##                                     structure (SPAWN_FLAG_UNK5)
 ##               512 FLAG_DIVIDER_HALF first half of a "divider" room (TERRAIN_TYPE_UNK_7)
 ##              1024 FLAG_KECLEON      Kecleon shopkeeper position
+##              2048 FLAG_UNBREAKABLE  TERRAIN_TYPE_UNBREAKABLE (fixed-room tiles): walkable, not counted for spawns
 ##   "stairs": Vector2i, "player": Vector2i (leader spawn, gDungeon->playerSpawn)
 ##   "items": Array of {pos: Vector2i, kind: "normal"|"shop"|"house"|"buried"}
 ##            (items flagged on the stairs tile are skipped, as Red's item spawner does)
@@ -60,6 +61,7 @@ const MAX_ROOM_COUNT := 32
 
 # Output flag bits
 const FLAG_IMPASSABLE := 1
+const FLAG_UNBREAKABLE := 2048    # TERRAIN_TYPE_UNBREAKABLE (fixed rooms, map border): walkable, can't be dug
 const FLAG_JUNCTION := 2
 const FLAG_SHOP := 4
 const FLAG_MONSTER_HOUSE := 8
@@ -2869,7 +2871,8 @@ class _Gen:
 				terrain[i] = t & 3
 				room[i] = rm[i] & 0xFF
 				var f := 0
-				if t & (TF_IMPASSABLE | TF_UNBREAKABLE): f |= FLAG_IMPASSABLE
+				if t & TF_IMPASSABLE: f |= FLAG_IMPASSABLE
+				if t & TF_UNBREAKABLE: f |= FLAG_UNBREAKABLE
 				if t & TF_JUNCTION: f |= FLAG_JUNCTION
 				if t & TF_SHOP:
 					f |= FLAG_SHOP

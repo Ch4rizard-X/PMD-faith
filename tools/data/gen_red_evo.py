@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Red's evolution requirements (pmdred_full/data/monster/monster_data.json: preEvolution / evolutionRequirements,
+"""Red's evolution requirements (pmd-red data/monster/monster_data.json: preEvolution / evolutionRequirements,
 used by pokemon_evolution.c SetMonEvolveStatus) -> game/data/red_evo.json
   {pre_species_key: [[target_key, type, main, additional], ...]}
 type: "level" (main = level), "iq" (main = IQ), "item" (main = item key), "link" (EVOLVE_TYPE_LINK_CABLE), "none"
 additional: 0 none, 4 Link Cable, 5 Atk>Def, 6 Atk<Def, 7 Atk=Def, 8 Sun Ribbon, 9 Lunar Ribbon, 10 Beauty Scarf,
             11 Wurmple even, 12 Wurmple odd
 """
-import json, re
-RED = "/tmp/claude-0/pmdred_full"
-G = "/tmp/claude-0/pmd1/game"
+import json, os, re, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
+import redsrc  # noqa: E402
+RED = common.PMDRED
+G = common.GAME
 mons = json.load(open(f"{RED}/data/monster/monster_data.json"))
-extra = json.load(open(f"{G}/data/ground/extra.json"))
-red_mon = extra["red_mon"]
+red_mon = {str(k): v for k, v in redsrc.red_mon_map().items()}   # = data/ground/extra.json "red_mon"
 items = json.load(open(f"{G}/data/items.json"))
 by_red = {int(v["red_id"]): k for k, v in items.items() if v.get("red_id") is not None}
 consts = {}

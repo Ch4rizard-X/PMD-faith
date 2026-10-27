@@ -10,14 +10,16 @@ Output: game/data/fixed_rooms.json
 Personal use only (data derived from the user's own ROM / the pret decomp).
 """
 import json, os, re, subprocess, sys, tempfile
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
+import redsrc  # noqa: E402
 
-DEC = "/tmp/claude-0/pmdred_full"
-GAME = "/tmp/claude-0/pmd1/game"
+DEC = common.PMDRED
+GAME = common.GAME
 OUT = GAME + "/data/fixed_rooms.json"
 CFLAGS = ["-w", "-O0", "-iquote", DEC + "/include", "-iquote", DEC, "-iquote", DEC + "/src", "-D_(x)=x", "-D__(x)=x"]
 
-extra = json.load(open(GAME + "/data/ground/extra.json"))
-RED_MON = {int(k): v for k, v in extra["red_mon"].items()}
+RED_MON = redsrc.red_mon_map()   # same as data/ground/extra.json "red_mon" (made later by tools/ground)
 items = json.load(open(GAME + "/data/items.json"))
 RED_ITEM = {}
 for k, v in items.items():
@@ -231,6 +233,8 @@ class CS:
         self.funcs = funcs
         self.consts = consts
         self.vars = {}
+        self.arrays = {}
+        self.ptrs = {}
 
     def who(self, expr):
         expr = expr.strip().lstrip("&")
@@ -429,6 +433,21 @@ class CS:
             v, f, a = m.groups()
             self.vars[v] = {"CutsceneGetLeader": "leader", "GetLeader": "leader", "CutsceneGetPartner": "partner"}.get(f, a.strip())
             return []
+        # sub_8085B4C walk paths: s16 arrays {dir, px/frame, frames, 0}... {.., frames=0} then x, y; pointer arrays
+        m = re.match(r"s16\s+(\w+)\s*\[\s*\w*\s*\]\s*=\s*\{(.*)\}$", s, re.S)
+        if m:
+            vals = [self.num(x.strip()) for x in m.group(2).split(",") if x.strip()]
+            self.arrays[m.group(1)] = [v if isinstance(v, int) else 0 for v in vals]
+            return []
+        m = re.match(r"(\w+)\s*=\s*\(struct\s+\w+\)\s*\{(.*)\}$", s, re.S)
+        if m:
+            vals = [self.num(x.strip()) for x in m.group(2).split(",") if x.strip()]
+            self.arrays[m.group(1)] = [v if isinstance(v, int) else 0 for v in vals]
+            return []
+        m = re.match(r"(\w+)\s*\[\s*(\d+)\s*\]\s*=\s*&?(\w+)(?:\.unk0)?$", s)
+        if m:
+            self.ptrs.setdefault(m.group(1), {})[int(m.group(2))] = m.group(3)
+            return []
         m = re.match(r"(\w+)\s*=\s*DisplayDungeonMenuMessage\((.*)\)$", s)
         if m:
             args = [x.strip() for x in m.group(2).split(",")]
@@ -442,6 +461,16 @@ class CS:
             return []
         f, a = m.group(1), m.group(2)
         args = [x.strip() for x in self._split_top(a, ",")] if a.strip() else []
+        if f == "sub_8085B4C":
+            n = self.num(args[3])
+            paths, ents = args[1].lstrip("&"), args[2].lstrip("&")
+            out = []
+            for k in range(n if isinstance(n, int) else 0):
+                arr = self.arrays.get(self.ptrs.get(paths, {}).get(k, ""))
+                ent = self.ptrs.get(ents, {}).get(k)
+                if arr and ent:
+                    out.append([self.who(ent), arr])
+            return [["march", out]] if out else []
         if f == "DisplayDungeonDialogue_Async":
             return [["say", args[0].lstrip("&")]]
         if f == "sub_80866C4":
@@ -595,7 +624,7 @@ def main():
            "items": {}}
     item_enum = enum_values(DEC + "/include/constants/item.h")
     out["items"] = {k: RED_ITEM[v] for k, v in item_enum.items() if k.startswith("ITEM_") and v in RED_ITEM}
-    json.dump(out, open(OUT, "w"), separators=(",", ":"))
+    json.dump(out, open(OUT, "w", encoding="utf-8"), separators=(",", ":"))
     print("rooms", len(rooms), "entities", len(ents), "dialogue", len(dialogue), "scenes", len(out["cutscenes"]["scenes"]),
           "bytes", os.path.getsize(OUT))
 

@@ -8,7 +8,7 @@ Follows the pret/pmd-red decompilation:
                     sub_80A4D48 (sprite priority)
   src/ground_sprite.c GroundSprite_Reset (OAM priority 2 or 3)
 
-Usage: python3 gen_ground_bg.py [--decomp DIR] [--out DIR] [--no-hd] [--only name1,name2]
+Usage: python3 -I gen_ground_bg.py [--decomp DIR] [--out DIR] [--no-hd] [--only name1,name2]
 """
 import argparse
 import json
@@ -21,10 +21,11 @@ import types
 import numpy as np
 from PIL import Image
 
-DECOMP = '/tmp/claude-0/pmdred_full'
-OUT = '/tmp/claude-0/pmd1/ground_bg'
-XBRZ_PKG = '/tmp/claude-0/x_xbrz.py'
-XBRZ_LIB = '/tmp/claude-0/libxbrz.so'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common  # noqa: E402
+
+DECOMP = common.PMDRED
+OUT = os.path.join(common.TMP, 'ground_bg')     # intermediate renders; gen_ground_assets.py copies what the game uses
 HD_SCALE = 4
 
 
@@ -385,10 +386,7 @@ _xbrz = None
 def get_xbrz():
     global _xbrz
     if _xbrz is None:
-        sys.modules.setdefault('_xbrz', types.SimpleNamespace(__file__=XBRZ_LIB))
-        sys.path.insert(0, XBRZ_PKG)
-        import xbrz
-        _xbrz = xbrz
+        _xbrz = common.xbrz_module()
     return _xbrz
 
 
@@ -499,6 +497,50 @@ def process(name, entry, mid, map_types, files, out, hd):
     return info
 
 
+def map_state(name, decomp=DECOMP):
+    """Decoded map for other tools (gen_town.py): dict(tilemaps (layer 0 = upper/BG2 first), vram, pal,
+    tile_anims, pal_anim, W, H) exactly as process() renders it."""
+    enum, ids, table, types_by_file, files = parse_tables(decomp)
+    e = 'MAP_FILE_ID_' + name.upper()
+    entry, map_types = table[e], types_by_file.get(e, [])
+
+    def rd(fname):
+        return open(files[fname], 'rb').read()
+    mtypes = sorted(set(t for _, t in map_types))
+    two_layer_cfg = any(t in (5, 6, 7, 8, 9) for t in mtypes)
+    h, layers, coll = load_bma(rd(entry['bma']))
+    if not map_types:
+        two_layer_cfg = h['layers'] == 2
+    max_pals, vram_tiles = (14, 0x400) if two_layer_cfg else (13, 0x380)
+    pal, num_pals, pal_anim = load_bpl(rd(entry['bpl']), max_pals)
+    bpc = load_bpc(rd(entry['bpc']), vram_tiles)
+    vram = bpc['vram']
+    vptr = bpc['num_tiles']
+    tile_anims = []
+    for sid in range(4):
+        fn = entry['bpa'][sid]
+        if fn is None:
+            continue
+        b = rd(fn)
+        bpa = load_bpa(b)
+        nt = bpc['slots'][sid]
+        if nt == 0:
+            continue
+        frames = []
+        for f in range(bpa['n_frames'] if sid < 2 else 1):
+            off = bpa['tiles_off'] + f * nt * 32
+            frames.append(decode_tiles_4bpp(b[off:off + nt * 32], nt))
+        end = min(vptr + nt, 1024)
+        vram[vptr:end] = frames[0][:end - vptr]
+        if sid < 2:
+            tile_anims.append(dict(slot=sid, first_tile=vptr, num_tiles=nt, frames=frames,
+                                   frame_ticks=[d + 1 for d in bpa['durations']]))
+        vptr += nt
+    W, H = h['w_tiles'] * 8, h['h_tiles'] * 8
+    tilemaps = [build_tilemap(layers[i], bpc['cells'], bpc['cw'], bpc['ch'], h) for i in range(len(layers))]
+    return dict(tilemaps=tilemaps, vram=vram, pal=pal, tile_anims=tile_anims, pal_anim=pal_anim or [], W=W, H=H)
+
+
 MAX_PAL_OVERLAY_FRAMES = 32
 
 
@@ -595,13 +637,13 @@ def write_anim(name, out, tilemaps, layer_names, vram, pal, tile_anims, pal_anim
     return {k: v for k, v in res.items() if v}
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--decomp', default=DECOMP)
     ap.add_argument('--out', default=OUT)
     ap.add_argument('--no-hd', action='store_true')
     ap.add_argument('--only', default='')
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     os.makedirs(a.out, exist_ok=True)
     enum, ids, table, types_by_file, files = parse_tables(a.decomp)
     dinfo = parse_dungeon_info(a.decomp)

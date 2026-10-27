@@ -1,5 +1,11 @@
+"""moves_data.json (Remixed waza_p.bin, vanilla for moves Remixed lacks) and learnsets.json (Remixed) -> tmp/eos/moveanim."""
 import json, struct
-R=json.load(open('strings_rx.json')); V=json.load(open('/tmp/claude-0/eos/strings_e.json'))
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tables import MOVEANIM, T_EOS, common, _EOS, _RX
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'eos'))
+from extract import strings
+R=strings(_RX,'replace'); V=common.load_json(os.path.join(T_EOS,'strings_e.json'))
 MB=8173; TB=13770; R_MON=18451
 def u16(d,o): return struct.unpack_from('<H',d,o)[0]
 def decode_ints(d,o):
@@ -31,8 +37,8 @@ def moves_of(path,S):
             flags=dict(affected_by_magic_coat=bool(e[16]),snatchable=bool(e[17]),uses_mouth=bool(e[18]),ai_avoids_frozen_targets=bool(e[19]),usable_while_taunted=bool(e[20]))))
     return d,dp,lp,out
 BAD={'$$$','[M:D1]','','NonRelearnable','??????????','Nothing'}
-rd,rdp,rlp,rmoves=moves_of('/tmp/claude-0/eosrx/fs/BALANCE/waza_p.bin',R)
-vd,vdp,vlp,vmoves=moves_of('/tmp/claude-0/eos/fs/BALANCE/waza_p.bin',V)
+rd,rdp,rlp,rmoves=moves_of(os.path.join(_RX,'fs','BALANCE','waza_p.bin'),R)
+vd,vdp,vlp,vmoves=moves_of(os.path.join(_EOS,'fs','BALANCE','waza_p.bin'),V)
 data={}; rxn=set()
 for m in rmoves:
     nm=R[MB+m['id']]
@@ -43,10 +49,10 @@ for m in vmoves:
     nm=V[MB+m['id']]
     if nm in BAD or nm in rxn: continue
     data[nm]=dict(m,src='vanilla',note='Not in Explorers Remixed (by name); vanilla EoS data')
-json.dump(data,open('/tmp/claude-0/eos/moveanim/moves_data.json','w'),indent=1,ensure_ascii=False)
+json.dump(data,open(common.p(os.path.join(MOVEANIM,'moves_data.json')),'w'),indent=1,ensure_ascii=False)
 print('moves_data',len(data))
 # learnsets
-md=open('/tmp/claude-0/eosrx/fs/BALANCE/monster.md','rb').read(); cnt=struct.unpack_from('<I',md,4)[0]
+md=open(os.path.join(_RX,'fs','BALANCE','monster.md'),'rb').read(); cnt=struct.unpack_from('<I',md,4)[0]
 ls={}; n=0
 def mname(i): return R[MB+i] if 0<i<559 else f'move_{i}'
 for i in range(cnt):
@@ -63,7 +69,5 @@ for i in range(cnt):
     gender=md[8+68*i+0x12]
     ls.setdefault(str(dex),[]).append(dict(md_index=i,entity_id=entid,name=R[R_MON+i] if R_MON+i<len(R) else None,gender=gender,level_up=lvl,tm_hm=tm,egg=egg))
     n+=1
-json.dump(ls,open('/tmp/claude-0/eos/moveanim/learnsets.json','w'),indent=1,ensure_ascii=False)
+json.dump(ls,open(os.path.join(MOVEANIM,'learnsets.json'),'w'),indent=1,ensure_ascii=False)
 print('learnsets entries',n,'dex keys',len(ls))
-print(json.dumps(ls.get('25',[])[:1])[:600])
-print(json.dumps(data['Moonblast'])[:500])

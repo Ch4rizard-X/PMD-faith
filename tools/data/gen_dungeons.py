@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
-"""Export every Red Rescue Team dungeon (floor properties, Pokemon/item/trap tables) to data/dungeons.json."""
-import json, re, os
-D = '/tmp/claude-0/pmdred'
-G = '/tmp/claude-0/pmd1/game/data'
-norm = lambda s: re.sub(r'[^a-z0-9]', '', s.lower())
-J = lambda p: json.load(open(p))
-
-def consts(path, prefix):
-    out = {}
-    for m in re.finditer(r'#define (' + prefix + r'\w+)\s+(0x[0-9A-Fa-f]+|\d+)', open(path).read()):
-        out.setdefault(m.group(1), int(m.group(2), 0))
-    return out
-def names_from_s(path, prefix):
-    s = open(path, encoding='utf8', errors='replace').read()
-    out = {}
-    for m in re.finditer(r'\n(' + prefix + r'\w+):\s*\n\.string "([^"\\]*)', s):
-        v = m.group(2)
-        out[m.group(1)] = 'Poke' if v == '{POKE}' else re.sub(r'\{[^}]*\}', '', v).strip()
-    return out
+"""Export every Red Rescue Team dungeon (floor properties, Pokemon/item/trap tables) to data/dungeons.json (stage 1).
+Sources: pmd-red data/dungeon/* (main_data.inc, pokemon_found, floor_id, dungeon_item_data, trap_data, dungeon_data).
+Pokemon not in Red are spread through dungeons whose Pokemon share their types. Stage 2 (tools/eos/convert_dungeons.py,
+tools/data/convert_remix.py, gen_extra_spread.py) adds the Explorers of Sky dungeons and more spreading."""
+import json, re, os, sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
+import proto  # noqa: E402
+import redsrc  # noqa: E402
+from redsrc import consts as _consts, names_from_s as _names  # noqa: E402
+D = common.PMDRED
+G = common.DATA
+norm = redsrc.norm
+J = lambda p: json.load(open(p, encoding='utf-8'))
+consts = lambda path, prefix: _consts(os.path.relpath(path, D), prefix)
+names_from_s = lambda path, prefix: _names(os.path.relpath(path, D), prefix)
 
 species = J(G + '/species.json'); items = J(G + '/items.json')
 sp_by_norm = {'farfetchd': '0083'}
@@ -57,14 +54,14 @@ TRAP_ID = {'Trip Trap': 'trip', 'Mud Trap': 'mud', 'Sticky Trap': 'sticky', 'Gri
 trap_tables = [{TRAP_ID.get(k, k): v for k, v in t['traps'].items() if v} for t in J(D + '/data/dungeon/trap_data.json')]
 
 # ---- global tables: floor records (per-dir files in include order, then the inline block), Pokemon tables
-mi = open(D + '/data/dungeon/main_data.inc').read()
+mi = redsrc.read('data/dungeon/main_data.inc')
 recs = []
 for d in re.findall(r'#include "(\w+)/main_data.inc"', mi):
-    raw = [int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', open(f'{D}/data/dungeon/{d}/main_data.inc').read())]
+    raw = [int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', redsrc.read(f'data/dungeon/{d}/main_data.inc'))]
     recs += [raw[i:i + 28] for i in range(0, len(raw) - 27, 28)]
 raw = [int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', mi[mi.rfind('#include'):])]
 recs += [raw[i:i + 28] for i in range(0, len(raw) - 27, 28)]
-pf_inc = open(D + '/data/dungeon/pokemon_found.inc').read()
+pf_inc = redsrc.read('data/dungeon/pokemon_found.inc')
 labels = re.findall(r'\.4byte (\w+)', pf_inc[pf_inc.index('DungeonPokemonFoundTable'):])
 by_label = {}
 for d in os.listdir(D + '/data/dungeon'):
@@ -73,7 +70,7 @@ for d in os.listdir(D + '/data/dungeon'):
         for t in J(f)['tables']:
             by_label[t['name']] = [[mon_key(p['species']) or p['species'], p['level'], p['probability']] for p in t['pokemon'] if p['probability'] > 0]
 ptables = [by_label.get(l, []) for l in labels]
-order = re.findall(r'#include "(\w+)/floor_id.inc"', open(D + '/data/dungeon/floor_id.inc').read())
+order = re.findall(r'#include "(\w+)/floor_id.inc"', redsrc.read('data/dungeon/floor_id.inc'))
 dj = J(D + '/data/dungeon/dungeon_data.json')
 dname = {}
 for n, m in enumerate(dj):
@@ -113,8 +110,9 @@ def stage_range(k):
         lvs = [e[1] for e in nxt if isinstance(e[1], int) and e[1] > 0]
         hi = (min(lvs) if lvs else 35) + 12
     return lo, hi
+HAS_SPRITE = set(proto.build_all()['DEX'])   # species with a SpriteCollab sprite (data/sprites.json is made later)
 SKIP = re.compile(r'^(D\d+|Boss\d+|Autopilot|DojoRegistration)$')
-extras = [k for k, v in species.items() if not v.get('red') and not v.get('megaBase') and not v.get('legend') and len(k) == 4 and k in J(G + '/sprites.json')]
+extras = [k for k, v in species.items() if not v.get('red') and not v.get('megaBase') and not v.get('legend') and len(k) == 4 and k in HAS_SPRITE]
 cands = []   # (dungeon, floor index, avg level, type profile)
 for key, dd in out.items():
     if SKIP.match(dd['dir']): continue
@@ -149,7 +147,8 @@ for (key, fi), lst in placed.items():
     for k, lv, _sc in lst:
         fl['pk'].append([k, lv, w, 1]); added += 1
 print('extras placed', len({fe[0] for d in out.values() for f in d['floors'] for fe in f['pk'] if len(fe) > 3}), 'of', len(extras), 'entries', added)
-json.dump({'dungeons': out, 'item_tables': item_tables, 'trap_tables': trap_tables}, open(G + '/dungeons.json', 'w'), separators=(',', ':'))
+with open(common.p(G, 'dungeons.json'), 'w') as f:
+    json.dump({'dungeons': out, 'item_tables': item_tables, 'trap_tables': trap_tables}, f, separators=(',', ':'))
 print(len(out), 'dungeons;', len(item_tables), 'item tables;', len(trap_tables), 'trap tables')
 for k in ['tiny_woods', 'thunderwave_cave', 'western_cave', 'uproar_forest']:
     v = out[k]; print(k, v['name'], len(v['floors']), v['floors'][0]['pk'][:6])

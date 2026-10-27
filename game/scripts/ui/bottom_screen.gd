@@ -63,6 +63,9 @@ var _town_mons: Array = []
 var _push_t := 0.0
 var _redraw_t := 0.0
 var _last_hash := 0
+var _last_key := ""
+var _needs_render := true
+var _pushing := false
 var _log_key := ""
 var _hudfont: Texture2D
 var _stairs_tex: Texture2D
@@ -187,7 +190,7 @@ func _build_viewport() -> void:
 	sub.size = logical
 	sub.transparent_bg = false
 	sub.disable_3d = true
-	sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	sub.render_target_update_mode = SubViewport.UPDATE_ONCE    # re-rendered only when its content changes (_render)
 	sub.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	sub.gui_embed_subwindows = true
 	add_child(sub)
@@ -326,12 +329,39 @@ func _process(dt: float) -> void:
 	_redraw_t -= dt
 	if _redraw_t <= 0.0:
 		_redraw_t = 1.0 / REDRAW_FPS
-		_refresh()
-	if mode == "android":
-		_push_t -= dt
-		if _push_t <= 0.0:
-			_push_t = 1.0 / PUSH_FPS
+		var k := _state_key()
+		if k != _last_key:
+			_last_key = k
+			_refresh()
+		if _needs_render:
+			_needs_render = false
+			_render()
+
+## Performance: the second screen used to re-render every frame and copy itself GPU -> CPU 30 times a second
+## (a pipeline stall each time). Now it renders once when something on it changed, and on Android the frame is
+## read back after that frame has been drawn.
+func _render() -> void:
+	sub.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if mode == "android" and not _pushing:
+		_pushing = true
+		await RenderingServer.frame_post_draw
+		if is_instance_valid(sub) and mode == "android":
 			_push_frame()
+		_pushing = false
+
+## What the second screen shows, as a cheap string: when it changes, the screen is redrawn.
+func _state_key() -> String:
+	var d := _dungeon() if _scene == "dungeon" else null
+	if d:
+		var parts := PackedStringArray([str(d.fs.turn), str(d.hud.msg_count), str(Game.money), str(int(d.belly)),
+			str(d.autoplay), str(d.busy), str(d.menu_open), str(d.result_sent), str(map_zoom), str(d.floor_i)])
+		for m in d.fs.mons:
+			parts.append("%d,%d,%d,%d" % [m.uid, m.pos.x, m.pos.y, m.hp])
+		return "|".join(parts)
+	var t := _town() if _scene == "town" else null
+	if t:
+		return "town|%s|%d|%s" % [str(Vector2i(t.pos)), Game.money, str(map_zoom)]
+	return _scene
 
 func _push_frame() -> void:
 	var img := sub.get_texture().get_image()
@@ -547,6 +577,7 @@ func _on_button(key: String) -> void:
 func _refresh() -> void:
 	if ui == null:
 		return
+	_needs_render = true
 	ui.queue_redraw()
 	if map_view:
 		map_view.queue_redraw()

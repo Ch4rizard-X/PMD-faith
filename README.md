@@ -33,24 +33,22 @@ Added or changed (54 in total), among them:
 ```
 game/        Godot project (scripts, scenes, shaders, tests). Assets and data go in game/assets and game/data (not included).
 tools/       Python tools that build game/assets and game/data from your own ROMs and community resources.
+build_all.py One command that runs every tool in order (see SETUP.md).
 android/     Source of the ThorScreen Android plugin (second-screen support).
 build_thor.bat, build_thor_debug.bat, set_godot_java.ps1   Windows build scripts for the Android APK.
 ```
 
 ## Building
 
-1. Create the assets and data with the tools (see [SETUP.md](SETUP.md)).
-2. Open `game/project.godot` in Godot 4.7.2.
-3. Android: run `build_thor.bat` (needs the Android SDK and Godot's export templates). Windows/desktop: export from the Godot editor.
+1. Copy `build_config.example.json` to `build_config.json` and set the paths to your three ROMs.
+2. Run `python build_all.py`. It downloads the community resources and builds `game/assets/` and `game/data/` from your ROMs.
+3. Open `game/project.godot` in Godot 4.7.2.
+
+Details, requirements and the Android build are in [SETUP.md](SETUP.md).
 
 ## Credits
 
-- [pret/pmd-red](https://github.com/pret/pmd-red): the decompilation the game logic, rules and story scripts are ported from.
-- [pret/pmd-sky](https://github.com/pret/pmd-sky) and [UsernameFodder/pmdsky-debug](https://github.com/UsernameFodder/pmdsky-debug): *Explorers of Sky* research.
-- [SkyTemple](https://github.com/SkyTemple): file format references for *Explorers of Sky*.
-- [PMDCollab SpriteCollab](https://github.com/PMDCollab/SpriteCollab): the sprites and portraits the engine is built for (CC BY-NC 4.0; credits per sprite in SpriteCollab).
-- [PokeAPI](https://github.com/PokeAPI/pokeapi): species, stats and ability data for Pokémon outside the original.
-- *Explorers Remixed* by its authors: move data, abilities, items and dungeon lists used for the added content.
+This project would not exist without the [pret](https://github.com/pret) decompilations, SkyTemple, the PMDCollab SpriteCollab artists, PokeAPI and the *Explorers Remixed* team, among others. The full list is in [CREDITS.md](CREDITS.md), and every sprite and portrait artist is in [CREDITS_SPRITES.md](CREDITS_SPRITES.md).
 
 ## License
 

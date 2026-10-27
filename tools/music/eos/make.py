@@ -1,5 +1,11 @@
-"""Render EoS BGM tracks to ogg + loops.json.
-usage: python3 -I make.py OUTDIR [ids,comma,sep] [--gain G] [--wav]
+"""Render Explorers of Sky BGM (SOUND/BGM/bgmNNNN.smd + .swd + bgm.swd) to game/assets/music/eos_NNNN.ogg
+and game/data/eos_loops.json.
+
+Loop points come from the sequence data itself: the DSE loop-point event (0x99) and the track end (0x98)
+give the loop start / end ticks, converted to seconds with the tempo map (render.py Song.tS / Song.tE).
+Looping tracks are written as intro + exactly one loop period, so the game loops from loop_start to the end.
+
+usage: python3 -I make.py [OUTDIR] [ids,comma,sep] [--gain G] [--wav]
 """
 import sys
 import os
@@ -8,14 +14,18 @@ import math
 import time
 import subprocess
 import numpy as np
-from scipy.signal import resample_poly
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from samples import load_bank
-from render import Song
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+import common  # noqa: E402
+from audio_util import resample  # noqa: E402
+from samples import load_bank  # noqa: E402
+from render import Song  # noqa: E402
 
-BGM = '/tmp/claude-0/eos/fs/SOUND/BGM'
-CACHE = '/tmp/claude-0/eos_build/cache'
+BGM = os.path.join(common.EOS, 'fs', 'SOUND', 'BGM')
+CACHE = os.path.join(common.TMP, 'eos_bgm_cache')
 SR_SYN = 32728
 SR_OUT = 24000
 # bgm0124's own swd lacks the programs its sequence uses (51/59); it is a near copy of bgm0000
@@ -31,9 +41,7 @@ def render_one(num, bank, gain, outdir, keep_wav=False):
     L, R = song.render(sr=SR_SYN)
     st = np.stack([L, R], axis=1).astype(np.float64)
     # resample whole render (incl. pass 2/3 context) before splicing
-    up, down = SR_OUT, SR_SYN
-    g = math.gcd(up, down)
-    y = resample_poly(st, up // g, down // g, axis=0)
+    y = resample(st, SR_SYN, SR_OUT)
     if song.looping:
         S = int(round(song.tS * SR_OUT))
         E = int(round(song.tE * SR_OUT))
@@ -81,13 +89,16 @@ def render_one(num, bank, gain, outdir, keep_wav=False):
                 exact=getattr(song, 'exact', True))
 
 
-def main():
-    outdir = sys.argv[1]
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    keep = '--wav' in argv
+    args = [a for a in argv if a not in ('--wav', '--resume')]
+    outdir = os.path.join(common.ASSETS, 'music')
+    if args and not args[0][0].isdigit() and not args[0].startswith('--'):
+        outdir = args.pop(0)
     os.makedirs(outdir, exist_ok=True)
     ids = None
-    gain = 1.0
-    keep = '--wav' in sys.argv
-    args = [a for a in sys.argv[2:] if a != '--wav']
+    gain = 0.7          # level of the shipped renders (stats_final: rms 0.0274 for bgm0000)
     if '--gain' in args:
         k = args.index('--gain')
         gain = float(args[k + 1])
@@ -97,10 +108,13 @@ def main():
     else:
         ids = sorted(int(f[3:7]) for f in os.listdir(BGM) if f.endswith('.smd'))
     bank = load_bank(os.path.join(BGM, 'bgm.swd'), CACHE)
-    statf = os.path.join(outdir, '_stats.json')
+    statf = os.path.join(CACHE, '_stats.json')
     stats = json.load(open(statf)) if os.path.exists(statf) else {}
+    skip_done = '--resume' in argv
     for num in ids:
         t0 = time.time()
+        if skip_done and 'length' in stats.get('%04d' % num, {}) and os.path.exists(os.path.join(outdir, 'eos_%04d.ogg' % num)):
+            continue
         try:
             r = render_one(num, bank, gain, outdir, keep)
         except Exception as e:
@@ -118,6 +132,19 @@ def main():
             num, r['length'], None if r['loop_start'] is None else round(r['loop_start'], 2), r['peak'], r['rms'],
             r['clipped'], r['voices'], time.time() - t0, '; '.join(r['warnings'])), flush=True)
         json.dump(stats, open(statf, 'w'), indent=1)
+    write_loops(stats)
+
+
+def write_loops(stats, path=None):
+    """data/eos_loops.json: {"NNNN": {"loop_start": s or null, "length": s}} for every rendered track."""
+    out = {}
+    for k in sorted(stats):
+        r = stats[k]
+        if 'length' in r:
+            out[k] = {'loop_start': None if r['loop_start'] is None else round(r['loop_start'], 6),
+                      'length': round(r['length'], 6)}
+    common.save_json(path or os.path.join(common.DATA, 'eos_loops.json'), out, pretty=True)
+    return out
 
 
 if __name__ == '__main__':

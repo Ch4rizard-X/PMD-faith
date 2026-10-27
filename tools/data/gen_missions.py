@@ -21,9 +21,11 @@ import json
 import os
 import re
 import sys
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
+import common  # noqa: E402
 
-RED = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/pmdred"
-GAME = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "game")
+RED = common.PMDRED
+GAME = common.GAME
 
 
 def src(p):

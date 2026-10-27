@@ -97,6 +97,18 @@ static func entry(root: Control, list: Array, i: int) -> int:
 				return cur
 	return cur
 
+## Red's Pokémon list colours (code_8023144.c): white = you don't have its Friend Area yet, green = you have
+## the Friend Area but haven't recruited it, cyan = recruited.
+const LIST_GREEN := Color8(0x7f, 0xff, 0x7f)
+const LIST_CYAN := Color8(0x7f, 0xe0, 0xff)
+
+static func list_color(sp: String) -> Color:
+	if Pokedex.is_recruited(sp):
+		return LIST_CYAN
+	if Services.area_of(sp) in Game.friend_areas:
+		return LIST_GREEN
+	return UITheme.INK
+
 static func num(sp: String) -> String:
 	return "#%03d" % int(sp.substr(0, 4))
 
@@ -240,10 +252,11 @@ class DexList extends PanelContainer:
 			row.add_child(cur)
 			var seen := Pokedex.is_seen(sp)
 			var rec := Pokedex.is_recruited(sp)
-			var n := PokedexUI._lbl(PokedexUI.num(sp), UITheme.INK_DIM)
+			var col := PokedexUI.list_color(sp) if seen else UITheme.INK_DIM
+			var n := PokedexUI._lbl(PokedexUI.num(sp), col)
 			n.custom_minimum_size.x = 48
 			row.add_child(n)
-			var nm := PokedexUI._lbl(PokedexUI.dex_name(sp), UITheme.INK if seen else UITheme.INK_DIM)
+			var nm := PokedexUI._lbl(PokedexUI.dex_name(sp), col)
 			row.add_child(nm)
 			var mark := TextureRect.new()
 			mark.texture = TeamScreens.icon("star") if rec else null

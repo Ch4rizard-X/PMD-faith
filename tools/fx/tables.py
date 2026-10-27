@@ -1,5 +1,9 @@
+"""Move-animation tables: vanilla overlay 10 and Remixed BALANCE/anim.bin (SkyTemple ExtractAnimData layout)."""
 import struct, json
-EOS='/tmp/claude-0/eos/'; RX='/tmp/claude-0/eosrx/'
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'eos'))
+from paths import EOS as _EOS, REMIX as _RX, MOVEANIM, SHEETS, T_EOS, T_RX, common  # noqa: E402
+EOS=_EOS+os.sep; RX=_RX+os.sep
 OV10=0x22BCA80
 def mv(e):
     a=struct.unpack_from('<4h',e,0); fl=struct.unpack_from('<I',e,8)[0]

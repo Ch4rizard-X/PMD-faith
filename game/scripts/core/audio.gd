@@ -39,6 +39,11 @@ func play_music(id: String) -> void:
 				s.loop = L.get("loop_start") != null
 				if s.loop:
 					s.loop_offset = float(L.loop_start)
+		elif s.loop:
+			# Red tracks rendered by tools/music/red (intro + one loop): loop back to the loop start, not to 0
+			var RL: Dictionary = _eos_loops().get("red_" + id, {})
+			if RL.get("loop_start") != null:
+				s.loop_offset = float(RL.loop_start)
 	music.stream = s
 	music.volume_db = linear_to_db(maxf(0.001, float(Game.settings.music)))
 	music.play()

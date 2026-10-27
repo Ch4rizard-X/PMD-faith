@@ -1,0 +1,6 @@
+{
+  "red_rom": "roms/Red Rescue Team (US).gba",
+  "eos_rom": "roms/Explorers of Sky (US).nds",
+  "remix_rom": "roms/Explorers Remixed.nds",
+  "work_dir": "build_work"
+}

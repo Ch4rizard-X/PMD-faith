@@ -14,9 +14,12 @@ enums, map conversion, map files).
 """
 import glob, json, os, re, subprocess, sys
 
-DEC = "/tmp/claude-0/pmdred_full"
-OUT = "/tmp/claude-0/pmd1/game/data/ground"
-WORK = "/tmp/claude-0/-home-claude/gsdump"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import common as CM  # noqa: E402
+
+DEC = CM.PMDRED
+OUT = os.path.join(CM.DATA, "ground")
+WORK = os.path.join(CM.TMP, "gsdump", "w")      # reg.h goes in its parent
 os.makedirs(WORK, exist_ok=True)
 os.makedirs(OUT, exist_ok=True)
 
