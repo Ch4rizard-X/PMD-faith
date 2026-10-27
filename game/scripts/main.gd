@@ -982,6 +982,26 @@ func _ready() -> void:
 					c.visible = was2
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--sleeptest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(1.5).timeout
+			var d: Dungeon = dungeon
+			d.auto_answer = true
+			var L: Mon = d.fs.leader
+			L.status["sleep"] = 3
+			var t0: int = d.fs.turn
+			var e0: int = -1
+			var last_move0 := L.last_move
+			d.leader_action({"type": "attack", "move": "", "dir": L.facing})
+			await get_tree().create_timer(0.5).timeout
+			print("SLEEPTEST %s attack while asleep becomes a wait (last move %s)" % ["ok " if L.last_move == last_move0 else "BAD", L.last_move])
+			await get_tree().create_timer(3.0).timeout
+			print("SLEEPTEST %s turns pass by themselves: %d -> %d, asleep now %d" % ["ok " if d.fs.turn > t0 + 1 else "BAD", t0, d.fs.turn, int(L.status.get("sleep", 0))])
+			print("SLEEPTEST log: ", d.hud.log_all.slice(maxi(0, d.hud.log_all.size() - 4)))
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--shoptest"):
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
@@ -991,6 +1011,7 @@ func _ready() -> void:
 				tally["ok" if good else "bad"] += 1
 				print("SHOPTEST %s %s %s" % ["ok " if good else "BAD", what, info])
 			# 1) real floors make shops with a Kecleon: try floors until one has a shop
+			Dialog.auto = true
 			var found := false
 			var mix := {"red": 0, "eos": 0}
 			for key in ["mt_steel", "sinister_woods", "silent_chasm", "mt_thunder", "great_canyon", "lapis_cave", "mt_blaze", "frosty_forest", "mt_freeze", "magma_cavern", "sky_tower", "uproar_forest", "howling_forest", "stormy_sea", "silver_trench", "meteor_cave", "fiery_field", "lightning_field", "northwind_field", "mt_faraway", "western_cave", "northern_range", "pitfall_valley", "buried_relic", "wish_cave", "murky_cave", "desert_region", "southern_cavern", "wyvern_hill", "solar_cave", "darknight_relic", "grand_sea", "waterfall_pond", "unown_relic", "joyous_tower", "far_off_sea", "purity_forest"]:
@@ -1019,6 +1040,7 @@ func _ready() -> void:
 			if not found:
 				check.call("a generated shop was found", false)
 			# 2) scripted shop on a known room
+			Dialog.auto = false
 			await start_dungeon("tiny_woods")
 			await get_tree().create_timer(1.0).timeout
 			var d: Dungeon = dungeon
@@ -1049,6 +1071,11 @@ func _ready() -> void:
 			L.pos = w1 + Vector2i(0, 1)
 			await d.shop.on_leader_step()
 			check.call("stepping in: inside the shop", d.shop.prev_in_shop)
+			d.obj_layer.queue_redraw()
+			if L.visual: L.visual.position = d._px(L.pos)
+			await get_tree().create_timer(0.6).timeout
+			get_viewport().get_texture().get_image().save_png("user://shop_floor.png")
+			check.call("attacks ignore the shopkeeper", not d.fs.is_foe(L, k) and not d.targets_for(L, DB.moves.get("Regular Attack", {"r": "front"}), AI.dir_toward(L.pos, k.pos)).has(k) or FloorState.cheb(L.pos, k.pos) > 1)
 			# pick up a ware (unpaid)
 			var price1 := int(fs.items[w1].price)
 			Game.bag.append({"id": "oran", "n": 1, "price": price1})

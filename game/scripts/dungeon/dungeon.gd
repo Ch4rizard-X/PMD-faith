@@ -49,6 +49,7 @@ var result_sent := false
 var recruited_names: Array = []
 var partner_ai: PartnerAI = null   # Game Options "Partner AI: Smarter"
 var shop: KecleonShop = null       # the floor's Kecleon Shop (dungeon/kecleon_shop.gd)
+var _blk_t := 0.0                  # time since the blocked leader's last automatic turn
 var shop_base := 0                 # wares' value when the floor began / since the last payment (Red unk50)
 var shop_stole := false            # thief on this floor (Red stoleFromKecleon)
 var _entry_state: Dictionary = {}  # DungeonSave.entry_state() at this floor's start (boss floors save this)
@@ -684,6 +685,16 @@ func _draw_objects() -> void:
 				obj_layer.draw_texture(ht if line.has(q) else gt, Vector2(q.x * T, q.y * T))
 	if _stairs_tex and fs.stairs.x >= 0:
 		obj_layer.draw_texture(_stairs_tex, Vector2(fs.stairs.x * T, fs.stairs.y * T) + (Vector2(T, T) - _stairs_tex.get_size()) / 2)
+	# Kecleon Shop floor (dungeon_map_access.c: TERRAIN_TYPE_SHOP tiles use trappat metatile 25)
+	if shop and shop.active():
+		var srect: Rect2i = shop.rect()
+		var stt := DB.tex("res://assets/ui/traps_red.png")
+		if stt:
+			for sy in range(srect.position.y, srect.end.y):
+				for sx in range(srect.position.x, srect.end.x):
+					var sp := Vector2i(sx, sy)
+					if shop.is_shop_tile(sp):
+						obj_layer.draw_texture_rect_region(stt, Rect2(sx * T, sy * T, T, T), Rect2(25 * 24, 0, 24, 24))
 	for p in fs.traps:
 		var t: Dictionary = fs.traps[p]
 		if t.seen:
@@ -781,7 +792,15 @@ func _process_main(dt: float) -> void:
 			obj_layer.queue_redraw()
 	_diag_was = dg_now
 	if busy or menu_open or result_sent:
+		_blk_t = 0.0
 		return
+	if leader_blocked() != "":
+		_blk_t += dt                          # asleep / frozen ...: the turn passes by itself (Red)
+		if _blk_t >= 0.35:
+			_blk_t = 0.0
+			leader_action({"type": "wait"})
+		return
+	_blk_t = 0.0
 	var d := _input_dir()
 	_running = Input.is_action_pressed("act_run") or Input.is_action_pressed("gp_b") or (hud != null and hud.pad_run and hud.pad_dir >= 0)
 	if d >= 0 and Input.is_action_pressed("gp_b"):
@@ -1041,9 +1060,39 @@ func on_hud_button(name: String) -> void:
 		"map": _toggle_map()
 
 # ================================================================= turn loop
+## sub_80701A4: the leader's turn passes by itself while asleep, frozen, wrapped, petrified, paused,
+## infatuated or biding (with Red's message). "" = the leader can act.
+func leader_blocked() -> String:
+	var L := fs.leader if fs else null
+	if L == null or L.hp <= 0:
+		return ""
+	var nm := _nm(L)
+	if AI.st(L, "sleep") > 0 or AI.st(L, "nightmare") > 0 or AI.st(L, "napping") > 0:
+		return "%s is asleep!" % nm
+	if AI.st(L, "frozen") > 0:
+		return "%s is frozen solid!" % nm
+	if AI.st(L, "wrapping") > 0:
+		return "%s is wrapped around the foe!" % nm
+	if AI.st(L, "wrapped") > 0:
+		return "%s is wrapped by the foe!" % nm
+	if AI.st(L, "petrified") > 0:
+		return " "
+	if AI.st(L, "paused") > 0:
+		return "%s can't move!" % nm
+	if AI.st(L, "infatuated") > 0:
+		return "%s is infatuated!" % nm
+	if AI.st(L, "bide") > 0:
+		return "%s is storing energy!" % nm
+	return ""
+
 func leader_action(a: Dictionary) -> void:
 	if busy:
 		return
+	var blk := leader_blocked()
+	if blk != "":
+		a = {"type": "wait"}                   # Red: no action this turn
+		if blk.strip_edges() != "":
+			_msg(blk)
 	busy = true
 	var L := fs.leader
 	var used := await execute(L, a)
@@ -1340,6 +1389,12 @@ func execute(m: Mon, a: Dictionary) -> bool:
 			var d := int(a.get("dir", m.facing))
 			if d < 0:
 				d = m.facing
+			if m.is_leader and str(a.get("move", "")) == "" and shop:
+				var kk := fs.mon_at(m.pos + DB.DIRS[d])
+				if kk and bool(kk.get_meta("shopkeeper", false)):
+					m.facing = d
+					await shop.talk(kk)              # Red: A on the shopkeeper talks to it
+					return false
 			var chain: Array = a.get("chain", [])
 			if chain.size() > 1:
 				await use_linked_chain(m, chain, d)

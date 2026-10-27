@@ -52,6 +52,19 @@ static var debug := false             # tests: print partners that stand still a
 ## Called from AI.decide after Red's status / item checks. {} = let Red's AI decide.
 func decide(m: Mon, mem: Dictionary) -> Dictionary:
 	var r := _decide(m, mem)
+	if applies(m, mem) and dg.fs.leader:
+		# safety net: standing still away from the leader for a while = drop the target and just follow;
+		# still stuck = Red's own AI for the turn
+		var away := FloorState.cheb(m.pos, dg.fs.leader.pos) > 1
+		var idle := r.is_empty() or (str(r.get("type", "")) == "wait")
+		mem.smart_still = int(mem.get("smart_still", 0)) + 1 if (away and idle) else 0
+		if int(mem.smart_still) >= 6:
+			mem.smart_still = 0
+			return {}
+		if int(mem.smart_still) >= 3 and idle:
+			mem.follow_only = true
+			r = _decide(m, mem)
+			mem.follow_only = false
 	if debug and applies(m, mem):
 		var L: Mon = dg.fs.leader
 		var still := str(r.get("type", "")) == "wait" or r.is_empty()
@@ -85,7 +98,7 @@ func _decide(m: Mon, mem: Dictionary) -> Dictionary:
 	if AI._can_take_item(m, fs, mem):
 		return {"type": "item", "action": "pickup"}
 	# 2) where to go
-	var tgt := pick_target(m, foes)
+	var tgt: Mon = null if bool(mem.get("follow_only", false)) else pick_target(m, foes)
 	if low and tgt != null and FloorState.cheb(tgt.pos, m.pos) > 1:
 		tgt = null
 	if tgt == null and FloorState.cheb(m.pos, L.pos) <= 1 and not (low and not foes.is_empty()):
@@ -167,8 +180,8 @@ func pick_target(m: Mon, foes: Array) -> Mon:
 			prio = 0
 		elif o.uid == lt:
 			prio = 1
-		if prio == 2 and AI.is_sleeping(o) and dm > 1:
-			continue                             # let sleeping foes lie
+		if prio == 2 and AI.is_sleeping(o):
+			continue                             # let sleeping foes lie (unless they're at the leader / its target)
 		var key := [prio, float(o.hp) / maxf(1.0, o.max_hp), dm]
 		if best == null or _less(key, best_key):
 			best = o

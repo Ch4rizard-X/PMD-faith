@@ -3,6 +3,12 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.33 (27 Oct 2026)
+
+- **Leader statuses:** as in Red (sub_80701A4), the leader's turn passes by itself while asleep, frozen, wrapped, petrified, unable to move, infatuated or biding, with Red's message ("... is asleep!"). Before, you could still act.
+- **Kecleon Shop floor** drawn with Red's shop carpet tile; attacks and moves ignore the shopkeeper (Red's TREATMENT_IGNORE) and A while facing Kecleon talks to it. After a theft Kecleon can be fought.
+- **Partners:** a sleeping foe next to a partner is no longer picked as its target (it used to stand there without attacking); a partner idle away from the leader for 3 turns drops its target and follows, and after 6 Red's AI takes over for a turn.
+
 ## v0.6.32 (27 Oct 2026): Kecleon Shops
 
 **Kecleon Shops in dungeons** (Red's dungeon_kecleon_shop.c, with Red's own lines)

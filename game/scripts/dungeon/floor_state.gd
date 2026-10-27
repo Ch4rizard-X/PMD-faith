@@ -109,6 +109,8 @@ func can_attack_dir(from: Vector2i, d: int) -> bool:
 func is_foe(a: Mon, b: Mon) -> bool:
 	if a.side == "client" or b.side == "client":   # rescue-job clients are neutral
 		return false
+	if a.has_meta("shopkeeper") or b.has_meta("shopkeeper"):   # Red: the shopkeeper is ignored (TREATMENT_IGNORE)
+		return false
 	return a.side != b.side
 
 func foes_of(m: Mon) -> Array:
