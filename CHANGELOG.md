@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.29 (27 Oct 2026)
+
+- Recruiting doesn't start until Wigglytuff gives the team its first Friend Areas (Wild Plains and Mist-Rise Forest).
+- DX recruiting also needs the Pokémon's own Friend Area, as in Red; the rest stays DX (2-tile range, temporary members up to 8, the choice when you leave).
+
 ## v0.6.28 (27 Oct 2026): DX recruiting, smarter partners
 
 **Recruiting**

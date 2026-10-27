@@ -2239,12 +2239,17 @@ func recruit_allowed(t: Mon) -> bool:
 	return true
 
 ## Game Options "Recruiting: DX" (Rescue Team DX): a defeated Pokémon joins for this dungeon only (from up to 2
-## tiles, Red's rate, no Friend Area needed yet, up to 8 members); at the exit you choose who stays.
+## tiles, Red's rate, its Friend Area needed as in Red, up to 8 members); at the exit you choose who stays.
 const DX_TEAM_MAX := 8
 const DX_RANGE := 2
 
 static func dx_recruiting() -> bool:
 	return int(QOL.opt("qol_recruit")) == 1
+
+## No recruiting at all until Wigglytuff gives the team its first Friend Areas (story special 0x17: Wild
+## Plains and Mist-Rise Forest); after that each species still needs its own Friend Area (Red and DX).
+static func recruiting_unlocked() -> bool:
+	return not Game.friend_areas.is_empty()
 
 static func is_temp(m: Mon) -> bool:
 	return m != null and bool(m.get_meta("temp_recruit", false))
@@ -2252,7 +2257,7 @@ static func is_temp(m: Mon) -> bool:
 ## Smarter partner AI: a foe the leader could recruit with its next hit (low HP, leader in range, allowed,
 ## room on the team). Partners leave it alone; not while the leader is in trouble.
 func recruit_candidate(t: Mon) -> bool:
-	if t.is_team() or not t.recruit_ok or not ddata.get("recruit", true):
+	if t.is_team() or not t.recruit_ok or not ddata.get("recruit", true) or not recruiting_unlocked():
 		return false
 	if t.hp * 3 > t.max_hp:
 		return false
@@ -2266,12 +2271,14 @@ func recruit_candidate(t: Mon) -> bool:
 		return false
 	if int(DB.species.get(t.sp, {}).get("recruit", 0)) == -999 or recruit_rate(L, t) <= 0:
 		return false
+	if not Services.has_area_for(t.sp):
+		return false
 	if dx:
 		return fs.team().size() < DX_TEAM_MAX
-	return Services.has_area_for(t.sp) and fs.team().size() < Services.PARTY_MAX
+	return fs.team().size() < Services.PARTY_MAX
 
 func try_recruit(r: Mon, t: Mon) -> bool:
-	if not ddata.get("recruit", true) or not t.recruit_ok:
+	if not ddata.get("recruit", true) or not t.recruit_ok or not recruiting_unlocked():
 		return false
 	var dx := dx_recruiting()
 	if FloorState.cheb(r.pos, t.pos) > (DX_RANGE if dx else 1):
@@ -2286,12 +2293,12 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 		return false
 	if legend_owned(t):
 		return false
+	if not Services.has_area_for(t.sp):          # Red and DX: only with the species' Friend Area
+		return false
 	if dx:
 		if fs.team().size() >= DX_TEAM_MAX:
 			return false
 	else:
-		if not Services.has_area_for(t.sp):
-			return false
 		var body := 0
 		for m in fs.team():
 			body += maxi(1, int(DB.species.get(m.sp, {}).get("size", 1)))

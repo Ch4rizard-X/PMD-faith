@@ -493,13 +493,21 @@ func _ready() -> void:
 				Game.friend_areas.erase(Services.area_of(sp))
 				if area: Game.friend_areas.append(Services.area_of(sp))
 				return w
+			var areas_keep: Array = Game.friend_areas.duplicate()
+			Game.friend_areas.clear()
+			var w0: Mon = spawn_at.call(1, "0019", false)
+			Game.friend_areas.clear()
+			if w0: check.call("DX: no recruiting before the first Friend Area", await d.try_recruit(L, w0), false)
+			Game.friend_areas.append_array(areas_keep)
 			var money0 := Game.money
 			var f0 := Game.friends.size()
 			var wx: Mon = spawn_at.call(3, "0019", false)
 			if wx: check.call("DX: no join from 3 tiles", await d.try_recruit(L, wx), false)
-			var wa: Mon = spawn_at.call(2, "0016", false)
+			var wn: Mon = spawn_at.call(1, "0016", false)
+			if wn: check.call("DX: no join without its Friend Area", await d.try_recruit(L, wn), false)
+			var wa: Mon = spawn_at.call(2, "0016", true)
 			var ra: bool = wa != null and await d.try_recruit(L, wa)
-			check.call("DX: joins from 2 tiles with no Friend Area", ra, true)
+			check.call("DX: joins from 2 tiles with its Friend Area", ra, true)
 			check.call("DX: it's a temporary member", ra and wa.is_team() and Dungeon.is_temp(wa), true)
 			if ra:
 				var e0 := wa.exp
@@ -518,9 +526,8 @@ func _ready() -> void:
 			var nb := Game.friends.filter(func(f): return str(f.sp) == sp_b).size()
 			d._end("cleared")
 			await get_tree().create_timer(1.0).timeout
-			check.call("DX: the one with a Friend Area stays", Game.friends.size() - f0, 1)
-			check.call("DX: ...and it's the right one", Game.friends.filter(func(f): return str(f.sp) == sp_b).size(), nb + 1)
-			check.call("DX: the one without leaves and pays", Game.money > money0, true)
+			check.call("DX: both temporary members stay (answered yes)", Game.friends.size() - f0, 2)
+			check.call("DX: ...including the right one", Game.friends.filter(func(f): return str(f.sp) == sp_b).size(), nb + 1)
 			# lost expedition: temporary members don't stay
 			await start_dungeon("thunderwave_cave")
 			await get_tree().create_timer(2.0).timeout
