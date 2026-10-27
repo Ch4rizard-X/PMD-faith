@@ -982,6 +982,109 @@ func _ready() -> void:
 					c.visible = was2
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--shoptest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dungeon.test_invincible = true
+			var tally := {"ok": 0, "bad": 0}
+			var check := func(what: String, good: bool, info := ""):
+				tally["ok" if good else "bad"] += 1
+				print("SHOPTEST %s %s %s" % ["ok " if good else "BAD", what, info])
+			# 1) real floors make shops with a Kecleon: try floors until one has a shop
+			var found := false
+			var mix := {"red": 0, "eos": 0}
+			for key in ["mt_steel", "sinister_woods", "silent_chasm", "mt_thunder", "great_canyon", "lapis_cave", "mt_blaze", "frosty_forest", "mt_freeze", "magma_cavern", "sky_tower", "uproar_forest", "howling_forest", "stormy_sea", "silver_trench", "meteor_cave", "fiery_field", "lightning_field", "northwind_field", "mt_faraway", "western_cave", "northern_range", "pitfall_valley", "buried_relic", "wish_cave", "murky_cave", "desert_region", "southern_cavern", "wyvern_hill", "solar_cave", "darknight_relic", "grand_sea", "waterfall_pond", "unown_relic", "joyous_tower", "far_off_sea", "purity_forest"]:
+				if found or not DB.dungeons.dungeons.has(key): continue
+				var nfl: int = DB.dungeons.dungeons[key].floors.size()
+				for fi in range(0, nfl - 1):
+					await start_dungeon(key, fi)
+					await get_tree().create_timer(0.3).timeout
+					if is_instance_valid(dungeon) and dungeon.shop and dungeon.shop.active():
+						found = true
+						break
+				if found:
+					var d0: Dungeon = dungeon
+					var k0: Array = d0.shop.keepers()
+					check.call("a generated shop has its Kecleon", k0.size() == 1, "%s F%d rect %s" % [key, d0.floor_i + 1, d0.shop.rect()])
+					var wares := 0
+					for p in d0.fs.items:
+						var it: Dictionary = d0.fs.items[p]
+						if int(it.get("price", 0)) > 0:
+							wares += 1
+							mix["eos" if DB.items.get(str(it.id), {}).get("eos_added", 0) else "red"] += 1
+					check.call("the shop has priced wares", wares > 0, "%d wares, value %d" % [wares, d0.shop_base])
+					if k0.size() > 0:
+						check.call("Kecleon is level 90 and won't move", k0[0].level == 90 and AI.decide(k0[0], d0.fs, {}).get("type", "") == "wait")
+			print("SHOPTEST ware mix: ", mix)
+			if not found:
+				check.call("a generated shop was found", false)
+			# 2) scripted shop on a known room
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(1.0).timeout
+			var d: Dungeon = dungeon
+			d.auto_answer = true
+			var fs: FloorState = d.fs
+			var L: Mon = fs.leader
+			var room: Rect2i = fs.rooms[0]
+			for rr in fs.rooms:
+				if rr.get_area() > room.get_area(): room = rr
+			for m in fs.mons.duplicate():
+				if not m.is_team():
+					if m.visual: m.visual.queue_free()
+					fs.mons.erase(m)
+			fs.items.clear()
+			var inner := Rect2i(room.position + Vector2i(1, 1), room.size - Vector2i(2, 2))
+			var w1 := inner.position
+			var w2 := inner.position + Vector2i(1, 0)
+			fs.items[w1] = {"id": "oran", "n": 1, "price": KecleonShop.buy_price("oran", 1)}
+			fs.items[w2] = {"id": "pecha", "n": 1, "price": KecleonShop.buy_price("pecha", 1)}
+			var gen := {"shop": inner, "kecleon": inner.get_center()}
+			d.shop.on_floor_built(gen)
+			var k: Mon = d.shop.keepers()[0]
+			var outside := Vector2i(room.position.x, room.position.y)
+			if inner.has_point(outside): outside = room.position
+			L.pos = outside
+			d.shop.prev_in_shop = false
+			# step in
+			L.pos = w1 + Vector2i(0, 1)
+			await d.shop.on_leader_step()
+			check.call("stepping in: inside the shop", d.shop.prev_in_shop)
+			# pick up a ware (unpaid)
+			var price1 := int(fs.items[w1].price)
+			Game.bag.append({"id": "oran", "n": 1, "price": price1})
+			fs.items.erase(w1)
+			check.call("owed after taking a ware", d.shop.owed() == price1, "owed %d" % d.shop.owed())
+			# leave own item for sale
+			fs.items[w1] = {"id": "apple", "n": 1, "price": 0}
+			check.call("offer for a left item", d.shop.offer() == KecleonShop.sell_price("apple", 1), "offer %d" % d.shop.offer())
+			# step out with money: sells, then pays
+			Game.money = 1000
+			var m0 := Game.money
+			L.pos = outside
+			await d.shop.on_leader_step()
+			var bag_paid: bool = Game.bag.filter(func(b): return int(b.get("price", 0)) > 0).is_empty()
+			check.call("stepping out: paid and the ware is ours", bag_paid and d.shop.owed() == 0 and not d.shop_stole, "money %d -> %d" % [m0, Game.money])
+			check.call("the money adds up", Game.money == m0 + KecleonShop.sell_price("apple", 1) - price1)
+			check.call("the left item is now a ware", int(fs.items[w1].get("price", 0)) > 0)
+			# take another ware without money: thief
+			Game.money = 0
+			L.pos = w2 + Vector2i(0, 1)
+			await d.shop.on_leader_step()
+			Game.bag.append({"id": "pecha", "n": 1, "price": int(fs.items[w2].price)})
+			fs.items.erase(w2)
+			L.pos = outside
+			await d.shop.on_leader_step()
+			check.call("no money: thief", d.shop_stole)
+			check.call("Kecleon turns hostile", not k.has_meta("shopkeeper"))
+			check.call("prices cleared after the theft", Game.bag.filter(func(b): return int(b.get("price", 0)) > 0).is_empty())
+			var n0 := fs.mons.filter(func(m): return m.sp == "0352").size()
+			for i in 12:
+				await d.end_of_turn_i()
+			var n1 := fs.mons.filter(func(m): return m.sp == "0352").size()
+			check.call("Kecleon keep coming after the thief", n1 > n0, "%d -> %d" % [n0, n1])
+			print("SHOPTEST summary ok=%d bad=%d" % [tally.ok, tally.bad])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--partnersoak"):
 		(func():
 			var key := "mt_steel"

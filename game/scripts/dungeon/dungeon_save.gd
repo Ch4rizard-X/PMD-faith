@@ -24,7 +24,7 @@ const FS_SKIP := ["mons", "leader", "rng", "_red_exits_cache"]
 const MON_SKIP := ["visual"]
 const META_SKIP := ["fainting"]
 ## Dungeon vars stored as-is (plain data).
-const DUNGEON_VARS := ["dkey", "dname", "floor_i", "belly", "belly_max", "belly_state", "wind_state", "spawn_timer", "mem", "recruited_names", "dx_turns"]
+const DUNGEON_VARS := ["dkey", "dname", "floor_i", "belly", "belly_max", "belly_state", "wind_state", "spawn_timer", "mem", "recruited_names", "dx_turns", "shop_base", "shop_stole"]
 ## Game fields that change inside a dungeon (snapshotted so the suspend file is self-consistent).
 const GAME_VARS := ["team", "bag", "money", "jobs", "flags", "rank_points", "storage"]
 
@@ -324,6 +324,9 @@ static func _apply(d, st: Dictionary) -> void:
 		if "log_all" in d.hud and st.has("log"):
 			d.hud.log_all = st.log.duplicate()
 	d._update_hud()
+	if "shop" in d:                          # the Kecleon Shop's state (shop rect is a FloorState meta)
+		d.shop = KecleonShop.new(d)
+		d.shop.prev_in_shop = d.shop.is_shop_tile(fs.leader.pos) if fs.leader else false
 
 ## What Dungeon.start() builds before the first floor (layers, camera, textures). Uses the dungeon's own
 ## _setup_nodes() if a newer dungeon.gd has one.

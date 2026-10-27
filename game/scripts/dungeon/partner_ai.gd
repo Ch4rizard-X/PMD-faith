@@ -57,7 +57,7 @@ func decide(m: Mon, mem: Dictionary) -> Dictionary:
 		var still := str(r.get("type", "")) == "wait" or r.is_empty()
 		var k := "dbg_still"
 		mem[k] = int(mem.get(k, 0)) + 1 if still else 0
-		if int(mem[k]) >= 5 and FloorState.cheb(m.pos, L.pos) > 2:
+		if int(mem[k]) >= 4 and FloorState.cheb(m.pos, L.pos) > 1:
 			print("PARTNERDBG %s still %d turns at %s leader %s dist %d goal=%s act=%s room=%d" % [m.name, int(mem[k]), m.pos, L.pos, FloorState.cheb(m.pos, L.pos), str(mem.get("last_goal", "?")), str(r), dg.fs.room_at(m.pos)])
 	return r
 
@@ -95,7 +95,6 @@ func _decide(m: Mon, mem: Dictionary) -> Dictionary:
 		if o.hp > 0:
 			_occ[o.pos] = o
 	var plan := _bfs(m, NEAR_DEPTH)
-	var need_far := FloorState.cheb(m.pos, L.pos) >= NEAR_DEPTH - 2
 	var goal := Vector2i(-1, -1)
 	if tgt != null:
 		goal = _attack_spot(m, tgt, plan)
@@ -103,8 +102,8 @@ func _decide(m: Mon, mem: Dictionary) -> Dictionary:
 	if goal.x < 0:
 		goal = _follow_spot(m, L, foes, low, plan)
 		mem.last_goal = "leader"
-		if need_far and (goal.x < 0 or FloorState.cheb(goal, L.pos) > 1):
-			plan = _bfs(m, SEARCH)              # the leader is far or out of sight: search the whole floor
+		if FloorState.cheb(m.pos, L.pos) > 1 and (goal.x < 0 or FloorState.cheb(goal, L.pos) > 1):
+			plan = _bfs(m, SEARCH)              # no way within 8 steps (or the leader is far): search the whole floor
 			goal = _follow_spot(m, L, foes, low, plan)
 			if goal.x < 0 or FloorState.cheb(goal, L.pos) > 2:
 				_relaxed = true                     # blocked by a known trap / Monster House room: go through it
@@ -361,8 +360,8 @@ func _bfs(m: Mon, max_depth: int) -> Dictionary:
 		if pd >= max_depth:
 			continue
 		var o0: Mon = _occ.get(p)
-		if o0 != null and o0 != m and (not o0.is_team() or o0.is_leader or Missions.is_client(o0)):
-			continue                              # reachable as a goal next to, but not through
+		if o0 != null and o0 != m and (not o0.is_team() or o0.is_leader or Missions.is_client(o0) or _busy(o0)):
+			continue                              # reachable as a goal next to, but not through (nor a teammate mid-fight)
 		for d in 8:
 			var to: Vector2i = p + DB.DIRS[d]
 			if not fs.inb(to):

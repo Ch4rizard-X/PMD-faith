@@ -48,6 +48,9 @@ var _auto_target := Vector2i(-1, -1)
 var result_sent := false
 var recruited_names: Array = []
 var partner_ai: PartnerAI = null   # Game Options "Partner AI: Smarter"
+var shop: KecleonShop = null       # the floor's Kecleon Shop (dungeon/kecleon_shop.gd)
+var shop_base := 0                 # wares' value when the floor began / since the last payment (Red unk50)
+var shop_stole := false            # thief on this floor (Red stoleFromKecleon)
 var _entry_state: Dictionary = {}  # DungeonSave.entry_state() at this floor's start (boss floors save this)
 
 ## Fixed rooms (story bosses, legendaries, Explorers of Sky boss arenas) can't be resumed mid-floor: their
@@ -229,7 +232,11 @@ func build_floor() -> void:
 			table = int(fdata.house_items)
 		elif kind == "shop":
 			table = int(fdata.shop)
-		var id := _pick_item(table)
+		var id := ""
+		if kind == "shop" and rng.randi_range(0, 1) == 0:
+			id = EosItems.shop_pick(self, rng)        # Kecleon's wares: half Red's shop list, half Explorers of Sky items
+		if id == "" or not KecleonShop.shoppable(id):
+			id = _pick_item(table)
 		if id == "":
 			continue
 		var n := 1
@@ -238,13 +245,17 @@ func build_floor() -> void:
 			n = rng.randi_range(1, maxi(1, int(props.get("moneyUpperBound", 1)) * 40))
 		elif I.has("amt"):
 			n = rng.randi_range(int(I.amt[0]), int(I.amt[1]))
-		fs.items[it.pos] = {"id": id, "n": n, "price": int(I.get("price", 0)) if kind == "shop" else 0}
+		var price := KecleonShop.buy_price(id, n) if kind == "shop" and KecleonShop.shoppable(id) else 0
+		fs.items[it.pos] = {"id": id, "n": n, "price": price}
+	if shop == null:
+		shop = KecleonShop.new(self)
+	shop.on_floor_built(gen)                 # Kecleon in the middle of the shop, the wares' value noted
 	if test_want != "" and _floor_has_want():
 		print("  TEST floor items: ", fs.items.values().map(func(x): return x.id))
 	for p in gen.get("traps", []):
 		var tid := _pick_trap(int(fdata.traps))
 		if tid != "":
-			fs.traps[p] = {"id": tid, "seen": false}
+			fs.traps[p] = {"id": tid, "seen": tid == "wonder"}     # Red: Wonder Tiles are always visible
 	for t in gen.get("fixed_traps", []):
 		fs.traps[t.pos] = {"id": str(t.id), "seen": bool(t.visible)}
 	for it in gen.get("fixed_items", []):
@@ -1283,7 +1294,11 @@ func end_of_turn_i() -> void:
 				return
 	# wild spawns (Red: every 36 turns, room tile away from the leader)
 	spawn_timer += 1
-	if spawn_timer >= int(TurnRules.spawn_interval(fs)):
+	if shop_stole and shop:
+		if spawn_timer >= KecleonShop.THIEF_SPAWN_TURNS:     # gKecleonSpawnIntervalFrames: Kecleon after the thief
+			spawn_timer = 0
+			shop.thief_spawn()
+	elif spawn_timer >= int(TurnRules.spawn_interval(fs)):
 		spawn_timer = 0
 		if TurnRules.can_spawn(fs) and not BossScene.is_floorwide(fixed_no) and eos_arena.is_empty():
 			var p := TurnRules.spawn_position(fs)
@@ -1370,6 +1385,9 @@ func do_move(m: Mon, d: int, swap := false) -> bool:
 			return false
 		if m.is_leader and Missions.is_client(o):
 			await Missions.on_talk(self, o)
+			return false
+		if m.is_leader and bool(o.get_meta("shopkeeper", false)) and shop:
+			await shop.talk(o)                       # Red: walking into Kecleon talks to it
 			return false
 		if (m.is_leader and o.is_team()) or (swap and o.is_team() and not o.is_leader and not Missions.is_client(o)):
 			# swap places with a teammate (partners too, with the smarter partner AI)
@@ -1508,6 +1526,8 @@ func _after_leader_step() -> void:
 	var t0 := Time.get_ticks_usec()
 	var f0 := Engine.get_process_frames()
 	await _after_leader_step_i()
+	if shop and not result_sent:
+		await shop.on_leader_step()              # Kecleon Shop: welcome / pay when stepping out / thief
 	if perf_log and Engine.get_process_frames() == f0:
 		pacc("after_leader_step", Time.get_ticks_usec() - t0)
 
@@ -1564,17 +1584,27 @@ func trigger_trap(m: Mon, p: Vector2i) -> void:
 		return
 	var t: Dictionary = fs.traps[p]
 	t.seen = true
-	if HeldItems.blocks_trap(m):
+	if HeldItems.blocks_trap(m) and str(t.id) != "wonder":     # Red: the Trap Scarf doesn't stop a Wonder Tile
 		_msg("%s's Trap Scarf kept the trap from going off!" % _nm(m))
 		obj_layer.queue_redraw()
 		return
 	obj_layer.queue_redraw()
 	match t.id:
 		"wonder":
+			# HandleWonderTile -> sub_8079E34: stages and multipliers back to normal; the tile stays (Red)
+			var changed := false
 			for k in m.stages:
-				m.stages[k] = 10
-			_msg("%s stepped on a Wonder Tile! Stat changes were reset." % _nm(m))
-			fs.traps.erase(p)
+				if int(m.stages[k]) != 10:
+					m.stages[k] = 10
+					changed = true
+			var sm = m.get("stat_mult")
+			if sm is Dictionary:
+				for k in sm.keys():
+					if int(sm[k]) != 256:
+						sm[k] = 256
+						changed = true
+			_msg("%s stepped on a Wonder Tile!" % _nm(m))
+			_msg(("%s's stats returned to normal." if changed else "%s's stats appear unchanged.") % _nm(m))
 		"slumber":
 			m.status.sleep = TurnRules.red_turns("sleep", fs.rng, m, 4)
 			_msg("%s stepped on a Slumber Trap and fell asleep!" % _nm(m))
@@ -2965,8 +2995,8 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 			var it: Dictionary = fs.items[L.pos]
 			id = it.id
 			var unpaid := int(it.get("price", 0)) > 0
-			opts.append({"text": "Pick Up", "id": "pickup", "disabled": unpaid or (id != "poke" and _bag_is_full(id))})
-			opts.append({"text": "Switch", "id": "switch", "disabled": unpaid or Game.bag.is_empty()})
+			opts.append({"text": "Pick Up", "id": "pickup", "disabled": (id != "poke" and _bag_is_full(id)) or (unpaid and Game.bag.size() >= Game.BAG_MAX)})
+			opts.append({"text": "Switch", "id": "switch", "disabled": Game.bag.is_empty()})
 			var verb2 := TeamScreens.item_verb(id)
 			if verb2 != "":
 				opts.append({"text": verb2, "id": "use_ground", "disabled": unpaid})
@@ -3027,7 +3057,7 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 			return true
 		"place":
 			var b: Dictionary = Game.bag[bag_i]
-			fs.items[L.pos] = {"id": b.id, "n": int(b.n), "price": 0}
+			fs.items[L.pos] = {"id": b.id, "n": int(b.n), "price": int(b.get("price", 0))}
 			Game.bag.remove_at(bag_i)
 			obj_layer.queue_redraw()
 			_msg("%s put the %s on the ground." % [_nm(L), nm])
@@ -3036,8 +3066,10 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 		"swap_ground":
 			var g: Dictionary = fs.items[L.pos]
 			var b2: Dictionary = Game.bag[bag_i]
-			fs.items[L.pos] = {"id": b2.id, "n": int(b2.n), "price": 0}
+			fs.items[L.pos] = {"id": b2.id, "n": int(b2.n), "price": int(b2.get("price", 0))}
 			Game.bag[bag_i] = {"id": g.id, "n": int(g.get("n", 1))}
+			if int(g.get("price", 0)) > 0:
+				Game.bag[bag_i].price = int(g.price)
 			obj_layer.queue_redraw()
 			_msg("Exchanged the [color=#ffdc4a]%s[/color] on the ground with the %s." % [DB.item_name(g.id), nm])
 			await _menu_turn()
@@ -3053,7 +3085,11 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 				Game.money += int(it2.n)
 				Audio.sfx("coin")
 				_msg("Picked up %d Poké." % int(it2.n))
-			elif Game.bag_add(id, int(it2.get("n", 1))):
+			elif int(it2.get("price", 0)) > 0 and Game.bag.size() < Game.BAG_MAX:
+				Game.bag.append({"id": id, "n": int(it2.get("n", 1)), "price": int(it2.price)})    # a Kecleon ware: unpaid
+				Audio.sfx("pickup")
+				_msg("Picked up the %s." % nm)
+			elif int(it2.get("price", 0)) == 0 and Game.bag_add(id, int(it2.get("n", 1))):
 				Audio.sfx("pickup")
 				_msg("Picked up the %s." % nm)
 			else:
@@ -3069,8 +3105,10 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 				return false
 			var g2: Dictionary = fs.items[L.pos]
 			var b3: Dictionary = Game.bag[k2]
-			fs.items[L.pos] = {"id": b3.id, "n": int(b3.n), "price": 0}
+			fs.items[L.pos] = {"id": b3.id, "n": int(b3.n), "price": int(b3.get("price", 0))}
 			Game.bag[k2] = {"id": g2.id, "n": int(g2.get("n", 1))}
+			if int(g2.get("price", 0)) > 0:
+				Game.bag[k2].price = int(g2.price)
 			obj_layer.queue_redraw()
 			_msg("Exchanged the %s on the ground with the [color=#ffdc4a]%s[/color]." % [nm, DB.item_name(b3.id)])
 			await _menu_turn()

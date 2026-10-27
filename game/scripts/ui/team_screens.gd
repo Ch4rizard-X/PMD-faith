@@ -246,6 +246,9 @@ static func item_row(b: Dictionary, show_set := true) -> Dictionary:
 	var row := {"text": nm, "icon": item_icon(id)}
 	if I.get("stack", false) and int(b.get("n", 1)) > 0:
 		row.right = str(int(b.get("n", 1)))
+	if int(b.get("price", 0)) > 0:          # an unpaid Kecleon ware: its price, in the shop's colour
+		row.text = "[color=#7fff7f]%s[/color]" % nm
+		row.right = "%d%s" % [int(b.price), UITheme.glyph("POKE")]
 	return row
 
 static func icon(kind: String) -> Texture2D:

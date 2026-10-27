@@ -3,6 +3,18 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.32 (27 Oct 2026): Kecleon Shops
+
+**Kecleon Shops in dungeons** (Red's dungeon_kecleon_shop.c, with Red's own lines)
+- The shop rooms the floor generator makes now have their Kecleon (Lv. 90) standing in the middle. Wares are half from Red's Kecleon lists and half Explorers of Sky items (stronger ones on deeper floors).
+- Pick wares up (they stay unpaid, shown in green with their price in the Toolbox); leave your own items on the shop floor to sell them.
+- Stepping in: "Ah, welcome~♪" and the shop theme. Stepping out while owing: Kecleon comes over, offers for what you left, then asks you to pay. Talking to Kecleon does the same.
+- Saying no, not having the money, or leaving while no Kecleon can stop you makes you a thief: "Help! Thief! I've been robbed!", the Stop Thief! theme, Kecleon turn hostile and more Kecleon (Lv. 90) arrive every 5 turns.
+
+**Also**
+- Wonder Tiles are always visible and stay after use, reset multiplier effects too, aren't stopped by a Trap Scarf, and use Red's lines ("...'s stats returned to normal." / "...appear unchanged.").
+- Partners no longer give up on routes longer than 8 steps, and walk around a teammate who is fighting in the way instead of waiting behind it.
+
 ## v0.6.31 (27 Oct 2026)
 
 - **Partners don't freeze at room entrances:** when the way to the leader is blocked by a known trap or an untriggered Monster House room, partners go through it; with no way at all they use Red's following for that turn instead of standing still.

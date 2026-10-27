@@ -311,6 +311,18 @@ static func _drop_pool() -> Array:
 
 ## A floor item roll in any dungeon: 3% of the time an Explorers of Sky item suited to the floor's level,
 ## 3% an exclusive item for one of the Pokémon living on this floor (rarer the more stars it has).
+## Kecleon's wares from the Explorers of Sky / Remixed items (no exclusives), by the floor's level like the drops.
+static func shop_pick(d, rng: RandomNumberGenerator) -> String:
+	var fl: Dictionary = d.ddata.floors[mini(d.floor_i, d.ddata.floors.size() - 1)] if d.ddata.has("floors") else {}
+	var pk: Array = fl.get("pk", [])
+	var lv := 1
+	if not pk.is_empty():
+		var lvs: Array = pk.map(func(e): return int(e[1]))
+		lvs.sort()
+		lv = int(lvs[lvs.size() / 2])
+	var pool: Array = _drop_pool().filter(func(p): return lv >= int(p[2]) and int(DB.items.get(str(p[0]), {}).get("price", 0)) > 0)
+	return str(d._pick_weighted(pool)) if not pool.is_empty() else ""
+
 static func floor_pick(d, rng: RandomNumberGenerator) -> String:
 	var fl: Dictionary = d.ddata.floors[mini(d.floor_i, d.ddata.floors.size() - 1)] if d.ddata.has("floors") else {}
 	var pk: Array = fl.get("pk", [])
