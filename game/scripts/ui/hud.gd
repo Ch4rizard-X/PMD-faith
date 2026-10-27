@@ -54,6 +54,7 @@ func _ready() -> void:
 	msg_text.add_theme_constant_override("line_separation", 0)
 	msg_panel.add_child(msg_text)
 	msg_panel.visible = false
+	apply_msg_size()
 	touch_device = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
 	touch_ui = touch_device and Input.get_connected_joypads().is_empty()
 	_build_touch()
@@ -134,7 +135,34 @@ func set_low_hp(on: bool) -> void:
 		_blink_t = 0.0
 		top_draw.queue_redraw()
 
+## Game Options "Message size" (Small / Normal / Large): the dungeon message box's text and height.
+const MSG_SCALES := [0.75, 1.0, 1.5]       # Large = 3x the pixel font (sharp)
+var _msg_size := -1
+
+static func msg_scale() -> float:
+	return float(MSG_SCALES[clampi(int(Game.settings.get("qol_msgsize", 1)), 0, MSG_SCALES.size() - 1)])
+
+func apply_msg_size() -> void:
+	var i := clampi(int(Game.settings.get("qol_msgsize", 1)), 0, MSG_SCALES.size() - 1)
+	if i == _msg_size or msg_text == null:
+		return
+	_msg_size = i
+	var sc := float(MSG_SCALES[i])
+	var fs := int(round(UITheme.FONT_SIZE * sc))
+	for k in ["normal_font_size", "bold_font_size", "italics_font_size", "mono_font_size"]:
+		msg_text.add_theme_font_size_override(k, fs)
+	var whole := fs % 11 == 0                   # 1x / 2x / 3x keep the default pixel-sharp font
+	for k in ["normal_font", "bold_font"]:
+		if whole:
+			msg_text.remove_theme_font_override(k)
+		else:
+			msg_text.add_theme_font_override(k, UITheme.font_free_scale())
+	var line := int(round(UITheme.LINE * sc))
+	msg_text.add_theme_constant_override("line_separation", 0)
+	msg_panel.offset_top = -(2 * line + int(round(10 * UITheme.PX * sc)))
+
 func msg(t: String) -> void:
+	apply_msg_size()
 	msg_count += 1
 	lines.append(t)
 	log_all.append(t)

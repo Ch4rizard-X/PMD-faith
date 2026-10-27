@@ -48,7 +48,7 @@ static func _price_rows(list: Array, price_of: Callable) -> Array:
 		var nm := DB.item_name(str(b.id))
 		if DB.items.get(b.id, {}).get("stack", false) and int(b.get("n", 0)) > 0:
 			nm += " %d" % int(b.n)
-		rows.append({"text": nm, "right": str(price_of.call(b))})
+		rows.append({"text": nm, "right": str(price_of.call(b)), "icon": TeamScreens.item_icon(str(b.id))})
 	return rows
 
 # ============================================================================ Kecleon Bros.
@@ -210,7 +210,7 @@ static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 		for i in Game.bag.size():
 			if EosItems.is_box(str(Game.bag[i].id)):
 				idx.append(i)
-				rows.append({"text": DB.item_name(str(Game.bag[i].id)), "right": str(fee)})
+				rows.append({"text": DB.item_name(str(Game.bag[i].id)), "right": str(fee), "icon": TeamScreens.item_icon(str(Game.bag[i].id))})
 		if idx.is_empty():
 			return
 		var mb := _money_box(root)
@@ -301,7 +301,7 @@ static func _kec_sell(root: Control, K: String, nm: String, sp: String, v: Dicti
 			labels.append(DB.item_name(str(b0.id)) + (" %d" % int(b0.n) if int(b0.get("n", 1)) > 1 else ""))
 			rights.append(str(sell_value(b0)) if shoppable(str(b0.id)) else "-")
 		var marks := {}
-		var r := await _multi_list(root, "", labels, marks, start, rights)     # L / R / Select mark several (Red)
+		var r := await _multi_list(root, "", labels, marks, start, rights, Game.bag.map(func(b): return str(b.id)))     # L / R / Select mark several (Red)
 		TeamScreens._drop(mb)
 		if r.act != "pick":
 			return
@@ -614,7 +614,7 @@ static func _storage_ids() -> Array:
 
 ## A list where Select (or the "Mark" command) marks several rows, as Red's L / R. Returns
 ## {act: "pick"|"cancel", i, marks: Array of indices}.
-static func _multi_list(root: Control, title: String, labels: Array, marks: Dictionary, start: int, rights: Array = []) -> Dictionary:
+static func _multi_list(root: Control, title: String, labels: Array, marks: Dictionary, start: int, rights: Array = [], ids: Array = []) -> Dictionary:
 	var per := 8
 	var pages := maxi(1, ceili(labels.size() / float(per)))
 	var page := clampi(start / per, 0, pages - 1)
@@ -627,6 +627,8 @@ static func _multi_list(root: Control, title: String, labels: Array, marks: Dict
 			var row := {"text": str(labels[k]), "marked": marks.has(k)}      # Red: a highlight bar, not an icon
 			if k < rights.size():
 				row["right"] = str(rights[k])
+			if k < ids.size():
+				row["icon"] = TeamScreens.item_icon(str(ids[k]))
 			rows.append(row)
 		var m := TeamScreens.menu(title, rows, 16 * 8 * P)
 		m.pages = pages
@@ -677,7 +679,8 @@ static func _kang_store(root: Control, KA: String, nm: String, sp: String, v: Di
 		for b in Game.bag:
 			labels.append(BaseMenu._bag_label(b))
 		var marks := {}
-		var r := await _multi_list(root, "", labels, marks, start)
+		var bag_ids: Array = Game.bag.map(func(b): return str(b.id))
+		var r := await _multi_list(root, "", labels, marks, start, [], bag_ids)
 		if r.act != "pick":
 			return
 		start = int(r.i)
@@ -688,7 +691,7 @@ static func _kang_store(root: Control, KA: String, nm: String, sp: String, v: Di
 			continue
 		if c == "Mark":
 			marks[r.i] = true
-			var r2 := await _multi_list(root, "", labels, marks, start)
+			var r2 := await _multi_list(root, "", labels, marks, start, [], bag_ids)
 			if r2.act != "pick":
 				continue
 			picks = r2.marks if r2.marks.size() > 0 else [r2.i]
@@ -736,7 +739,7 @@ static func _kang_take(root: Control, KA: String, nm: String, sp: String, v: Dic
 		for id in ids:
 			labels.append("%s  %d" % [DB.item_name(id), int(Game.storage[id])])
 		var marks := {}
-		var r := await _multi_list(root, "", labels, marks, start)
+		var r := await _multi_list(root, "", labels, marks, start, [], ids)
 		if r.act != "pick":
 			return
 		start = int(r.i)

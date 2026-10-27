@@ -50,6 +50,8 @@ static func save(dungeon) -> void:
 	for m in dungeon.team_mons:
 		Game.store_mon(m)
 	var st := _state(dungeon)
+	if dungeon.has_method("restart_floor_on_load") and dungeon.restart_floor_on_load() and not dungeon._entry_state.is_empty():
+		st = dungeon._entry_state          # boss / fixed floor: resume from the floor's start (cutscene again)
 	var head := {
 		"v": VERSION,
 		"dkey": str(dungeon.dkey),
@@ -98,6 +100,32 @@ static func load_into(dungeon) -> bool:
 	return true
 
 # ------------------------------------------------------------------ serialize
+## The run as it stands when a floor starts, before it is generated: no floor, only the team, the Game data
+## and the dungeon's RNG. Loading it builds that floor again from the same seed ("fresh": true).
+static func entry_state(d) -> Dictionary:
+	var st := {"fresh": true}
+	for k in DUNGEON_VARS:
+		if k in d:
+			st[k] = _plain(d.get(k))
+	st.rng = [d.rng.seed, d.rng.state]
+	var mons: Array = []
+	for m in d.team_mons:
+		Game.store_mon(m)
+		mons.append(_mon_dict(m))
+	st.mons = mons
+	st.team_mons = d.team_mons.map(func(m): return m.uid)
+	st.floor_mons = []
+	st.uid_next = DB._uid
+	var g := {}
+	for k in GAME_VARS:
+		g[k] = _plain(Game.get(k))
+	st.game = g
+	if d.hud and "log_all" in d.hud:
+		st.log = d.hud.log_all.slice(maxi(0, d.hud.log_all.size() - 60))
+	if d.has_method("save_extra"):
+		st.extra = _plain(d.save_extra())
+	return JSON.to_native(JSON.from_native(st))      # a deep copy: later changes on the floor don't leak in
+
 static func _state(d) -> Dictionary:
 	var st := {}
 	for k in DUNGEON_VARS:
@@ -242,6 +270,14 @@ static func _apply(d, st: Dictionary) -> void:
 	for u in st.get("team_mons", []):
 		if by_uid.has(int(u)):
 			d.team_mons.append(by_uid[int(u)])
+	if bool(st.get("fresh", false)):
+		# saved on a boss / fixed floor: Dungeon.build_floor() runs again (resume_dungeon awaits it)
+		if st.has("extra") and d.has_method("load_extra"):
+			d.load_extra(st.extra)
+		if d.hud and "log_all" in d.hud and st.has("log"):
+			d.hud.log_all = st.log.duplicate()
+		d.set_meta("resume_fresh", true)
+		return
 	# floor
 	var fs := FloorState.new()
 	var fsd: Dictionary = st.get("fs", {})

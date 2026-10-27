@@ -53,6 +53,52 @@ func anim_length(a: String) -> float:
 		tot += int(d)
 	return tot / 60.0
 
+func has_anim(a: String) -> bool:
+	return man.get("anims", {}).has(a)
+
+## How far (px) the sprite's current pose floats above its shadow: the gap between the lowest visible pixel
+## of the anim's last frame and the shadow. Flyers (Skarmory, Zubat ...) without a Faint anim use it to
+## come down to the ground when they faint instead of vanishing in mid-air.
+func height_above_ground(a: String) -> float:
+	var A := _anim(a)
+	if A.is_empty():
+		return 0.0
+	var tex := DB.tex("res://assets/sp/" + str(A.get("s", man.get("sheet", ""))))
+	if tex == null:
+		return 0.0
+	var w := int(A.w)
+	var h := int(A.h)
+	var f := maxi(0, A.dur.size() - 1)
+	var row := mini(mon.facing, int(A.rows) - 1)
+	var x0 := int(A.get("x", 0)) + f * w
+	var y0 := int(A.y) + row * h
+	if A.has("cols"):
+		var cols := maxi(1, int(A.cols))
+		x0 = int(A.get("x", 0)) + (f % cols) * w
+		y0 = int(A.y) + (f / cols) * int(A.rows) * h + row * h
+	var img := tex.get_image()
+	if img == null or x0 + w > img.get_width() or y0 + h > img.get_height():
+		return 0.0
+	if img.is_compressed():
+		img = img.duplicate()
+		img.decompress()
+	var bottom := -1
+	for yy in range(h - 1, -1, -1):
+		for xx in range(0, w, 2):
+			if img.get_pixel(x0 + xx, y0 + yy).a > 0.1:
+				bottom = yy
+				break
+		if bottom >= 0:
+			break
+	if bottom < 0:
+		return 0.0
+	var ground := 4.0
+	var shd: Array = man.get("shd", [])
+	if shd.size() > 0:
+		ground = float(shd[mini(mon.facing, shd.size() - 1)][1])
+	var feet := -h / 2.0 - 2.0 + bottom + 1.0
+	return maxf(0.0, ground - feet)
+
 func _anim(a: String) -> Dictionary:
 	var anims: Dictionary = man.get("anims", {})
 	if anims.has(a):

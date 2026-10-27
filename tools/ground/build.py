@@ -9,7 +9,7 @@
   assets/sfx/*                                             Red sound effects (m4a)
 
 usage: python3 -I tools/ground/build.py [--skip-audio] [--only step,step]
-steps: ground_bg ground_assets scripts extra ornaments credits front ui worldmap town eos_music red_music sfx
+steps: ground_bg ground_assets scripts extra ornaments anim_offsets credits front ui worldmap town eos_music red_music sfx
 Needs data/dungeons.json and data/friend_areas.json from tools/data (for the world map keys).
 """
 import glob
@@ -39,6 +39,7 @@ STEPS = [
     ("scripts", [T("ground", "gen_ground_scripts.py")]),
     ("extra", [T("ground", "gen_ground_extra.py")]),
     ("ornaments", [T("ground", "gen_ornaments.py")]),
+    ("anim_offsets", [T("ground", "gen_red_anim_offsets.py")]),
     ("credits", [T("ground", "gen_credits.py")]),
     ("front", [T("ground", "gen_front_assets.py")]),
     ("ui", [T("ground", "gen_ui.py")]),

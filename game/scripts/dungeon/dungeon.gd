@@ -48,6 +48,12 @@ var _auto_target := Vector2i(-1, -1)
 var result_sent := false
 var recruited_names: Array = []
 var partner_ai: PartnerAI = null   # Game Options "Partner AI: Smarter"
+var _entry_state: Dictionary = {}  # DungeonSave.entry_state() at this floor's start (boss floors save this)
+
+## Fixed rooms (story bosses, legendaries, Explorers of Sky boss arenas) can't be resumed mid-floor: their
+## cutscene and boss state live in the scene, so saves there go back to the floor's start.
+func restart_floor_on_load() -> bool:
+	return fixed_no != 0 or not eos_arena.is_empty() or boss != null
 var dx_turns := 0                 # turns taken in this dungeon (DX recruiting: the farewell payment)
 const QOL := preload("res://scripts/dungeon/dungeon_qol.gd")
 var boss: BossScene = null             # fixed-room cutscene of this floor (Red dungeon_cutscene.c)
@@ -141,6 +147,9 @@ func _floor_label() -> String:
 
 func build_floor() -> void:
 	busy = true
+	# the team as it arrives on this floor (before anything is generated): a Quicksave or autosave made on
+	# a fixed / boss floor stores this instead, so loading rebuilds the floor and replays its cutscene
+	_entry_state = DungeonSave.entry_state(self)
 	for c in mon_layer.get_children():
 		c.queue_free()
 	var fdata: Dictionary = ddata.floors[floor_i]
@@ -2147,9 +2156,19 @@ func faint(t: Mon, killer: Mon) -> void:
 	AbilityFx.on_faint(self, t, killer)              # Aftermath / Moxie
 	EosItems.on_ko(self, t, killer)                  # Amulet Coin and money exclusives
 	if t.visual and not (_quiet and not _on_screen(t.pos)):
-		t.visual.play("Faint", true)
+		# Pokémon with a Faint anim play it to the end, then fade; the others (most of them) hold their Hurt
+		# pose and, if they float (Skarmory, Zubat ...), sink down to their shadow first.
+		var vis: MonSprite = t.visual
+		var has_faint := vis.has_anim("Faint")
+		vis.play("Faint", true)
 		var tw := create_tween()
-		tw.tween_property(t.visual, "fade", 0.0, 0.45).set_delay(0.25)
+		if has_faint:
+			tw.tween_property(vis, "fade", 0.0, 0.45).set_delay(maxf(0.25, vis.anim_length("Faint")))
+		else:
+			var drop := vis.height_above_ground("Faint")
+			if drop >= 3.0:
+				tw.tween_property(vis, "bob", Vector2(0, drop), 0.4).set_delay(0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+			tw.tween_property(vis, "fade", 0.0, 0.45).set_delay(0.15 if drop >= 3.0 else 0.35)
 		await tw.finished
 	if t.visual:
 		if t.visual:
@@ -3628,13 +3647,19 @@ func open_log() -> void:
 	var lines: Array = hud.log_all.duplicate() if hud else []
 	if lines.is_empty():
 		lines = [" "]
-	var per := 7
+	var sc := Hud.msg_scale()                   # Game Options "Message size"
+	var per := int(round(7 / sc))
+	var fs := int(round(UITheme.FONT_SIZE * sc))
 	var n := ceili(lines.size() / float(per))
 	var pg := TeamScreens.InfoPage.new()
 	pg.count = n
 	pg.page = n - 1
 	pg.width = 448
-	pg.builder = func(i): return {"title": "Message log", "parts": ["\n".join(lines.slice(i * per, (i + 1) * per))]}
+	if fs % 11 != 0:
+		UITheme.font_free_scale()                  # writes the freely scaling font for [font=...]
+	var fpath := "" if fs % 11 == 0 else "[font=%s]" % UITheme.FONT_FREE_PATH
+	var fend := "" if fpath == "" else "[/font]"
+	pg.builder = func(i): return {"title": "Message log", "parts": ["%s[font_size=%d]%s[/font_size]%s" % [fpath, fs, "\n".join(lines.slice(i * per, (i + 1) * per)), fend]]}
 	await TeamScreens.run_page(ui_root, pg, Vector2(TeamScreens.WIN_X, 8))
 
 ## Red's Mission objectives (post_office_guide2.c DisplayMissionObjectives).

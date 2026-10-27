@@ -125,7 +125,7 @@ static func _full_toolbox(root: Control, key: String, n: int) -> void:
 static func _pick_toolbox(root: Control, title: String) -> int:
 	var rows: Array = []
 	for b in Game.bag:
-		rows.append({"text": BaseMenu._bag_label(b)})
+		rows.append({"text": BaseMenu._bag_label(b), "icon": TeamScreens.item_icon(str(b.id))})
 	var P := UITheme.PX
 	var r := await BaseMenu.paged(root, title, rows, 0, Vector2(2 * 8 * P, 2 * 8 * P), 8, 120 * P)
 	return int(r.i) if r.act == "pick" else -1

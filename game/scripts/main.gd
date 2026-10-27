@@ -770,7 +770,7 @@ func _ready() -> void:
 			var marks := {}
 			var res := {}
 			var run := func():
-				res.merge(await RedShops._multi_list(root, "", labels, marks, 0))
+				res.merge(await RedShops._multi_list(root, "", labels, marks, 0, [], ["oran", "apple", "pecha", "sleepseed", "blastseed", "stick", "chesto", "rawst", "sitrus", "joyseed"]))
 			run.call()
 			await get_tree().create_timer(0.4).timeout
 			var tap := func(ctrl: Control, down: bool):
@@ -956,6 +956,182 @@ func _ready() -> void:
 					c.visible = false
 					await measure.call("hide root/" + str(c.name))
 					c.visible = was2
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--msgshot"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(1.5).timeout
+			for i in 3:
+				Game.settings["qol_msgsize"] = i
+				hud.msg("Charmander used [color=#7fe0ff]Scratch[/color]!")
+				hud.msg("Pidgey took [color=#ffdc4a]16[/color] damage!")
+				await get_tree().create_timer(0.4).timeout
+				get_viewport().get_texture().get_image().save_png("user://msg_%d.png" % i)
+			Game.settings["qol_msgsize"] = 0
+			dungeon.open_log()
+			await get_tree().create_timer(0.6).timeout
+			get_viewport().get_texture().get_image().save_png("user://msg_log_small.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--eosjobtest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for k in ["tiny_woods", "thunderwave_cave", "mt_steel", "eos_beach_cave", "eos_drenched_bluff", "eos_mt_bristle", "eos_apple_woods", "eos_foggy_forest"]:
+				if not k in Game.cleared: Game.cleared.append(k)
+				if not k in Game.unlocked: Game.unlocked.append(k)
+			print("EOSJOB job dungeons: ", Missions.job_dungeons())
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 7
+			var counts := {}
+			var sample := {}
+			for i in 60:
+				for j in Missions.make_board(rng):
+					counts[j.dungeon] = int(counts.get(j.dungeon, 0)) + 1
+					if str(j.dungeon).begins_with("eos_") and not sample.has(j.kind):
+						sample[j.kind] = j
+			print("EOSJOB counts: ", counts)
+			for k in sample:
+				var j: Dictionary = sample[k]
+				print("EOSJOB sample %s: %s F%d diff=%s reward=%s | %s" % [k, j.dungeon, int(j.floor), j.get("difficulty", "?"), Missions.reward_text(j), str(j.get("title", ""))])
+			var eos_n := 0
+			for k in counts:
+				if str(k).begins_with("eos_"): eos_n += int(counts[k])
+			print("EOSJOB %s" % ("ok  Explorers of Sky jobs on the board (%d)" % eos_n if eos_n > 0 else "BAD no Explorers of Sky jobs"))
+			# take one and enter its floor
+			var jj: Dictionary = sample.values()[0] if sample.size() > 0 else {}
+			if not jj.is_empty():
+				Missions.accept(jj)
+				for k2 in Game.jobs:
+					if str(k2.id) == str(jj.id): Missions.take(k2)
+				start_dungeon(str(jj.dungeon), int(jj.floor) - 1)
+				for i in 30:
+					await get_tree().create_timer(0.5).timeout
+					if i > 4 and not dungeon.busy: break
+				var here := dungeon.fs.mons.filter(func(m): return Missions.is_client(m) or m.has_meta("job_id") or m.get_meta("client", false))
+				print("EOSJOB %s" % ("ok  job target is on its floor (%s F%d)" % [jj.dungeon, int(jj.floor)] if here.size() > 0 or str(jj.kind) in ["find", "deliver"] else "BAD job target missing (kind %s)" % jj.kind))
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--flytest"):
+		(func():
+			var g := GSprite.new()
+			root.add_child(g)
+			g.position = Vector2(200, 300)
+			g.set_species("0227")
+			g.play(0x100E, 0)                 # Skarmory's "flee" (event anim 23 -> Red group 14)
+			var log := []
+			var busy_frames := 0
+			for i in 80:
+				g.tick()
+				await get_tree().process_frame
+				if g.anim_busy(): busy_frames += 1
+				if i % 4 == 0: log.append(int(g._track_offset().y))
+			print("FLYTEST track frames=%d busy for %d frames, y offsets: %s" % [g._track_total, busy_frames, log])
+			print("FLYTEST %s" % ("ok  flies off the top" if g._track_offset().y <= -100 else "BAD stays put"))
+			for pl in [0, 4, 1, 5, 3]:
+				print("FLYTEST portrait place %d x on 1440: %.0f (Red's own: %d)" % [pl, GText.portrait_x(pl, 0, 1440.0), int(GText.PLACE_X[pl]) * 8 * UITheme.PX])
+			var g2 := GSprite.new()
+			root.add_child(g2)
+			g2.set_species("0025")
+			g2.play(0x807, 0)
+			print("FLYTEST %s" % ("ok  normal idle has no track" if g2._track.is_empty() else "BAD idle got a track"))
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--bosswin"):
+		(func():
+			var key := "mt_steel"
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--boss="):
+					key = a.substr(7)
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for e in Game.team:
+				e.level = 40
+				e.exp = DB.exp_at(str(e.sp), 40)
+			Game.story.erase("cutscene_flags")
+			Dialog.auto = true
+			var n: int = DB.dungeons.dungeons[key].floors.size()
+			start_dungeon(key, n - 1)
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if i > 6 and not dungeon.busy: break
+			Dialog.auto = false
+			dungeon.auto_answer = true
+			var d: Dungeon = dungeon
+			var L: Mon = d.fs.leader
+			var b: Mon = null
+			for m in d.fs.mons:
+				if not m.is_team() and str(m.get_meta("behavior", "")) != "" and str(m.get_meta("behavior", "")) != "BEHAVIOR_FIXED_ENEMY" and m.visual and m.visual.fade > 0.5 and not m.get_meta("cs_hidden", false):
+					if b == null or m.max_hp > b.max_hp: b = m
+			print("BOSSWIN boss=%s at %s leader %s" % [b.name if b else "-", b.pos if b else "-", L.pos])
+			# put the boss next to the leader and finish it
+			for dv in DB.DIRS:
+				if d.fs.walkable(L.pos + dv, b) and d.fs.mon_at(L.pos + dv) == null and d.fs.can_attack_dir(L.pos, DB.DIRS.find(dv)):
+					b.pos = L.pos + dv
+					b.visual.position = d._px(b.pos)
+					break
+			b.hp = 1
+			var dir := AI.dir_toward(L.pos, b.pos)
+			var shots := {"i": 0}
+			var t := Timer.new()
+			t.wait_time = 0.1
+			add_child(t)
+			t.timeout.connect(func():
+				if shots.i < 40:
+					get_viewport().get_texture().get_image().save_png("user://bosswin_%02d.png" % shots.i)
+					if is_instance_valid(b) and b.visual:
+						print("BOSSWIN frame %d anim=%s fade=%.2f pos=%s vis=%s" % [shots.i, b.visual.anim, b.visual.fade, b.visual.position, b.visual.visible])
+					shots.i += 1)
+			t.start()
+			d.leader_action({"type": "attack", "move": "", "dir": dir})
+			await get_tree().create_timer(5.0).timeout
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--bossresume"):
+		(func():
+			var key := "sinister_woods"
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--boss="):
+					key = a.substr(7)
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			var n: int = DB.dungeons.dungeons[key].floors.size()
+			var ok := {"ok": 0, "bad": 0}
+			var check := func(what: String, good: bool, info := ""):
+				ok["ok" if good else "bad"] += 1
+				print("BOSSRESUME %s %s %s" % ["ok " if good else "BAD", what, info])
+			# a normal floor: a quicksave there resumes mid-floor, as before
+			start_dungeon(key, n - 2)
+			for i in 40:
+				await get_tree().create_timer(0.5).timeout
+				if i > 4 and not dungeon.busy: break
+			var lpos: Vector2i = dungeon.fs.leader.pos
+			DungeonSave.save(dungeon)
+			var raw: Dictionary = DungeonSave._read_raw()
+			check.call("normal floor saves the floor itself", not bool(JSON.to_native(raw.state).get("fresh", false)))
+			# the boss floor: the save is the floor's start
+			start_dungeon(key, n - 1)
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if i > 6 and not dungeon.busy: break
+			check.call("boss floor built", dungeon.boss != null or dungeon.fixed_no != 0, "fixed=%d" % dungeon.fixed_no)
+			var hp_before: int = dungeon.fs.leader.hp
+			dungeon.fs.leader.hp = maxi(1, dungeon.fs.leader.hp - 5)     # changes during the fight aren't kept
+			DungeonSave.save(dungeon)
+			raw = DungeonSave._read_raw()
+			check.call("boss floor saves the floor's start", bool(JSON.to_native(raw.state).get("fresh", false)))
+			var foes0: int = dungeon.fs.mons.filter(func(m): return not m.is_team()).size()
+			await resume_dungeon()
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if i > 6 and not dungeon.busy: break
+			check.call("resumed on the boss floor", dungeon.floor_i == n - 1, "floor_i=%d" % dungeon.floor_i)
+			check.call("boss scene rebuilt", dungeon.boss != null or dungeon.fixed_no != 0)
+			var foes1: int = dungeon.fs.mons.filter(func(m): return not m.is_team()).size()
+			check.call("bosses are back", foes1 == foes0 and foes1 > 0, "%d vs %d" % [foes1, foes0])
+			check.call("leader HP from the floor's start", dungeon.fs.leader.hp == hp_before, "%d vs %d" % [dungeon.fs.leader.hp, hp_before])
+			get_viewport().get_texture().get_image().save_png("user://bossresume.png")
+			print("BOSSRESUME summary ok=%d bad=%d" % [ok.ok, ok.bad])
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--bossfight"):
@@ -1355,7 +1531,11 @@ func resume_dungeon() -> void:
 		title()
 		return
 	last_dungeon = dungeon.dkey
-	await dungeon._floor_banner()
+	if dungeon.has_meta("resume_fresh"):
+		dungeon.remove_meta("resume_fresh")
+		await dungeon.build_floor()            # boss / fixed floor: built again, its cutscene plays again
+	else:
+		await dungeon._floor_banner()
 	if is_instance_valid(dungeon):
 		dungeon.busy = false
 

@@ -3,6 +3,16 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.30 (27 Oct 2026)
+
+- **Saving on a boss floor:** a Quicksave or autosave made on a boss / fixed floor now saves the team as it arrived there. Loading it builds the floor again and plays the boss scene again, instead of resuming in the middle of it.
+- **Red's moving animations:** take-offs, landings, jumps and fly-ins in story scenes now move the sprite as in Red (offsets and timing read from the decompilation; new build step `anim_offsets`). Skarmory now flies off the screen after the Mt. Steel fight instead of vanishing mid-scene.
+- **Fainting:** Pokémon without a faint animation hold their hurt pose and, if they float (Skarmory, Zubat ...), come down to their shadow before fading; those with one play it to the end.
+- **Explorers of Sky jobs:** cleared Explorers of Sky dungeons now get jobs on the board, with difficulty from each floor's Pokémon levels, no jobs on boss arena floors and rewards from the dungeon's own items.
+- **Message size** (Game Options): Small / Normal / Large for the dungeon message box and the message log.
+- **Portraits on wide screens:** story portraits keep their side of the screen (right-side ones keep their distance from the right edge, centre ones stay centred) instead of drifting toward the middle.
+- **Item sprites** in Kecleon's shop, Kangaskhan Storage, the treasure-box list, the reward screen and the job board's reward line.
+
 ## v0.6.29 (27 Oct 2026)
 
 - Recruiting doesn't start until Wigglytuff gives the team its first Friend Areas (Wild Plains and Mist-Rise Forest).

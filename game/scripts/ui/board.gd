@@ -547,7 +547,7 @@ class InfoView extends PanelContainer:
 			[Missions.txt("objective"), str(j.get("objective", ""))],
 			[Missions.txt("place"), str(j.get("place", ""))],
 			[Missions.txt("difficulty_label"), Missions.difficulty_bb(str(j.get("difficulty", "E")))],
-			[Missions.txt("reward"), Missions.reward_text(j)],
+			[Missions.txt("reward"), (TeamScreens.item_icon_bb(str(j.get("reward", {}).get("item", ""))) if str(j.get("reward", {}).get("type", "")).begins_with("item") else "") + Missions.reward_text(j)],
 		]
 		for r in rows:
 			var k := Board.label(str(r[0]), UITheme.INK_DIM)

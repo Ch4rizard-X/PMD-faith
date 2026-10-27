@@ -47,6 +47,42 @@ func show_effect(id: int, d := 0) -> void:
 	if sfx > 0:
 		Audio.sfx("%03d" % sfx)
 var zbias := 0
+## Red's moving animations (take-off, landing, jumps; tools/ground/gen_red_anim_offsets.py): when the
+## SpriteCollab sheet lacks the Red group, its fallback pose is moved by Red's per-frame offsets for Red's
+## duration, so e.g. Skarmory flies off the screen before the script removes it.
+static var _red_tracks: Dictionary = {}
+static var _red_tracks_loaded := false
+var _track: Array = []                # [[frames, dx, dy], ...] for the current animation, or []
+var _track_total := 0
+
+static func red_track(sp: String, g: int, d: int) -> Array:
+	if not _red_tracks_loaded:
+		_red_tracks_loaded = true
+		var f := FileAccess.open("res://data/ground/red_anim_offsets.json", FileAccess.READ)
+		if f:
+			var j = JSON.parse_string(f.get_as_text())
+			if j is Dictionary:
+				_red_tracks = j
+	var e = _red_tracks.get(sp.substr(0, 4), {}).get(str(g))
+	if e is Dictionary:
+		e = e.get(str(d & 7), [])
+	return e if e is Array else []
+
+func _track_offset() -> Vector2:
+	if _track.is_empty():
+		return Vector2.ZERO
+	var t := _frame_t
+	if loop:
+		t = posmod(t, maxi(_track_total, 1))
+	elif t >= _track_total:
+		t = _track_total - 1
+	var acc := 0
+	for fr in _track:
+		acc += int(fr[0])
+		if t < acc:
+			return Vector2(int(fr[1]), int(fr[2]))
+	var last: Array = _track.back()
+	return Vector2(int(last[1]), int(last[2]))
 
 static var _emote_tex: Texture2D
 
@@ -102,6 +138,12 @@ func play(a1: int, d: int) -> void:
 	anim_group = g
 	dir = new_dir
 	loop = (a1 & 0x800) != 0
+	_track = []
+	_track_total = 0
+	if not man.is_empty() and g >= 0 and g < ANIM_NAMES.size() and _anim_name(g) != ANIM_NAMES[g]:
+		_track = red_track(species, g, new_dir)
+		for fr in _track:
+			_track_total += int(fr[0])
 	queue_redraw()
 
 ## RunAxAnimationFrame at the current speed (one game frame).
@@ -155,7 +197,7 @@ func _draw() -> void:
 	if not loop:
 		if t >= total:
 			t = total - 1
-			finished = true
+			finished = _frame_t >= _track_total      # a Red motion track runs to its end first
 	else:
 		t = posmod(t, maxi(total, 1))
 	var f := 0
@@ -184,7 +226,8 @@ func _draw() -> void:
 	if A.has("cols"):        # frames wrap onto further lines (sheets wider than 4096 px)
 		var cols := maxi(1, int(A.cols))
 		src.position = Vector2(int(A.get("x", 0)) + (f % cols) * w, int(A.y) + (f / cols) * int(A.rows) * h + row * h)
-	var dst := Rect2(Vector2(-w / 2.0, -h / 2.0 - 2.0 - height).round(), Vector2(w, h))
+	var toff := _track_offset()
+	var dst := Rect2((Vector2(-w / 2.0, -h / 2.0 - 2.0 - height) + toff).round(), Vector2(w, h))
 	draw_texture_rect_region(tex, dst, src)
 	if emote >= 0:
 		# Red anchors effects at an ax position set of the pose (0 head, 3 body centre; -1 = sprite origin).

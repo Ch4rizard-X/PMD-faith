@@ -59,7 +59,47 @@ static func txt(k: String) -> Variant:
 	return data().get("text", {}).get(k, "")
 
 static func dinfo(key: String) -> Dictionary:
-	return data().get("dungeons", {}).get(key, {})
+	var d: Dictionary = data().get("dungeons", {}).get(key, {})
+	if d.is_empty() and bool(ddb(key).get("eos", false)):
+		return eos_dinfo(key)
+	return d
+
+## Explorers of Sky / Remixed dungeons have no entry in Red's mission table: built from the dungeon itself.
+## Difficulty per floor from its wild Pokémon levels (1 + level / 5, Red's 1..15 scale), no jobs on boss arena
+## floors (eos_fixed) or in Lv. 1 dungeons, the items from its floor item tables, sorted after Red's dungeons.
+static var _eos_info := {}
+
+static func eos_dinfo(key: String) -> Dictionary:
+	if _eos_info.has(key):
+		return _eos_info[key]
+	var D := ddb(key)
+	var floors: Array = D.get("floors", [])
+	var diff: Array = [0]
+	var no_jobs: Array = []
+	var items := {}
+	var tabs: Array = DB.dungeons.get("item_tables", [])
+	for i in floors.size():
+		var f: Dictionary = floors[i]
+		var lv := 0.0
+		var n := 0
+		for e in f.get("pk", []):
+			if e is Array and e.size() > 1:
+				lv += float(e[1])
+				n += 1
+		var avg := lv / n if n > 0 else float(D.get("eos_level", 10))
+		diff.append(clampi(1 + int(avg / 5.0), 1, 15))
+		if int(f.get("eos_fixed", 0)) > 0 or n == 0:
+			no_jobs.append(i + 1)
+		var ti := int(f.get("items", -1))
+		if ti >= 0 and ti < tabs.size():
+			for c in tabs[ti].get("cats", []):
+				for it in c.get("items", []):
+					items[str(it[0])] = true
+	var info := {"red_index": 1000 + int(D.get("eos_id", D.get("index", 0))), "red_floor_count": floors.size() + 1,
+		"difficulty": diff, "no_job_floors": no_jobs, "items": items.keys(),
+		"jobs": floors.size() >= 2 and not bool(D.get("level_reset", false)) and no_jobs.size() < floors.size(), "eos": true}
+	_eos_info[key] = info
+	return info
 
 static func ddb(key: String) -> Dictionary:
 	return DB.dungeons.get("dungeons", {}).get(key, {})

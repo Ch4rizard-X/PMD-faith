@@ -307,10 +307,25 @@ func _show_portrait(speaker: int) -> void:
 		return
 	port_tex.texture = tex
 	port_tex.flip_h = PLACE_FLIP[place]
-	var x = (PLACE_X[place] * 8 + int(p.delta.x)) * UITheme.PX
+	var x := portrait_x(place, int(p.delta.x), size.x if size.x > 0 else get_viewport_rect().size.x)
 	var y := int((PLACE_Y[place] * 8 + int(p.delta.y)) * 1.55)
 	port_frame.position = Vector2(x - UITheme.PX, y)
 	port_frame.visible = true
+
+## Red places portraits on its 240 px screen (PLACE_X tiles + the scene's delta). On a wider screen each
+## keeps its side: left places (x 2, 7) stay put, right places (18, 23) keep their distance from the right
+## edge, centre places (12, 13) stay centred.
+const GBA_W := 240
+
+static func portrait_x(place: int, dx: int, screen_w: float) -> float:
+	var gx: int = int(PLACE_X[place]) * 8 + dx
+	var px := float(gx * UITheme.PX)
+	var t := int(PLACE_X[place])
+	if t >= 18:
+		return screen_w - float((GBA_W - gx) * UITheme.PX)
+	if t == 12 or t == 13:
+		return screen_w / 2.0 - float((GBA_W / 2 - gx) * UITheme.PX)
+	return px
 
 func is_open() -> bool:
 	return _open

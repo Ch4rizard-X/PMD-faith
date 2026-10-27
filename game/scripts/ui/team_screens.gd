@@ -219,6 +219,21 @@ static func item_icon(id: String) -> Texture2D:
 	_icons[key] = t
 	return t
 
+## The item's sprite as BBCode (for rich text such as a job's reward line), "" when it has none.
+static func item_icon_bb(id: String) -> String:
+	if id == "":
+		return ""
+	var a = DB.item_icons.get(id)
+	if a == null:
+		var I: Dictionary = DB.items.get(id, {})
+		for k in DB.items:
+			if DB.item_icons.has(k) and int(DB.items[k].get("sprite", -1)) == int(I.get("sprite", -2)):
+				a = DB.item_icons[k]
+				break
+	if a == null:
+		return ""
+	return "[img=%dx%d region=%d,%d,16,16]res://assets/ui/items.png[/img]" % [12 * P, 12 * P, int(a[0]), int(a[1])]
+
 ## A Toolbox row: the item's sprite, then Red's sticky / set marks in front of the name (items.c), count right.
 static func item_row(b: Dictionary, show_set := true) -> Dictionary:
 	var id := str(b.get("id", ""))

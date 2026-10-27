@@ -34,6 +34,23 @@ static func font() -> Font:
 		_font = f
 	return _font
 
+## The text font allowed to scale by non-whole steps (the Message size option's Small text); the normal
+## font only scales 1x / 2x / 3x so it stays pixel-sharp.
+static var _font_free: Font
+const FONT_FREE_PATH := "user://font_free_scale.res"
+
+static func font_free_scale() -> Font:
+	if _font_free == null:
+		var f = font()
+		if f is FontFile:
+			var c: FontFile = f.duplicate()
+			c.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_ENABLED
+			_font_free = c
+			ResourceSaver.save(c, FONT_FREE_PATH)       # for BBCode [font=...] (the message log)
+		else:
+			_font_free = f
+	return _font_free
+
 ## Red's menu cursor (green arrow), 8x8 in the cursor sheet.
 static func cursor() -> AtlasTexture:
 	if _cursor == null:
