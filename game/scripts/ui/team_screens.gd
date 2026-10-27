@@ -739,7 +739,9 @@ static func _backdrop(root: Control, target: Control) -> Control:
 				if target is RedMenu:
 					target.cancel()
 				elif target is InfoPage:
-					target.close())
+					target.close()
+				elif target.has_method("cancel"):
+					target.cancel())
 	root.add_child(bd)
 	return bd
 
@@ -1140,6 +1142,7 @@ static func moves_menu(root: Control, x, in_dungeon := false, dungeon = null, me
 		m.shift_keys = true
 		m.select_key = true
 		m.keep_on_pick = true
+		m.header_buttons = [[ARROW_U, "shift_up"], [ARROW_D, "shift_down"]]     # touch: move the selected move up / down
 		m.sel = sel
 		var help := _help_box(root, Vector2(WIN_X, WIN_Y + 150), 288,
 			"Shift+%s%s: Shift moves\nTab: %s" % [ARROW_U, ARROW_D, "Switch set moves" if leader else "Switch moves"])
@@ -1159,8 +1162,11 @@ static func moves_menu(root: Control, x, in_dungeon := false, dungeon = null, me
 				cur = (cur + 1) % list.size()
 				sel = 0
 				continue
-			"shift":
-				var ns := shift_chain(moves, sel, int(r.dir))
+			"shift", "shift_up", "shift_down":
+				var sd := int(r.get("dir", 0))
+				if str(r.act) != "shift":
+					sd = -1 if str(r.act) == "shift_up" else 1
+				var ns := shift_chain(moves, sel, sd)
 				Audio.sfx("cursor" if ns != sel else "error")
 				sel = ns
 				continue

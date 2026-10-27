@@ -3,6 +3,16 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.27 (27 Oct 2026): playable without a controller
+
+Every screen and menu was checked for actions that needed a controller.
+- **Tap outside a menu to close it** (Red's B), for the menus that didn't have this yet: Bulletin Board, Pokédex filters, shop and bank choices and many story choices. The finger that opened a menu doesn't close it on release; menus that can't be cancelled in Red still can't.
+- **Wonder Mail maker:** Back button on the Pokémon / dungeon / item lists and a Done button on the finished-code page.
+- **Number picker** (bank amounts and similar): a tap outside cancels.
+- **Moves screen:** ▲ / ▼ buttons in the title bar move the selected move up or down (was Shift + Up/Down only).
+- **Run by touch:** push the joystick past its ring (it turns gold) to run: Red's run in dungeons, faster walking in town and on story maps.
+- **Turn in place by touch:** in dungeons, tap your own Pokémon to face the nearest enemy (again to cycle, or one step around with none near). On an item, stairs or a known trap the tap opens that tile's menu as before.
+
 ## v0.6.26 (27 Oct 2026): touch controls
 
 - **Mark several items by touch:** in Kecleon's sell list and Kangaskhan's store / take lists, hold an item to mark it (Red's highlight bar). While anything is marked, a tap marks or unmarks more; **Done (N)** sells or stores them all and **Mark all** marks every item. Kangaskhan's "Mark" command now stays in marking mode.

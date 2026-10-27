@@ -421,6 +421,9 @@ class NumberPicker extends PanelContainer:
 	func _is_top() -> bool:
 		return not TeamScreens._stack.is_empty() and TeamScreens._stack.back() == self
 
+	func cancel() -> void:          # touch: a tap outside the window (the backdrop)
+		_finish(-1)
+
 	func _unhandled_input(e: InputEvent) -> void:
 		if _finished or not _is_top():
 			return

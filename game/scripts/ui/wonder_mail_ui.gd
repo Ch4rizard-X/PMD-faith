@@ -671,6 +671,7 @@ class PickList extends PanelContainer:
 		head.add_child(t)
 		_count = Board.label("", UITheme.INK_DIM)
 		head.add_child(_count)
+		head.add_child(TeamScreens.back_button(func(): if not _blocked(): _finish(null)))     # touch: leave the list
 		var bar := HBoxContainer.new()
 		bar.add_theme_constant_override("separation", 3 * UITheme.PX)
 		if search or toggle_text != "":
@@ -880,7 +881,7 @@ class ResultView extends PanelContainer:
 	var _info: RichTextLabel
 	var _title: RichTextLabel
 	var _btns: Array = []
-	var _acts := ["add", "copy", "new", "back"]
+	var _acts := ["add", "copy", "new", "back", "done"]
 	var _st_sel: StyleBoxFlat
 	var _st_cell: StyleBoxFlat
 
@@ -912,7 +913,7 @@ class ResultView extends PanelContainer:
 		hb.alignment = BoxContainer.ALIGNMENT_CENTER
 		hb.add_theme_constant_override("separation", 3 * UITheme.PX)
 		vb.add_child(hb)
-		var names := ["Add to Job List", "Copy code", "New code", "Edit"]
+		var names := ["Add to Job List", "Copy code", "New code", "Edit", "Done"]       # Done: leave (B without a controller)
 		for i in names.size():
 			var b := Button.new()
 			b.text = names[i]

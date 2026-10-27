@@ -387,6 +387,15 @@ func tap(sp: Vector2) -> void:
 	if tile == L.pos:
 		if not dg.busy and (fs.items.has(L.pos) or L.pos == fs.stairs or (fs.traps.has(L.pos) and fs.traps[L.pos].seen)):
 			dg.open_ground()
+		elif not dg.busy:
+			# touch: turn in place (Red's turn button): face the nearest enemy; with none in view (or tapped
+			# again while already facing it) turn one step clockwise
+			var before := L.facing
+			dg._face_nearest_foe()
+			if L.facing == before:
+				L.facing = (L.facing + 1) % 8
+				dg.obj_layer.queue_redraw()
+				dg.arrow_layer.queue_redraw()
 		return
 	var o := fs.mon_at(tile)
 	if o and fs.is_foe(L, o) and FloorState.cheb(L.pos, tile) == 1 and _seen(tile):

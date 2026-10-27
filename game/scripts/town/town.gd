@@ -425,7 +425,7 @@ func _step(dt: float) -> void:
 	if v == Vector2.ZERO:
 		_set_moving(false)
 		return
-	running = Input.is_action_pressed("act_run") and d >= 0
+	running = (Input.is_action_pressed("act_run") or (hud != null and hud.pad_run)) and d >= 0
 	var sp := SPEED * dt * (2.0 if running else 1.0)
 	var s := v * sp
 	if not path.is_empty():

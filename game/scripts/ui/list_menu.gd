@@ -79,6 +79,8 @@ func _ready() -> void:
 		_vbox.add_child(b)
 		_rows.append(b)
 	_set_sel(0)
+	if allow_cancel:
+		_add_backdrop.call_deferred()
 	if auto:
 		var pick := -1
 		for i in options.size():
@@ -100,6 +102,28 @@ func _ready() -> void:
 			_auto_last = ""
 		print("  MENU ", _title, " -> ", options[pick].text if pick >= 0 else "(cancel)")
 		(func(): _finish(pick)).call_deferred()
+
+## Touch: a transparent layer right behind the menu; tapping outside the menu cancels it (Red's B).
+var _backdrop: Control
+func _add_backdrop() -> void:
+	var par := get_parent()
+	if par == null or _done or not is_inside_tree():
+		return
+	_backdrop = Control.new()
+	_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	var armed := [false]           # only a tap that starts on the backdrop (not the finger that opened the menu)
+	_backdrop.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+			if e.pressed:
+				armed[0] = true
+			elif armed[0] and not _done:
+				_finish(-1))
+	par.add_child(_backdrop)
+	par.move_child(_backdrop, get_index())
+	tree_exiting.connect(func():
+		if is_instance_valid(_backdrop):
+			_backdrop.queue_free())
 
 func _set_sel(i: int) -> void:
 	if _rows.is_empty():
@@ -125,6 +149,8 @@ func _finish(i: int) -> void:
 	if _done:
 		return
 	_done = true
+	if is_instance_valid(_backdrop):
+		_backdrop.queue_free()
 	_result = i
 	Audio.sfx("confirm" if i >= 0 else "cancel")
 	picked.emit(i)

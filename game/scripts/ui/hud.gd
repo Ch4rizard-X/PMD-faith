@@ -17,6 +17,7 @@ var lines: Array = []
 var _msg_t := 0.0
 var pad: Control
 var pad_dir := -1
+var pad_run := false               # touch: the finger pushed past the pad's ring = run (Red's B)
 var _pad_touch := -1
 var _btns: Dictionary = {}
 var touch_ui := false
@@ -217,7 +218,7 @@ func set_touch_visible(v: bool) -> void:
 func _draw_pad() -> void:
 	var c := pad.size / 2
 	pad.draw_circle(c, 40, Color(0.05, 0.1, 0.3, 0.45))
-	pad.draw_arc(c, 40, 0, TAU, 32, Color(0.7, 0.8, 1, 0.6), 1.0)
+	pad.draw_arc(c, 40, 0, TAU, 32, Color(1, 0.86, 0.3, 0.95) if pad_run else Color(0.7, 0.8, 1, 0.6), 2.0 if pad_run else 1.0)
 	for d in 8:
 		var v: Vector2 = Vector2(DB.DIRS[d]).normalized()
 		var col := Color(1, 0.86, 0.3, 0.95) if d == pad_dir else Color(0.8, 0.88, 1, 0.55)
@@ -244,6 +245,7 @@ func _input(e: InputEvent) -> void:
 			return
 		_pad_touch = idx
 		var v := local - c
+		pad_run = v.length() > 46
 		if v.length() < 8:
 			pad_dir = -1
 		else:
@@ -257,4 +259,5 @@ func _input(e: InputEvent) -> void:
 	elif not pressed and idx == _pad_touch:
 		_pad_touch = -1
 		pad_dir = -1
+		pad_run = false
 		pad.queue_redraw()

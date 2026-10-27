@@ -759,7 +759,7 @@ func _process_main(dt: float) -> void:
 	if busy or menu_open or result_sent:
 		return
 	var d := _input_dir()
-	_running = Input.is_action_pressed("act_run") or Input.is_action_pressed("gp_b")
+	_running = Input.is_action_pressed("act_run") or Input.is_action_pressed("gp_b") or (hud != null and hud.pad_run and hud.pad_dir >= 0)
 	if d >= 0 and Input.is_action_pressed("gp_b"):
 		_b_moved = true
 	if autoplay:

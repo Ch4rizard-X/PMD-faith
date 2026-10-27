@@ -141,6 +141,114 @@ func _ready() -> void:
 			print("MEANIES after: where=%s scen=%s postgame=%s shop_fa=%d story_vars=%s base_level=%d leader=%s" % [where, str(GVars.scenario(GVars.SCENARIO_MAIN)), RedShops.postgame(), RedShops.shop_areas().size(), Game.story.has("vars"), GVars.get_val(null, GVars.BASE_LEVEL), Game.team[0].sp])
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--touchaudit"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await get_tree().create_timer(0.5).timeout
+			var click := func(ctrl: Control, at: Vector2, down: bool):
+				var ev := InputEventMouseButton.new()
+				ev.button_index = MOUSE_BUTTON_LEFT
+				ev.pressed = down
+				ev.position = at
+				ev.global_position = ctrl.get_global_transform() * at
+				ctrl.gui_input.emit(ev)
+			var find_btn := func(n: Node, txt: String) -> Button:
+				var st := [n]
+				while not st.is_empty():
+					var x: Node = st.pop_back()
+					if x is Button and (x as Button).text == txt and (x as Button).is_visible_in_tree():
+						return x
+					st.append_array(x.get_children())
+				return null
+			# 1. ListMenu: a release with no press on the backdrop (the finger that opened it) is ignored
+			var lm := ListMenu.make("Test", ["One", "Two"])
+			root.add_child(lm)
+			var r1 := {"v": -9}
+			var go := func(): r1.v = await lm.choose()
+			go.call()
+			await get_tree().process_frame
+			await get_tree().process_frame
+			var bd: Control = lm._backdrop
+			click.call(bd, Vector2(5, 5), false)
+			await get_tree().process_frame
+			var survived: bool = r1.v == -9
+			click.call(bd, Vector2(5, 5), true)
+			click.call(bd, Vector2(5, 5), false)
+			await get_tree().create_timer(0.2).timeout
+			print("TOUCHAUDIT listmenu: stray release ignored=%s, tap outside cancels=%s" % [survived, r1.v == -1])
+			# 2. Number picker: tap outside cancels
+			var r2 := {"v": -9}
+			var go2 := func(): r2.v = await RedShops.pick_number(root, "How much?", 500)
+			ListMenu.auto = false
+			go2.call()
+			await get_tree().create_timer(0.3).timeout
+			var bd2: Control = null
+			for c in root.get_children():
+				if c is Control and c.get_class() == "Control" and c.mouse_filter == Control.MOUSE_FILTER_STOP:
+					bd2 = c
+			if bd2:
+				click.call(bd2, Vector2(5, 5), true)
+				click.call(bd2, Vector2(5, 5), false)
+			await get_tree().create_timer(0.2).timeout
+			print("TOUCHAUDIT number picker: tap outside cancels=%s" % [r2.v == -1])
+			# 3. Wonder Mail pick list: Back
+			var r3 := {"v": 1, "done": false}
+			var go3 := func():
+				r3.v = await WonderMailUI._pick(root, "Pick", [{"text": "A", "value": 1}, {"text": "B", "value": 2}])
+				r3.done = true
+			go3.call()
+			await get_tree().create_timer(0.3).timeout
+			var b3: Button = find_btn.call(root, "Back")
+			if b3: b3.pressed.emit()
+			await get_tree().create_timer(0.2).timeout
+			print("TOUCHAUDIT wonder mail list: back=%s closed=%s value=%s" % [b3 != null, r3.done, r3.v])
+			# 4. Wonder Mail code page: Done
+			var r4 := {"v": "", "done": false}
+			var go4 := func():
+				r4.v = await WonderMailUI._show_result(root, {})
+				r4.done = true
+			go4.call()
+			await get_tree().create_timer(0.4).timeout
+			var b4: Button = find_btn.call(root, "Done")
+			if b4: b4.pressed.emit()
+			await get_tree().create_timer(0.2).timeout
+			print("TOUCHAUDIT wonder mail code page: done=%s closed=%s out=%s" % [b4 != null, r4.done, r4.v])
+			# 5. dungeon: Moves screen shift buttons, pad run, tap own tile to turn
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(2.0).timeout
+			var d := dungeon
+			var L: Mon = d.fs.leader
+			var names0 := (TeamScreens.moves_of(L) as Array).map(func(mv): return str(mv.name))
+			var go5 := func(): await d.open_moves()
+			go5.call()
+			await get_tree().create_timer(0.4).timeout
+			var mm = TeamScreens._stack.back()
+			mm._finish({"act": "shift_down"})
+			await get_tree().create_timer(0.3).timeout
+			var names1 := (TeamScreens.moves_of(L) as Array).map(func(mv): return str(mv.name))
+			mm = TeamScreens._stack.back()
+			mm._finish({"act": "cancel"})
+			await get_tree().create_timer(0.3).timeout
+			print("TOUCHAUDIT moves shift: before=%s after=%s" % [names0, names1])
+			var f0 := L.facing
+			d.qol.tap(d.qol.tile_to_screen(L.pos))
+			await get_tree().create_timer(0.2).timeout
+			print("TOUCHAUDIT tap own tile turns: %s (%d -> %d)" % [L.facing != f0, f0, L.facing])
+			_qclear()
+			var cor := _qcorridor(7)
+			if not cor.is_empty():
+				_qplace(L, cor[0])
+				await get_tree().create_timer(0.3).timeout
+				var p0 := L.pos
+				d.hud.pad_dir = int(cor[1])
+				d.hud.pad_run = true
+				await get_tree().create_timer(0.15).timeout
+				d.hud.pad_dir = -1
+				d.hud.pad_run = false
+				await get_tree().create_timer(2.0).timeout
+				print("TOUCHAUDIT pad run: moved %d tiles from one push" % [FloorState.cheb(p0, L.pos)])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--backtest"):
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")

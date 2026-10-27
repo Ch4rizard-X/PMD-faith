@@ -574,7 +574,8 @@ func _poll_input() -> void:
 		d = hud.pad_dir
 		up = d in [3, 4, 5]
 		down = d in [7, 0, 1]
-	_pad = {"dir": d, "a_pressed": (a and not _a_latch) or _touch_tap, "b_held": b or _touch_run, "b_pressed": b and not _b_latch,
+	var pad_run := hud != null and hud.pad.visible and hud.pad_run and hud.pad_dir >= 0
+	_pad = {"dir": d, "a_pressed": (a and not _a_latch) or _touch_tap, "b_held": b or _touch_run or pad_run, "b_pressed": b and not _b_latch,
 		"menu_pressed": (m and not _m_latch) or _touch_menu, "up": up, "down": down}
 	_touch_tap = false
 	_touch_menu = false
