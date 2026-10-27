@@ -46,6 +46,10 @@ build_thor.bat, build_thor_debug.bat, set_godot_java.ps1   Windows build scripts
 
 Details, requirements and the Android build are in [SETUP.md](SETUP.md).
 
+## Patch notes
+
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md) and on the Releases page.
+
 ## Credits
 
 This project would not exist without the [pret](https://github.com/pret) decompilations, SkyTemple, the PMDCollab SpriteCollab artists, PokeAPI and the *Explorers Remixed* team, among others. The full list is in [CREDITS.md](CREDITS.md), and every sprite and portrait artist is in [CREDITS_SPRITES.md](CREDITS_SPRITES.md).
