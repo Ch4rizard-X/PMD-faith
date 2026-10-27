@@ -30,6 +30,7 @@ var _swims := false
 var _fire := false
 var _lava_evader := false
 var _house_avoider := false
+var _relaxed := false              # second search: known traps and Monster House rooms don't block
 
 func _init(d) -> void:
 	dg = d
@@ -46,8 +47,21 @@ func applies(m: Mon, mem: Dictionary) -> bool:
 		return false
 	return AI.tactic_of(m, mem) == "lets_go_together"
 
+static var debug := false             # tests: print partners that stand still away from the leader
+
 ## Called from AI.decide after Red's status / item checks. {} = let Red's AI decide.
 func decide(m: Mon, mem: Dictionary) -> Dictionary:
+	var r := _decide(m, mem)
+	if debug and applies(m, mem):
+		var L: Mon = dg.fs.leader
+		var still := str(r.get("type", "")) == "wait" or r.is_empty()
+		var k := "dbg_still"
+		mem[k] = int(mem.get(k, 0)) + 1 if still else 0
+		if int(mem[k]) >= 5 and FloorState.cheb(m.pos, L.pos) > 2:
+			print("PARTNERDBG %s still %d turns at %s leader %s dist %d goal=%s act=%s room=%d" % [m.name, int(mem[k]), m.pos, L.pos, FloorState.cheb(m.pos, L.pos), str(mem.get("last_goal", "?")), str(r), dg.fs.room_at(m.pos)])
+	return r
+
+func _decide(m: Mon, mem: Dictionary) -> Dictionary:
 	if not applies(m, mem):
 		return {}
 	var fs: FloorState = dg.fs
@@ -92,6 +106,13 @@ func decide(m: Mon, mem: Dictionary) -> Dictionary:
 		if need_far and (goal.x < 0 or FloorState.cheb(goal, L.pos) > 1):
 			plan = _bfs(m, SEARCH)              # the leader is far or out of sight: search the whole floor
 			goal = _follow_spot(m, L, foes, low, plan)
+			if goal.x < 0 or FloorState.cheb(goal, L.pos) > 2:
+				_relaxed = true                     # blocked by a known trap / Monster House room: go through it
+				plan = _bfs(m, SEARCH)
+				_relaxed = false
+				goal = _follow_spot(m, L, foes, low, plan)
+		if FloorState.cheb(m.pos, L.pos) > 2 and (goal.x < 0 or goal == m.pos):
+			return {}                               # no way to the leader found: Red's own following this turn
 	if goal.x < 0 or goal == m.pos:
 		if tgt != null:
 			m.facing = AI.dir_toward(m.pos, tgt.pos)
@@ -378,9 +399,9 @@ func _tile_ok(m: Mon, p: Vector2i) -> bool:
 		var fl: int = fs.flags[fs.idx(p)]
 		if fl & 1:
 			ok = false
-		elif (fl & 8) and not bool(fs.get_meta("monster_house_triggered", false)) and _house_avoider:
+		elif (fl & 8) and not bool(fs.get_meta("monster_house_triggered", false)) and _house_avoider and not _relaxed:
 			ok = false
-	if ok and fs.traps.has(p):
+	if ok and fs.traps.has(p) and not _relaxed:
 		var tr: Dictionary = fs.traps[p]
 		if bool(tr.get("seen", false)) or AI.st(m, "eyedrops") > 0:
 			ok = false

@@ -797,6 +797,30 @@ func _ready() -> void:
 			m._finish({"act": "done"})                     # the Done button
 			await get_tree().create_timer(0.3).timeout
 			print("MARKTEST result: %s" % [res])
+			# sortable list: Select sorts, L still marks
+			var marks2 := {}
+			var res2 := {}
+			var run2 := func():
+				res2.merge(await RedShops._multi_list(root, "", labels, marks2, 0, [], [], true))
+			run2.call()
+			await get_tree().create_timer(0.3).timeout
+			var evl := InputEventAction.new()
+			evl.action = "gp_l"
+			evl.pressed = true
+			Input.parse_input_event(evl)
+			await get_tree().create_timer(0.3).timeout
+			var evu := InputEventAction.new()
+			evu.action = "gp_l"
+			evu.pressed = false
+			Input.parse_input_event(evu)
+			await get_tree().create_timer(0.3).timeout
+			print("MARKTEST L marks: %s" % [marks2.keys()])
+			var evs := InputEventAction.new()
+			evs.action = "act_map"
+			evs.pressed = true
+			Input.parse_input_event(evs)
+			await get_tree().create_timer(0.4).timeout
+			print("MARKTEST Select gives: %s" % [res2.get("act", "-")])
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--bagshot"):
@@ -956,6 +980,29 @@ func _ready() -> void:
 					c.visible = false
 					await measure.call("hide root/" + str(c.name))
 					c.visible = was2
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--partnersoak"):
+		(func():
+			var key := "mt_steel"
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--dungeon="): key = a.substr(10)
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.team.append(Game.make_entry("0025", "Pikachu", 10) if Game.has_method("make_entry") else Game.team[1].duplicate(true))
+			for e in Game.team:
+				e.level = 20
+				e.exp = DB.exp_at(str(e.sp), 20)
+			PartnerAI.debug = true
+			Dungeon.test_invincible = true
+			await start_dungeon(key)
+			dungeon.auto_answer = true
+			dungeon.set_autoplay(true)
+			var t := 0.0
+			while t < 240.0 and is_instance_valid(dungeon) and not dungeon.result_sent:
+				await get_tree().create_timer(0.5).timeout
+				t += 0.5
+				if not dungeon.autoplay and not dungeon.result_sent: dungeon.set_autoplay(true)
+			print("PARTNERSOAK done t=%.0f floor=%d" % [t, dungeon.floor_i + 1 if is_instance_valid(dungeon) else -1])
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--msgshot"):

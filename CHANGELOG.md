@@ -3,6 +3,12 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.31 (27 Oct 2026)
+
+- **Partners don't freeze at room entrances:** when the way to the leader is blocked by a known trap or an untriggered Monster House room, partners go through it; with no way at all they use Red's following for that turn instead of standing still.
+- **Kangaskhan Storage order:** Explorers of Sky items now sort in proper order with Red's (as the Toolbox Sort).
+- **Sort while selling or storing:** in Kecleon's sell list and Kangaskhan's store list, Select (or the Sort button) sorts the bag; L / R still mark several items.
+
 ## v0.6.30 (27 Oct 2026)
 
 - **Saving on a boss floor:** a Quicksave or autosave made on a boss / fixed floor now saves the team as it arrived there. Loading it builds the floor again and plays the boss scene again, instead of resuming in the middle of it.

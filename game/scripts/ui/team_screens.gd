@@ -312,6 +312,7 @@ class RedMenu extends PanelContainer:
 	var allow_cancel := true
 	var shift_keys := false         # Shift + Up/Down returns shift (Red: R + Up/Down)
 	var select_key := false         # act_map (Tab / Select) returns select (Red: Select)
+	var sort_key := false           # with select_key: Select returns "sort" instead; L / R (Q / E) still mark
 	var line_h := UITheme.LINE
 	var keep_on_pick := false       # stay on screen after a pick (a command sub-window follows; submenu() closes it)
 	var on_select: Callable
@@ -643,6 +644,8 @@ class RedMenu extends PanelContainer:
 			_finish({"act": "right"})
 		elif e.is_action_pressed("ui_accept") or e.is_action_pressed("act_attack"):
 			pick_current()
+		elif select_key and sort_key and e.is_action_pressed("act_map"):
+			_finish({"act": "sort"})        # Select sorts the list; L / R mark (below)
 		elif select_key and (e.is_action_pressed("act_map") or e.is_action_pressed("gp_l") or e.is_action_pressed("gp_r") \
 				or (e is InputEventKey and e.pressed and not e.echo and e.keycode in [KEY_Q, KEY_E])):
 			_finish({"act": "select"})      # mark several (Select, L or R; Q / E on a keyboard)

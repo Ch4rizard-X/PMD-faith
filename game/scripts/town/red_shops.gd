@@ -301,8 +301,12 @@ static func _kec_sell(root: Control, K: String, nm: String, sp: String, v: Dicti
 			labels.append(DB.item_name(str(b0.id)) + (" %d" % int(b0.n) if int(b0.get("n", 1)) > 1 else ""))
 			rights.append(str(sell_value(b0)) if shoppable(str(b0.id)) else "-")
 		var marks := {}
-		var r := await _multi_list(root, "", labels, marks, start, rights, Game.bag.map(func(b): return str(b.id)))     # L / R / Select mark several (Red)
+		var r := await _multi_list(root, "", labels, marks, start, rights, Game.bag.map(func(b): return str(b.id)), true)     # L / R mark several (Red), Select sorts
 		TeamScreens._drop(mb)
+		if r.act == "sort":
+			BaseMenu.sort_bag()
+			start = 0
+			continue
 		if r.act != "pick":
 			return
 		start = int(r.i)
@@ -609,12 +613,17 @@ static func _storage_ids() -> Array:
 	for id in Game.storage:
 		if int(Game.storage[id]) > 0 and DB.items.has(id):
 			ids.append(id)
-	ids.sort_custom(func(a, b): return int(DB.items[a].get("red_id", 999)) < int(DB.items[b].get("red_id", 999)))
+	ids.sort_custom(func(a, b):       # Red's item order (the Toolbox Sort), Explorers of Sky items after by name
+		var oa := BaseMenu.item_order(a)
+		var ob := BaseMenu.item_order(b)
+		return oa < ob if oa != ob else DB.item_name(a) < DB.item_name(b))
 	return ids
 
 ## A list where Select (or the "Mark" command) marks several rows, as Red's L / R. Returns
 ## {act: "pick"|"cancel", i, marks: Array of indices}.
-static func _multi_list(root: Control, title: String, labels: Array, marks: Dictionary, start: int, rights: Array = [], ids: Array = []) -> Dictionary:
+## sortable: Select (and a Sort button) returns {act: "sort"} so the caller can sort the bag and redraw;
+## L / R still mark.
+static func _multi_list(root: Control, title: String, labels: Array, marks: Dictionary, start: int, rights: Array = [], ids: Array = [], sortable := false) -> Dictionary:
 	var per := 8
 	var pages := maxi(1, ceili(labels.size() / float(per)))
 	var page := clampi(start / per, 0, pages - 1)
@@ -637,6 +646,9 @@ static func _multi_list(root: Control, title: String, labels: Array, marks: Dict
 		m.select_key = true
 		m.shift_keys = false
 		m.mark_touch = true          # touch: hold an item to mark it, then taps toggle (Red's L / R)
+		if sortable:
+			m.sort_key = true
+			m.header_buttons = [["Sort", "sort"]]
 		if marks.is_empty():
 			m.footer = [["Hold an item to mark several", ""]]
 		else:
@@ -668,6 +680,9 @@ static func _multi_list(root: Control, title: String, labels: Array, marks: Dict
 					marks[k2] = true
 			"pick":
 				return {"act": "pick", "i": page * per + sel, "marks": marks.keys()}
+			"sort":
+				if sortable:
+					return {"act": "sort", "i": page * per + sel, "marks": []}
 			_:
 				return {"act": "cancel", "i": -1, "marks": []}
 	return {"act": "cancel", "i": -1, "marks": []}
@@ -680,7 +695,11 @@ static func _kang_store(root: Control, KA: String, nm: String, sp: String, v: Di
 			labels.append(BaseMenu._bag_label(b))
 		var marks := {}
 		var bag_ids: Array = Game.bag.map(func(b): return str(b.id))
-		var r := await _multi_list(root, "", labels, marks, start, [], bag_ids)
+		var r := await _multi_list(root, "", labels, marks, start, [], bag_ids, true)
+		if r.act == "sort":
+			BaseMenu.sort_bag()
+			start = 0
+			continue
 		if r.act != "pick":
 			return
 		start = int(r.i)
