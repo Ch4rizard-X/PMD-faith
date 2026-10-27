@@ -119,10 +119,38 @@ def extract_nds(rom, out):
     print(f"extracted {rom} -> {out}")
 
 
+def check_roms():
+    """Catch the most common setup mistakes with a plain explanation: a wrong game, a non-US version,
+    or the two Explorers of Sky files swapped / the Remixed patch not applied."""
+    def head(path, off, n):
+        with open(path, "rb") as f:
+            f.seek(off)
+            return f.read(n)
+    problems = []
+    if head(RED_ROM, 0xAC, 4) != b"B24E":
+        problems.append(f"red_rom is not the US Red Rescue Team ROM (game code {head(RED_ROM, 0xAC, 4)!r}, expected b'B24E'):\n    {RED_ROM}")
+    for key, path in (("eos_rom", EOS_ROM), ("remix_rom", REMIX_ROM)):
+        if head(path, 0x0C, 4) != b"C2SE":
+            problems.append(f"{key} is not a US Explorers of Sky ROM (game code {head(path, 0x0C, 4)!r}, expected b'C2SE'):\n    {path}")
+    if not problems:
+        same = os.path.getsize(EOS_ROM) == os.path.getsize(REMIX_ROM) and head(EOS_ROM, 0, 1 << 20) == head(REMIX_ROM, 0, 1 << 20)
+        if same:
+            problems.append("eos_rom and remix_rom are the same file. remix_rom must be Explorers of Sky with the "
+                            "Explorers Remixed patch applied; eos_rom the normal, unpatched game.")
+        elif os.path.getsize(REMIX_ROM) == 128 * 1024 * 1024 and os.path.getsize(EOS_ROM) != 128 * 1024 * 1024:
+            problems.append("eos_rom and remix_rom look swapped: the normal Explorers of Sky ROM is exactly 128 MB, "
+                            "the Remixed one is larger. Swap the two paths in build_config.json.")
+    if problems:
+        sys.exit("\nThere is a problem with your ROM files:\n\n  - " + "\n  - ".join(problems) +
+                 "\n\nFix the paths in build_config.json (or run the Windows setup again) and start the build again.")
+    print("ROMs: Red Rescue Team (US), Explorers of Sky (US) and Explorers Remixed look right")
+
+
 def main():
     need(RED_ROM, "Red Rescue Team ROM (red_rom)")
     need(EOS_ROM, "Explorers of Sky ROM (eos_rom)")
     need(REMIX_ROM, "Explorers Remixed ROM (remix_rom)")
+    check_roms()
     for name, (url, sparse) in REPOS.items():
         fetch_repo(name, url, sparse)
     build_xbrz()

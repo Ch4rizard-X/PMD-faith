@@ -12,6 +12,7 @@ import os
 import json
 import math
 import time
+import shutil
 import subprocess
 import numpy as np
 
@@ -77,7 +78,8 @@ def render_one(num, bank, gain, outdir, keep_wav=False):
     wav = os.path.join(outdir, '_tmp_%04d.raw' % num)
     pcm.tofile(wav)
     ogg = os.path.join(outdir, 'eos_%04d.ogg' % num)
-    subprocess.run(['nice', '-n', '19', 'ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-f', 's16le', '-ar',
+    nice = ['nice', '-n', '19'] if shutil.which('nice') else []      # low priority where available (not on Windows)
+    subprocess.run(nice + [shutil.which('ffmpeg') or 'ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-f', 's16le', '-ar',
                     str(SR_OUT), '-ac', '2', '-i', wav, '-c:a', 'libvorbis', '-q:a', '0', ogg], check=True)
     if keep_wav:
         os.replace(wav, wav.replace('.raw', '.s16'))

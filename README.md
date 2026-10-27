@@ -40,11 +40,11 @@ build_thor.bat, build_thor_debug.bat, set_godot_java.ps1   Windows build scripts
 
 ## Building
 
-1. Copy `build_config.example.json` to `build_config.json` and set the paths to your three ROMs.
-2. Run `python build_all.py`. It downloads the community resources and builds `game/assets/` and `game/data/` from your ROMs.
-3. Open `game/project.godot` in Godot 4.7.2.
+**Windows (no programming needed):** download the ZIP, then double-click `SETUP_STEP1_install_tools.bat`, close it, and double-click `SETUP_STEP2_build_game_files.bat`. It asks for your three ROM files and builds everything. Then open `game/project.godot` in Godot 4.7.2 and press Play.
 
-Details, requirements and the Android build are in [SETUP.md](SETUP.md).
+**Mac / Linux:** set your ROM paths in `build_config.json` (copy `build_config.example.json`), run `python3 build_all.py`, then open the project in Godot 4.7.2.
+
+The step-by-step guide, with what to expect at each step and fixes for common problems, is [SETUP.md](SETUP.md).
 
 ## Patch notes
 
