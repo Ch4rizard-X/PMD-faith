@@ -147,6 +147,20 @@ func _ready() -> void:
 	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cl2.add_child(holder)
+	# touch: the same on-screen pad + A / Menu buttons as in dungeons and the town (under the text boxes)
+	hud = Hud.new()
+	holder.add_child(hud)
+	hud.top_draw.visible = false
+	hud.msg_panel.visible = false
+	hud.set_touch_visible(hud.touch_ui)
+	for k2 in hud._btns:
+		if k2 != "attack" and k2 != "menu":
+			hud._btns[k2].visible = false
+	hud.button.connect(func(btn: String):
+		if btn == "attack":
+			_touch_tap = true
+		elif btn == "menu":
+			_touch_menu = true)
 	text = GText.new(self)
 	holder.add_child(text)
 	camera = GCamera.new(self)
@@ -457,6 +471,8 @@ static var turbo := 1   # tests: ticks per frame multiplier
 func _process(dt: float) -> void:
 	if _done:
 		return
+	if hud:
+		hud.visible = not demo and not (cur_map >= 223 and cur_map <= 227)    # no pad on the boot, title and quiz screens
 	_acc += dt
 	var n := 0
 	var cap := 4 * turbo
@@ -554,9 +570,14 @@ func _poll_input() -> void:
 	var d := GDir.from_input(up, down, left, right)
 	if _touch_dir != -1:
 		d = _touch_dir
+	if hud and hud.pad.visible and hud.pad_dir >= 0:
+		d = hud.pad_dir
+		up = d in [3, 4, 5]
+		down = d in [7, 0, 1]
 	_pad = {"dir": d, "a_pressed": (a and not _a_latch) or _touch_tap, "b_held": b or _touch_run, "b_pressed": b and not _b_latch,
-		"menu_pressed": m and not _m_latch, "up": up, "down": down}
+		"menu_pressed": (m and not _m_latch) or _touch_menu, "up": up, "down": down}
 	_touch_tap = false
+	_touch_menu = false
 	if autopilot != null:
 		var o: Dictionary = autopilot.drive()
 		if not o.is_empty():
@@ -565,6 +586,8 @@ func _poll_input() -> void:
 	_b_latch = b
 	_m_latch = m
 
+var hud: Hud
+var _touch_menu := false
 var _touch_dir := -1
 var _touch_tap := false
 var _touch_run := false
@@ -588,6 +611,8 @@ func _unhandled_input(e: InputEvent) -> void:
 	if text.handle_input(e):
 		get_viewport().set_input_as_handled()
 		return
+	if hud and hud.pad.visible and (hud._pad_touch != -1 or _on_pad(e)):
+		return          # the on-screen pad has this finger (also its emulated mouse events): not tap-to-walk
 	if e is InputEventScreenTouch or (e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT):
 		if e.pressed:
 			_touch_down = true
@@ -608,6 +633,12 @@ func _unhandled_input(e: InputEvent) -> void:
 		if dv.length() > 12:
 			_touch_dir = GDir.vec_dir8(Vector2i(int(dv.x), int(dv.y)))
 			_touch_run = dv.length() > vs.y * 0.35
+
+func _on_pad(e: InputEvent) -> bool:
+	if not (e is InputEventScreenTouch or e is InputEventScreenDrag or e is InputEventMouseButton or e is InputEventMouseMotion):
+		return false
+	var local: Vector2 = hud.get_global_transform_with_canvas().affine_inverse() * e.position
+	return local.distance_to(hud.pad.position + hud.pad.size / 2) < 52
 
 # ------------------------------------------------------------------ locks
 ## Cutscene deadlock safety net. Our timings differ a little from Red's (and text can be advanced faster),

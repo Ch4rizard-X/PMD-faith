@@ -2655,8 +2655,10 @@ func _items_menu(ground_only: bool) -> bool:
 		m.pages = pages.size()
 		m.page = pi
 		m.sel = sel
-		m.max_rows = 8
+		m.max_rows = 8                    # a Toolbox page holds 10: swipe or the header arrows show the rest
 		m.select_key = pg.kind == "bag"
+		if pg.kind == "bag":
+			m.header_buttons = [["Sort", "select"]]   # touch: Red sorts with Select
 		m.keep_on_pick = true
 		var r := await TeamScreens.run_menu(ui_root, m, Vector2(TeamScreens.WIN_X, TeamScreens.WIN_Y))
 		match str(r.act):
@@ -2684,19 +2686,7 @@ func _items_menu(ground_only: bool) -> bool:
 
 ## Red's item order (ConvertMoneyItemToMoney: Poké becomes money, then sorted by the item order).
 func _sort_bag() -> void:
-	var keep: Array = []
-	for b in Game.bag:
-		if b.id == "poke":
-			Game.money += int(b.n)
-		else:
-			keep.append(b)
-	keep.sort_custom(func(a, b): return _item_order(a.id) < _item_order(b.id))
-	Game.bag.clear()
-	Game.bag.append_array(keep)
-
-func _item_order(id: String) -> int:
-	var I: Dictionary = DB.items.get(id, {})
-	return int(I.get("red_id", 1000)) * 1000 + int(I.get("sprite", 0))
+	BaseMenu.sort_bag()
 
 func _cant_hold(t: Mon) -> bool:
 	return t.get_meta("escort", false) or Missions.is_client(t) or t.get_meta("no_attack", false)

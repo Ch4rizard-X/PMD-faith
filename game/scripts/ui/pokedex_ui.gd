@@ -195,6 +195,7 @@ class DexList extends PanelContainer:
 		_page_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 		_page_lbl.gui_input.connect(_page_tap)
 		head.add_child(_page_lbl)
+		head.add_child(TeamScreens.back_button(func(): if active: _emit(-1)))      # touch: leave the Pokédex
 		vb.add_child(PokedexUI._sep())
 		var hb := HBoxContainer.new()
 		hb.size_flags_vertical = Control.SIZE_EXPAND_FILL

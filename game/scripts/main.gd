@@ -141,6 +141,173 @@ func _ready() -> void:
 			print("MEANIES after: where=%s scen=%s postgame=%s shop_fa=%d story_vars=%s base_level=%d leader=%s" % [where, str(GVars.scenario(GVars.SCENARIO_MAIN)), RedShops.postgame(), RedShops.shop_areas().size(), Game.story.has("vars"), GVars.get_val(null, GVars.BASE_LEVEL), Game.team[0].sp])
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--backtest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.friend_areas = ["beauplains"]
+			await get_tree().create_timer(0.5).timeout
+			var find_back := func(n: Node) -> Button:
+				var st := [n]
+				while not st.is_empty():
+					var x: Node = st.pop_back()
+					if x is Button and (x as Button).text == "Back" and (x as Button).is_visible_in_tree():
+						return x
+					st.append_array(x.get_children())
+				return null
+			# job board
+			var res := {"done": false}
+			var go1 := func():
+				res.v = await Board.open_board(root)
+				res.done = true
+			go1.call()
+			await get_tree().create_timer(0.1).timeout
+			print("BACKTEST dbg done=%s kids=%s" % [res.done, root.get_children().map(func(c): return c.get_class() + ":" + str(c.name))])
+			await get_tree().create_timer(0.5).timeout
+			var btns := []
+			var st0 := [root]
+			while not st0.is_empty():
+				var x0: Node = st0.pop_back()
+				if x0 is Button:
+					btns.append("%s vis=%s" % [(x0 as Button).text, (x0 as Button).is_visible_in_tree()])
+				st0.append_array(x0.get_children())
+			print("BACKTEST dbg2 done=%s buttons=%s" % [res.done, btns])
+			var b: Button = find_back.call(root)
+			var had_b := b != null
+			if b: b.pressed.emit()
+			await get_tree().create_timer(0.4).timeout
+			print("BACKTEST board: back=%s closed=%s" % [had_b, res.done])
+			# Pokédex list
+			var res2 := {"done": false}
+			var go2 := func():
+				await PokedexUI.browse(root, DB.species.keys().slice(0, 30), "All")
+				res2.done = true
+			go2.call()
+			await get_tree().create_timer(0.6).timeout
+			var b2: Button = find_back.call(root)
+			var had_b2 := b2 != null
+			if b2: b2.pressed.emit()
+			await get_tree().create_timer(0.4).timeout
+			print("BACKTEST pokedex: back=%s closed=%s" % [had_b2, res2.done])
+			# Friend Area map
+			var res3 := {"done": false}
+			var go3 := func():
+				res3.v = await WorldMap.friend_areas(root, "")
+				res3.done = true
+			go3.call()
+			await get_tree().create_timer(3.0).timeout
+			var b3: Button = find_back.call(root)
+			var had_b3 := b3 != null
+			if b3: b3.pressed.emit()
+			await get_tree().create_timer(3.0).timeout
+			print("BACKTEST friend map: back=%s closed=%s result='%s'" % [had_b3, res3.done, res3.get("v", "?")])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--groundpad"):
+		(func():
+			Game.load_game()
+			continue_story()
+			for i in 40:
+				await get_tree().create_timer(0.5).timeout
+				if is_instance_valid(ground) and ground.lives[0].kind_id != -1 and not ground.text.is_open() and ground.vis_map >= 0 and i > 8:
+					break
+			var h: Hud = ground.hud
+			h.touch_ui = true
+			h.set_touch_visible(true)
+			for k2 in h._btns:
+				if k2 != "attack" and k2 != "menu":
+					h._btns[k2].visible = false
+			var p0: Vector2i = ground.lives[0].p144
+			h.pad_dir = 2                                   # hold right on the pad
+			await get_tree().create_timer(1.0).timeout
+			h.pad_dir = -1
+			await get_tree().create_timer(0.3).timeout
+			print("GROUNDPAD map=%d moved=%s (from %s to %s)" % [ground.vis_map, ground.lives[0].p144 != p0, p0 / 2048, ground.lives[0].p144 / 2048])
+			h.pad_dir = 4
+			await get_tree().create_timer(0.3).timeout
+			get_viewport().get_texture().get_image().save_png("user://groundpad.png")
+			h.pad_dir = -1
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--marktest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await get_tree().create_timer(0.5).timeout
+			var labels := ["Oran Berry", "Apple", "Pecha Berry", "Sleep Seed", "Blast Seed", "Stick", "Chesto Berry", "Rawst Berry", "Sitrus Berry", "Joy Seed"]
+			var marks := {}
+			var res := {}
+			var run := func():
+				res.merge(await RedShops._multi_list(root, "", labels, marks, 0))
+			run.call()
+			await get_tree().create_timer(0.4).timeout
+			var tap := func(ctrl: Control, down: bool):
+				var ev := InputEventMouseButton.new()
+				ev.button_index = MOUSE_BUTTON_LEFT
+				ev.pressed = down
+				ev.position = ctrl.size / 2.0
+				ev.global_position = ctrl.get_global_transform() * ev.position
+				ctrl.gui_input.emit(ev)
+			var m = _top_mark_menu()
+			tap.call(m._rows[2], true)                     # hold row 2
+			await get_tree().create_timer(0.7).timeout
+			if is_instance_valid(m):
+				tap.call(m._rows[2], false)
+			await get_tree().create_timer(0.3).timeout
+			print("MARKTEST after hold: marks=%s" % [marks.keys()])
+			get_viewport().get_texture().get_image().save_png("user://marktest.png")
+			m = _top_mark_menu()
+			tap.call(m._rows[4], true)                     # quick tap row 4: toggles in marking mode
+			tap.call(m._rows[4], false)
+			await get_tree().create_timer(0.3).timeout
+			print("MARKTEST after tap: marks=%s" % [marks.keys()])
+			m = _top_mark_menu()
+			m._finish({"act": "done"})                     # the Done button
+			await get_tree().create_timer(0.3).timeout
+			print("MARKTEST result: %s" % [res])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--bagshot"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for id in ["oran", "apple", "pecha", "reviverseed", "sleepseed", "blastseed", "gravelrock", "ironthorn", "stick", "chesto", "rawst", "sitrus", "maxelixir", "escapeorb", "warpseed", "heal seed", "joyseed", "geoorb"]:
+				if DB.items.has(id):
+					Game.bag_add(id)
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(2.0).timeout
+			dungeon.open_bag()
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://bag_dungeon.png")
+			var m = TeamScreens._stack.back()
+			var tap := func(ctrl: Control, at: Vector2, down: bool):
+				var ev := InputEventMouseButton.new()
+				ev.button_index = MOUSE_BUTTON_LEFT
+				ev.pressed = down
+				ev.position = at
+				ev.global_position = ctrl.get_global_transform() * at
+				ctrl.gui_input.emit(ev)
+			# swipe up on the list: it should scroll down by a row or more
+			var row0: Control = m._rows[3]
+			var c := row0.size / 2.0
+			tap.call(row0, c, true)
+			for k in 6:
+				var mv := InputEventMouseMotion.new()
+				mv.button_mask = MOUSE_BUTTON_MASK_LEFT
+				mv.position = c - Vector2(0, 12 * k)
+				mv.global_position = row0.get_global_transform() * (c - Vector2(0, 12 * k))
+				row0.gui_input.emit(mv)
+			tap.call(row0, c - Vector2(0, 60), false)
+			print("BAGTEST after swipe: top=%d finished=%s" % [m.top, m.finished])
+			m._scroll_by(5)
+			print("BAGTEST after arrow: top=%d (max %d)" % [m.top, m.rows.size() - m.max_rows])
+			m._finish({"act": "select"})      # the Sort button's action
+			await get_tree().create_timer(0.8).timeout
+			print("BAGTEST sorted first=%s" % [Game.bag[0].id])
+			var m2 = TeamScreens._stack.back()
+			# a tap (press + release, no movement) opens the item's commands
+			tap.call(m2._rows[1], m2._rows[1].size / 2.0, true)
+			tap.call(m2._rows[1], m2._rows[1].size / 2.0, false)
+			print("BAGTEST tap picked: finished=%s act=%s i=%s" % [m2.finished, m2.result.get("act", ""), m2.result.get("i", "")])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--walktest"):
 		_walktest.call_deferred()
 	if OS.get_cmdline_user_args().has("--perftest"):
@@ -2403,6 +2570,13 @@ func _perftest() -> void:
 	get_tree().quit()
 
 ## --walktest: hold a direction down a corridor and log the leader's per-frame motion (stalls = clunky walking)
+func _top_mark_menu():
+	for i in range(TeamScreens._stack.size() - 1, -1, -1):
+		var x = TeamScreens._stack[i]
+		if is_instance_valid(x) and x.get("mark_touch") == true and not x.finished:
+			return x
+	return null
+
 func _walktest() -> void:
 	Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
 	Dungeon.perf_log = OS.get_cmdline_user_args().has("--perf")

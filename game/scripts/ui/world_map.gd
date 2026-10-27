@@ -45,6 +45,10 @@ var _anim_i := 0
 var _fade_in := true
 var _press_a := false
 var _press_b := false
+var _touch_dir := 0xFF          # touch: a tapped direction for ChooseLocation (Red's d-pad)
+var _touch_locs: Array = []
+var _touch_cur := -1
+var _back_btn: Button
 var _held_dir := 0xFF                              # GetChosenDirection state
 var _held_n := 0
 
@@ -265,6 +269,45 @@ func _unhandled_input(e: InputEvent) -> void:
 	else:
 		return
 	get_viewport().set_input_as_handled()
+
+## Touch (no controller): tap an area to walk toward it, tap the area you're on to choose it, Back to leave.
+func _gui_input(e: InputEvent) -> void:
+	if not (e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT and not e.pressed) or _touch_locs.is_empty() or _touch_cur < 0:
+		return
+	accept_event()
+	var mp: Vector2 = e.position / PX + bg_pos
+	var here: Vector2 = _touch_locs[_touch_cur].pos
+	if mp.distance_to(here) < 14.0:
+		_press_a = true
+		return
+	var want := (mp - here).normalized()
+	var best := 0xFF
+	var best_dot := 0.45
+	for d in 8:
+		var n: int = _touch_locs[_touch_cur].by_dir[d]
+		if n < 0 or not _touch_locs[n].shown:
+			continue
+		var dot := want.dot((_touch_locs[n].pos - here).normalized())
+		if dot > best_dot:
+			best_dot = dot
+			best = d
+	_touch_dir = best
+
+func _touch_back(on: bool) -> void:
+	if _back_btn == null:
+		_back_btn = Button.new()
+		_back_btn.text = "Back"
+		_back_btn.focus_mode = Control.FOCUS_NONE
+		_back_btn.add_theme_font_size_override("font_size", UITheme.FONT_SIZE)
+		_back_btn.add_theme_stylebox_override("normal", UITheme.box(0.85))
+		_back_btn.add_theme_stylebox_override("hover", UITheme.box(0.95))
+		_back_btn.add_theme_stylebox_override("pressed", UITheme.box(0.95))
+		_back_btn.z_index = 6
+		_back_btn.pressed.connect(func(): _press_b = true)
+		add_child(_back_btn)
+	_back_btn.position = Vector2(get_viewport_rect().size.x - 64 - 4 * UITheme.PX, 4 * UITheme.PX)
+	_back_btn.size = Vector2(64, 24)
+	_back_btn.visible = on
 
 func _clear_presses() -> void:
 	_press_a = false
@@ -598,6 +641,9 @@ func _friend_loop(start_key: String) -> String:
 		_show_arrows(locs, cur)
 		_show_name(locs[cur].name, 7, 21)
 		_clear_presses()
+		_touch_locs = locs
+		_touch_cur = cur
+		_touch_back(true)
 		var ret := 0
 		var nl := -1
 		var nd := 0
@@ -617,6 +663,8 @@ func _friend_loop(start_key: String) -> String:
 				ret = 3
 			if ListMenu.auto and ret == 0:
 				ret = 3
+		_touch_back(false)
+		_touch_locs = []
 		if ret == 1:
 			await _move_to(locs, cur, nl, nd, 50)
 			cur = nl
@@ -688,6 +736,10 @@ func _hide_arrows() -> void:
 
 ## GetChosenDirection: the d-pad (R = diagonals only) held for 3 frames.
 func _chosen_dir() -> int:
+	if _touch_dir != 0xFF:
+		var td := _touch_dir
+		_touch_dir = 0xFF
+		return td
 	var all := [0xFF, 0, 2, 1, 4, 0xFF, 3, 0xFF, 6, 7, 0xFF, 0xFF, 5, 0xFF, 0xFF, 0xFF]
 	var dg := [0xFF, 0xFF, 0xFF, 1, 0xFF, 0xFF, 3, 0xFF, 0xFF, 7, 0xFF, 0xFF, 5, 0xFF, 0xFF, 0xFF]
 	var id := 0

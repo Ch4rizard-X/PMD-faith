@@ -241,7 +241,16 @@ class RedMenu extends PanelContainer:
 	var line_h := UITheme.LINE
 	var keep_on_pick := false       # stay on screen after a pick (a command sub-window follows; submenu() closes it)
 	var on_select: Callable
+	var mark_touch := false         # touch: hold a row to mark it; while anything is marked a tap toggles (multi-select lists)
+	var footer: Array = []          # touch buttons under the list: [[label, act], ...]; act "" = a hint line
+	var header_buttons: Array = []  # touch buttons in the title line: [[label, act], ...]
+	var _scroll_up: Button
+	var _scroll_dn: Button
 	var finished := false
+	var _press_i := -1              # touch / mouse: row pressed, where, and whether it became a swipe
+	var _press_pos := Vector2.ZERO
+	var _dragged := false
+	var _press_token := 0
 	var result: Dictionary = {}
 	var _box: VBoxContainer
 	var _rows: Array = []
@@ -256,13 +265,24 @@ class RedMenu extends PanelContainer:
 		vb.add_theme_constant_override("separation", 0)
 		vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(vb)
-		if title != "" or pages > 1:
+		var scrolls := rows.size() > max_rows
+		if title != "" or pages > 1 or not header_buttons.is_empty() or scrolls:
 			var hb := HBoxContainer.new()
 			hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			hb.add_theme_constant_override("separation", 3 * P)
 			vb.add_child(hb)
 			var t := TeamScreens._rtl("[color=%s]%s[/color]" % [TeamScreens.YELLOW, title])
 			t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			hb.add_child(t)
+			for f in header_buttons:
+				var act := str(f[1])
+				hb.add_child(TeamScreens._arrow(str(f[0]), func(): _finish({"act": act})))
+			if scrolls:
+				# touch: more rows than fit; tap to scroll (or swipe the list)
+				_scroll_up = TeamScreens._arrow(TeamScreens.ARROW_U, func(): _scroll_by(-1))
+				_scroll_dn = TeamScreens._arrow(TeamScreens.ARROW_D, func(): _scroll_by(1))
+				hb.add_child(_scroll_up)
+				hb.add_child(_scroll_dn)
 			if pages > 1:
 				hb.add_child(TeamScreens._arrow(TeamScreens.ARROW_L, func(): _finish({"act": "left"})))
 				var pl := Label.new()
@@ -275,6 +295,21 @@ class RedMenu extends PanelContainer:
 		vb.add_child(_box)
 		for k in mini(rows.size(), max_rows):
 			_rows.append(_make_row(k))
+		if not footer.is_empty():
+			var fb := HBoxContainer.new()
+			fb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			fb.add_theme_constant_override("separation", 8 * P)
+			vb.add_child(fb)
+			for f in footer:
+				var act := str(f[1])
+				if act == "":
+					var hint := Label.new()
+					hint.text = str(f[0])
+					hint.add_theme_color_override("font_color", UITheme.INK_DIM)
+					fb.add_child(hint)
+				else:
+					var btn := TeamScreens._arrow(str(f[0]), func(): _finish({"act": act}))
+					fb.add_child(btn)
 		sel = clampi(sel, 0, maxi(0, rows.size() - 1))
 		if rows.size() > 0 and rows[sel].get("skip", false):
 			sel = _step(sel, 1)
@@ -366,6 +401,9 @@ class RedMenu extends PanelContainer:
 			r.text = str(row.get("right", ""))
 			r.visible = r.text != ""
 			r.add_theme_color_override("default_color", UITheme.INK_DIM if dis else UITheme.INK)
+		if _scroll_up:
+			_scroll_up.modulate.a = 1.0 if top > 0 else 0.3
+			_scroll_dn.modulate.a = 1.0 if top + max_rows < rows.size() else 0.3
 		if on_select.is_valid() and rows.size() > 0:
 			on_select.call(sel)
 
@@ -425,23 +463,76 @@ class RedMenu extends PanelContainer:
 		if allow_cancel:
 			_finish({"act": "cancel"})
 
+	## Touch / mouse: a tap acts on release, so a finger can swipe the list first (up/down scrolls,
+	## left/right turns the page). In multi-select lists, holding a row marks it.
 	func _row_input(e: InputEvent, k: int) -> void:
 		if finished or not _is_top():
 			return
-		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+		if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
 			var i: int = top + k
-			if i < rows.size() and not rows[i].get("skip", false):
-				sel = i
-				_refresh()
-				if lr and pages <= 1:
-					# option rows: a tap changes the value instead of closing the page; the left half of
-					# the value steps back, anything else steps forward (tap outside the window to finish)
-					var r: Control = _rows[k].get_child(4)
-					var back: bool = r.visible and e.position.x >= r.position.x and e.position.x < r.position.x + r.size.x * 0.5
-					_finish({"act": "left" if back else "right", "i": i})
-				else:
-					pick_current()
+			if e.pressed:
+				_press_i = i
+				_press_pos = e.global_position
+				_dragged = false
+				_press_token += 1
+				if i < rows.size() and not rows[i].get("skip", false):
+					sel = i
+					_refresh()
+					if mark_touch:
+						var tok := _press_token
+						get_tree().create_timer(0.45).timeout.connect(func():
+							if tok == _press_token and _press_i == i and not _dragged and not finished:
+								_press_i = -1
+								_finish({"act": "select", "i": i}))
+			elif _press_i >= 0:
+				var pi := _press_i
+				_press_i = -1
+				if not _dragged and pi < rows.size() and not rows[pi].get("skip", false):
+					sel = pi
+					if mark_touch and _any_marked():
+						_finish({"act": "select", "i": pi})       # marking mode: a tap toggles the mark
+					elif lr and pages <= 1:
+						# option rows: a tap changes the value instead of closing the page; the left half of
+						# the value steps back, anything else steps forward (tap outside the window to finish)
+						var r: Control = _rows[k].get_child(4)
+						var back: bool = r.visible and e.position.x >= r.position.x and e.position.x < r.position.x + r.size.x * 0.5
+						_finish({"act": "left" if back else "right", "i": pi})
+					else:
+						pick_current()
 			accept_event()
+		elif e is InputEventMouseMotion and _press_i >= 0 and (e.button_mask & MOUSE_BUTTON_MASK_LEFT):
+			var d: Vector2 = e.global_position - _press_pos
+			var lh := float(line_h) * get_global_transform().get_scale().y
+			if pages > 1 and absf(d.x) > 40.0 * P * get_global_transform().get_scale().x and absf(d.x) > absf(d.y) * 1.5:
+				_dragged = true
+				_press_i = -1
+				_finish({"act": "right" if d.x < 0 else "left"})
+			elif rows.size() > max_rows and absf(d.y) >= lh:
+				_dragged = true
+				var step := -1 if d.y > 0 else 1                       # drag up = scroll down, like a phone list
+				var nt := clampi(top + step, 0, rows.size() - max_rows)
+				_press_pos.y += lh * signf(d.y)
+				if nt != top:
+					top = nt
+					sel = clampi(sel, top, top + max_rows - 1)
+					_refresh()
+			elif d.length() > 12.0 * P:
+				_dragged = true
+			accept_event()
+
+	func _scroll_by(d: int) -> void:
+		var nt := clampi(top + d, 0, maxi(0, rows.size() - max_rows))
+		if nt != top:
+			top = nt
+			sel = clampi(sel, top, top + max_rows - 1)
+			Audio.sfx("cursor")
+			_refresh()
+
+	func _any_marked() -> bool:
+		for r in rows:
+			if r is Dictionary and bool(r.get("marked", false)):
+				return true
+		return false
 
 	func _gui_input(e: InputEvent) -> void:
 		if finished or not _is_top():
@@ -612,6 +703,12 @@ static func _arrow(t: String, cb: Callable) -> Button:
 		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	b.custom_minimum_size = Vector2(10 * P, UITheme.LINE)
 	b.pressed.connect(cb)
+	return b
+
+## Touch: a "Back" button for full-screen views that otherwise only close with B / right-click.
+static func back_button(cb: Callable) -> Button:
+	var b := _arrow("Back", cb)
+	b.custom_minimum_size = Vector2(28 * P, UITheme.LINE)
 	return b
 
 ## Append parts to a RichTextLabel (see InfoPage).

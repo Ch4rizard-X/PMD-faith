@@ -307,6 +307,7 @@ class JobView extends PanelContainer:
 		_page_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 		_page_lbl.gui_input.connect(_page_tap)
 		head.add_child(_page_lbl)
+		head.add_child(TeamScreens.back_button(func(): if not _blocked(): _emit(-1)))     # touch: leave the board
 		var sep := ColorRect.new()
 		sep.color = UITheme.WIN_EDGE
 		sep.custom_minimum_size = Vector2(0, UITheme.PX)

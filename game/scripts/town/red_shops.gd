@@ -631,9 +631,24 @@ static func _multi_list(root: Control, title: String, labels: Array, marks: Dict
 		m.sel = mini(sel, rows.size() - 1)
 		m.select_key = true
 		m.shift_keys = false
+		m.mark_touch = true          # touch: hold an item to mark it, then taps toggle (Red's L / R)
+		if marks.is_empty():
+			m.footer = [["Hold an item to mark several", ""]]
+		else:
+			m.footer = [["Done (%d)" % marks.size(), "done"], ["Mark all" if marks.size() < labels.size() else "Clear", "mark_all"]]
 		var r := await TeamScreens.run_menu(root, m, Vector2(2 * 8 * P, 2 * 8 * P))
 		sel = int(r.get("i", sel))
 		match str(r.act):
+			"done":
+				var ks: Array = marks.keys()
+				ks.sort()
+				return {"act": "pick", "i": int(ks[0]), "marks": ks}
+			"mark_all":
+				if marks.size() < labels.size():
+					for k3 in labels.size():
+						marks[k3] = true
+				else:
+					marks.clear()
 			"left":
 				page = (page - 1 + pages) % pages
 				sel = 0

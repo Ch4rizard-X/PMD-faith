@@ -209,7 +209,23 @@ static func _bag_label(b: Dictionary) -> String:
 	return DB.item_name(str(b.id)) + (" %d" % int(b.n) if DB.items.get(b.id, {}).get("stack", false) else "")
 
 ## A paged RedMenu list (8 per page). Returns {act, i} with i an index into rows.
-static func paged(root: Control, title: String, rows: Array, start := 0, at := Vector2(2 * 8 * P, 2 * 8 * P), per := 8, min_w := 0.0, line_h := 0) -> Dictionary:
+## Red's item order (ConvertMoneyItemToMoney: Poké becomes money, then sorted by the item order).
+static func sort_bag() -> void:
+	var keep: Array = []
+	for b in Game.bag:
+		if b.id == "poke":
+			Game.money += int(b.n)
+		else:
+			keep.append(b)
+	keep.sort_custom(func(a, b): return item_order(a.id) < item_order(b.id))
+	Game.bag.clear()
+	Game.bag.append_array(keep)
+
+static func item_order(id: String) -> int:
+	var I: Dictionary = DB.items.get(id, {})
+	return int(I.get("red_id", 1000)) * 1000 + int(I.get("sprite", 0))
+
+static func paged(root: Control, title: String, rows: Array, start := 0, at := Vector2(2 * 8 * P, 2 * 8 * P), per := 8, min_w := 0.0, line_h := 0, sortable := false) -> Dictionary:
 	var pages := maxi(1, ceili(rows.size() / float(per)))
 	var page := clampi(start / per, 0, pages - 1)
 	var sel := start % per
@@ -222,8 +238,14 @@ static func paged(root: Control, title: String, rows: Array, start := 0, at := V
 		m.max_rows = per
 		if line_h > 0:
 			m.line_h = line_h
+		if sortable:
+			m.select_key = true
+			m.header_buttons = [["Sort", "select"]]
 		var r := await TeamScreens.run_menu(root, m, at)
 		match str(r.act):
+			"select":
+				if sortable:
+					return {"act": "sort", "i": -1}
 			"left":
 				page = (page - 1 + pages) % pages
 				sel = 0
@@ -243,7 +265,11 @@ static func items_menu(root: Control) -> void:
 		var rows: Array = []
 		for b in Game.bag:
 			rows.append({"text": _bag_label(b)})
-		var r := await paged(root, "Toolbox", rows, start, Vector2(2 * 8 * P, 2 * 8 * P), 8, 120 * P)
+		var r := await paged(root, "Toolbox", rows, start, Vector2(2 * 8 * P, 2 * 8 * P), 8, 120 * P, 0, true)
+		if r.act == "sort":
+			sort_bag()
+			start = 0
+			continue
 		if r.act != "pick":
 			return
 		start = int(r.i)
