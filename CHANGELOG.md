@@ -12,6 +12,7 @@ Every screen and menu was checked for actions that needed a controller.
 - **Moves screen:** ▲ / ▼ buttons in the title bar move the selected move up or down (was Shift + Up/Down only).
 - **Run by touch:** push the joystick past its ring (it turns gold) to run: Red's run in dungeons, faster walking in town and on story maps.
 - **Turn in place by touch:** in dungeons, tap your own Pokémon to face the nearest enemy (again to cycle, or one step around with none near). On an item, stairs or a known trap the tap opens that tile's menu as before.
+- **Windows:** new export option "Windows (exe + pck)": a small `PMDRed.exe` plus the game data in `PMDRed.pck` next to it (the single-file .exe is still there).
 
 ## v0.6.26 (27 Oct 2026): touch controls
 
