@@ -1,17 +1,38 @@
 class_name Difficulty
 extends RefCounted
-## Remake option: Hard mode. Enemy and boss levels scale, and wild Pokémon keep arriving up to 20 per floor,
-## one every 24 turns (TurnRules.HARD_*); AI, items, hunger, rescues and recruiting stay Red's. Stored per adventure in Game.flags.hard_mode; picked at New Game, changeable any time in
-## Game Options -> Dungeon -> Difficulty.
+## Remake option: Hard mode (Game.flags.hard_mode; picked at New Game, changeable any time in
+## Game Options -> Dungeon -> Difficulty). AI, items, hunger, rescues and recruiting stay Red's.
 ##
-## Scaling: when the team out-levels a floor, its Pokémon rise by the difference, keeping Red's spread
-## between them; on top of that every enemy is a few levels higher. Bosses (story and EoS) do the same
-## against their own level and their HP grows with their level. A team below Red's levels meets Red's
-## Pokémon plus the flat bonus only, so Hard never makes a floor easier.
+## Levels follow a planned curve instead of Red's:
+##   - Story dungeons: CURVE gives the wild level on the first and last floor (in between it rises evenly)
+##     and the boss level; the story ends with Rayquaza at Lv 70. Red's spread between the species of a
+##     floor is kept (a floor at 30 has Pokémon at 28 and 32 where Red had 18 and 22 around 20).
+##   - Side dungeons that open during the story (and EoS dungeons that open by team level): Red's level
+##     mapped onto the story curve (RED_TO_HARD).
+##   - Post-game dungeons (and EoS post-game ones): Lv 70 on the first floor, +1 every 3 floors, up to 100;
+##     bosses there at least Lv 75 (or the floor + 5).
+##   - Backstop: a team 10+ levels above a floor's level raises its Pokémon by half of the difference past 10.
+##   - Lv 1 dungeons (level_reset) and Kecleon / other Lv 90 Pokémon are never changed.
+## Also on Hard: wild Pokémon keep arriving up to 20 per floor, one every 24 turns (TurnRules.HARD_*).
 
-const WILD_BONUS := 3        # levels added to every wild Pokémon
-const BOSS_BONUS := 3        # levels added to every boss
 const MAX_LEVEL := 100
+## dungeon key -> [first floor, last floor, boss]
+const CURVE := {
+	"tiny_woods": [3, 4, 0], "thunderwave_cave": [5, 7, 0], "mt_steel": [8, 11, 14], "sinister_woods": [12, 18, 20],
+	"silent_chasm": [19, 22, 0], "mt_thunder": [22, 26, 0], "mt_thunder_peak": [27, 29, 32], "great_canyon": [30, 33, 0],
+	"lapis_cave": [33, 37, 0], "mt_blaze": [37, 40, 0], "mt_blaze_peak": [41, 43, 46], "frosty_forest": [43, 46, 0],
+	"frosty_grotto": [46, 48, 50], "mt_freeze": [48, 52, 0], "mt_freeze_peak": [53, 55, 0], "magma_cavern": [55, 60, 0],
+	"magma_cavern_pit": [60, 62, 65], "sky_tower": [62, 67, 0], "sky_tower_summit": [67, 69, 70],
+}
+## Side dungeons open during the story; everything else outside CURVE is post-game.
+const STORY_SIDE := ["uproar_forest", "howling_forest"]
+## Red level -> Hard level (the story curve: Red's typical level of each stage against its Hard level).
+const RED_TO_HARD := [[1, 3], [3, 6], [6, 10], [11, 15], [11, 24], [15, 32], [16, 36], [16, 40], [18, 45],
+	[18, 50], [20, 54], [25, 58], [24, 65], [30, 68], [35, 70]]
+const BOSS_BONUS := 3
+const POST_START := 70
+const POST_BOSS_MIN := 75
+const BACKSTOP_MARGIN := 10
 
 static func hard() -> bool:
 	return bool(Game.flags.get("hard_mode", false))
@@ -19,7 +40,7 @@ static func hard() -> bool:
 static func set_hard(on: bool) -> void:
 	Game.flags["hard_mode"] = on
 
-## The team's level for scaling: the average of the team members on the floor (Lv 1 dungeons: their level there).
+## The team's level: the average of the team members on the floor (temporary recruits don't count).
 static func team_level(dg) -> int:
 	var n := 0
 	var tot := 0
@@ -30,7 +51,7 @@ static func team_level(dg) -> int:
 		n += 1
 	return int(round(tot / float(n))) if n > 0 else 1
 
-## The floor's usual wild level: the spawn-weighted average of Red's list for this floor.
+## Red's usual wild level on this floor: the spawn-weighted average of the floor's list.
 static func floor_level(dg) -> int:
 	var tot := 0.0
 	var w := 0.0
@@ -42,17 +63,67 @@ static func floor_level(dg) -> int:
 		w += p
 	return int(round(tot / w)) if w > 0.0 else 0
 
-static func wild_level(dg, lv: int) -> int:
-	if not hard() or lv >= 90:
+static func _red_to_hard(lv: int) -> int:
+	var best := -1
+	for pt in RED_TO_HARD:                      # the highest stage whose Red level the floor reaches
+		if lv >= int(pt[0]):
+			best = maxi(best, int(pt[1]))
+	if best < 0:
 		return lv
-	var fl := floor_level(dg)
-	var up := maxi(0, team_level(dg) - fl) if fl > 0 else 0
-	return clampi(lv + up + WILD_BONUS, 1, MAX_LEVEL)
+	if lv > 35:
+		best += (lv - 35) * 2                   # beyond Rayquaza's level (EoS dungeons): keep climbing
+	return best
 
-static func boss_level(dg, lv: int) -> int:
-	if not hard() or lv >= 90:
+static func _post_game(dg) -> bool:
+	var k := str(dg.dkey)
+	if CURVE.has(k) or k in STORY_SIDE:
+		return false
+	if bool(dg.ddata.get("eos", false)):
+		return k in Story.EOS_POSTGAME
+	return true
+
+static func _scaled(dg) -> bool:
+	return hard() and not bool(dg.ddata.get("level_reset", false))
+
+## The Hard level of the current floor (the curve's value before the backstop).
+static func floor_target(dg) -> int:
+	var k := str(dg.dkey)
+	var n: int = maxi(1, dg.ddata.floors.size())
+	if CURVE.has(k):
+		var c: Array = CURVE[k]
+		var t := 0.0 if n <= 1 else float(dg.floor_i) / float(n - 1)
+		return int(round(lerpf(float(c[0]), float(c[1]), clampf(t, 0.0, 1.0))))
+	if _post_game(dg):
+		return mini(MAX_LEVEL, POST_START + int(dg.floor_i) / 3)
+	return _red_to_hard(maxi(1, floor_level(dg)))
+
+static func _backstop(dg, target: int) -> int:
+	var over := team_level(dg) - target - BACKSTOP_MARGIN
+	return target + (over / 2 if over > 0 else 0)
+
+static func wild_level(dg, lv: int) -> int:
+	if not _scaled(dg) or lv >= 90:
 		return lv
-	return clampi(maxi(lv, team_level(dg)) + BOSS_BONUS, 1, MAX_LEVEL)
+	var target := floor_target(dg)
+	var fl := floor_level(dg)
+	var spread := lv - fl if fl > 0 else 0
+	return clampi(_backstop(dg, target) + spread, 1, MAX_LEVEL)
+
+## Story Pokémon and bosses (fixed rooms, EoS arenas).
+static func boss_level(dg, lv: int) -> int:
+	if not _scaled(dg) or lv >= 90:
+		return lv
+	var k := str(dg.dkey)
+	var target := floor_target(dg)
+	var want := target + BOSS_BONUS
+	if CURVE.has(k) and int(CURVE[k][2]) > 0 and int(dg.floor_i) >= int(dg.ddata.floors.size()) - 1:
+		want = int(CURVE[k][2])                 # the dungeon's boss on its last floor
+	elif _post_game(dg):
+		want = maxi(POST_BOSS_MIN, target + 5)
+	var bs := _backstop(dg, target)
+	if bs > target:                             # a team far above the curve: bosses keep up too
+		want = maxi(want, bs + BOSS_BONUS)
+	return clampi(want, 1, MAX_LEVEL)
 
 ## A boss's fixed HP (Red's boss HP / EoS arena HP), grown in step with its level.
 static func boss_hp(hp: int, base_lv: int, new_lv: int) -> int:

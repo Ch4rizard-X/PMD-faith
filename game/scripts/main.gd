@@ -930,28 +930,27 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--hardtest"):
 		(func():
 			Dialog.auto = true
-			for hard in [false, true]:
-				for lvl in [12, 40]:
-					Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
-					Difficulty.set_hard(hard)
-					for e in Game.team:
-						e.level = lvl
-						e.exp = DB.exp_at(str(e.sp), lvl)
-					Dungeon.test_invincible = true
-					await start_dungeon("mt_steel", 2)
-					await get_tree().create_timer(0.3).timeout
+			var cases := [["tiny_woods", 0], ["mt_steel", 0], ["mt_steel", 8], ["sinister_woods", 12], ["silent_chasm", 0],
+				["mt_thunder_peak", 2], ["magma_cavern", 22], ["magma_cavern_pit", 2], ["sky_tower_summit", 0], ["sky_tower_summit", 8],
+				["uproar_forest", 0], ["wish_cave", 0], ["wish_cave", 98], ["northern_range", 10], ["eos_zero_isle_east", 0]]
+			for lvl in [20, 60]:
+				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				Difficulty.set_hard(true)
+				for e in Game.team:
+					e.level = lvl
+					e.exp = DB.exp_at(str(e.sp), lvl)
+				Dungeon.test_invincible = true
+				for c in cases:
+					if not DB.dungeons.dungeons.has(c[0]):
+						print("HARDTEST missing ", c[0])
+						continue
+					await start_dungeon(c[0], c[1])
+					await get_tree().create_timer(0.2).timeout
 					var wl := []
 					for m in dungeon.fs.mons:
 						if not m.is_team() and m.side != "client":
-							wl.append("%s%d" % [m.name.substr(0, 4), m.level])
-					print("HARDTEST hard=%s team=%d F3 wild: %s" % [hard, lvl, " ".join(wl)])
-					await start_dungeon("mt_steel", 8)
-					await get_tree().create_timer(0.3).timeout
-					var bl := []
-					for m in dungeon.fs.mons:
-						if not m.is_team() and m.side != "client":
-							bl.append("%s Lv%d HP%d" % [m.name, m.level, m.max_hp])
-					print("HARDTEST hard=%s team=%d boss floor: %s" % [hard, lvl, ", ".join(bl)])
+							wl.append("%s%d%s" % [m.name.substr(0, 5), m.level, "*" if m.has_meta("boss") or m.has_meta("behavior") else ""])
+					print("HARDTEST team=%d %s F%d target=%d: %s" % [lvl, c[0], int(c[1]) + 1, Difficulty.floor_target(dungeon), " ".join(wl)])
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--linktest"):

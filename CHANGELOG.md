@@ -3,6 +3,14 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.47 (28 Oct 2026): Hard mode level curve
+
+- **Hard mode follows a planned level curve** instead of following the team: every story dungeon has its own wild range (first to last floor) and boss level, ending with Rayquaza at Lv 70 (Mt. Steel 8-11 / Skarmory 14, Sinister Woods 12-18 / Team Meanies 20, Mt. Thunder Peak / Zapdos 32, Mt. Blaze Peak / Moltres 46, Frosty Grotto / Articuno 50, Magma Cavern Pit / Groudon 65 ...). Red's spread between the species of a floor is kept.
+  - Side dungeons and EoS dungeons that open during the story: Red's level mapped onto the curve.
+  - Post-game dungeons: Lv 70 on the first floor, +1 every 3 floors, up to 100; bosses there at least Lv 75.
+  - Backstop: a team 10+ levels above a floor raises its Pokémon by half of the difference past 10.
+  - Lv 1 dungeons and Kecleon are unchanged; fixed boss HP grows with the boss's level.
+
 ## v0.6.46 (28 Oct 2026): Move Growth
 
 - **Move Growth** from Explorers Remixed (SkyTemple's patch, the Gates to Infinity system), option Game Options -> Dungeon -> Move growth (on by default). Damaging moves level 1-25 with Remixed's table (tools/eos/gen_move_growth.py reads BALANCE/mgrowth.bin): up to +30 power, +30 PP and +12 accuracy. Each use gives the move 3 Exp.; a move's level is shared by every team member that knows it; enemies never benefit.
