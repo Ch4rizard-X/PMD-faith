@@ -3,6 +3,13 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.3 (28 Oct 2026)
+
+- **Dungeon info on the second screen:** highlighting a dungeon in a dungeon list shows its wild Pokémon as portraits with names in the Pokédex colours (white = no Friend Area yet, green = Friend Area owned, cyan = recruited; unseen ones are silhouettes named ???), the level range and "No recruiting here" where it applies. Long lists scroll (drag on the second screen, right stick, or the mouse wheel in the PC window).
+- **Hold A+B to keep waiting** (Red): after a short pause, turns keep passing while A+B, the Wait key or the on-screen Wait button is held.
+- **Reviver Seed:** reviving shows Red's beam of light with its sound (sub_8042148), and a used Reviver Seed turns into a Plain Seed as in Red.
+- **Inviting Orb / Rare Quality Orb** now work: defeated Pokémon are twice as likely to join for the rest of the floor.
+
 ## v0.8.1 (28 Oct 2026)
 
 - **Recruiting in Explorers of Sky dungeons:** the story, Special Episode and post-game EoS dungeons now allow recruiting (EoS turned it off for story reasons that don't apply here). A boss floor (Pits, Peaks, Chambers, Summits ...) has no recruiting the first time; once its dungeon is cleared, recruiting works there and the boss itself can join (and be shiny-hunted). Lv 1 dungeons (Zero Isle East / West / South, Destiny Tower, Deep Concealed Ruins) still don't allow it; Red's own dungeons keep Red's rules.

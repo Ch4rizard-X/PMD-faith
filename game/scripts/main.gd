@@ -369,6 +369,9 @@ func _ready() -> void:
 			L.level = 5
 			L.held = "friendbow"
 			check.call("rate with Friend Bow", d.recruit_rate(L, t), base + 100)
+			d.fs.set_meta("inviting", true)
+			check.call("Inviting Orb doubles it", d.recruit_rate(L, t), (base + 100) * 2)
+			d.fs.remove_meta("inviting")
 			L.held = ""
 			# --- rules
 			var mk := func(sp: String) -> Mon:
@@ -925,6 +928,72 @@ func _ready() -> void:
 			Game.settings.qol_movegrowth = false
 			MoveGrowth.sync_all(dungeon)
 			print("MGTEST off: slot pp=%d/%d applied p=%d" % [int(L.moves[mi].pp), int(L.moves[mi].max_pp), int(MoveGrowth.apply(L, mvn, base).p)])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--dhovershot"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.settings[BottomScreen.SETTING] = "window"
+			for sp in Pokedex.species_in("mt_steel"):
+				Pokedex.mark_seen(sp)
+			var sps := Pokedex.species_in("mt_steel")
+			if sps.size() > 1:
+				Game.flags["seen"].erase(sps[sps.size() - 1])
+			Game.friend_areas.append(Services.area_of(sps[0]))
+			var e: Dictionary = Game._entry(sps[0], "x", 5)
+			e["area"] = Services.area_of(sps[0])
+			Game.friends.append(e)
+			if sps.size() > 2:
+				Game.friend_areas.append(Services.area_of(sps[1]))
+			BottomScreen.setup(self)
+			await get_tree().create_timer(0.5).timeout
+			BottomScreen.instance.refresh_mode()
+			await get_tree().create_timer(0.5).timeout
+			BottomScreen.hover_item("dungeon:mt_steel")
+			await get_tree().create_timer(1.0).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://dhover.png")
+			for sp2 in Pokedex.species_in("silver_trench"):
+				Pokedex.mark_seen(sp2)
+			BottomScreen.hover_item("dungeon:silver_trench")
+			await get_tree().create_timer(0.8).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://dhover_long0.png")
+			BottomScreen.instance.scroll_dungeon(2)
+			await get_tree().create_timer(0.8).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://dhover_long1.png")
+			print("DHOVER saved mode=", BottomScreen.instance.mode)
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--dhovershot"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.settings[BottomScreen.SETTING] = "window"
+			var sps := Pokedex.species_in("mt_steel")
+			for sp in sps:
+				Pokedex.mark_seen(sp)
+			if sps.size() > 1:
+				Game.flags["seen"].erase(sps[sps.size() - 1])
+			Game.friend_areas.append(Services.area_of(sps[0]))
+			var e: Dictionary = Game._entry(sps[0], "x", 5)
+			e["area"] = Services.area_of(sps[0])
+			Game.friends.append(e)
+			if sps.size() > 2:
+				Game.friend_areas.append(Services.area_of(sps[1]))
+			BottomScreen.setup(self)
+			await get_tree().create_timer(0.5).timeout
+			BottomScreen.instance.refresh_mode()
+			await get_tree().create_timer(0.5).timeout
+			BottomScreen.hover_item("dungeon:mt_steel")
+			await get_tree().create_timer(1.0).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://dhover.png")
+			for sp2 in Pokedex.species_in("silver_trench"):
+				Pokedex.mark_seen(sp2)
+			BottomScreen.hover_item("dungeon:silver_trench")
+			await get_tree().create_timer(0.8).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://dhover_long0.png")
+			BottomScreen.instance.scroll_dungeon(2)
+			await get_tree().create_timer(0.8).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://dhover_long1.png")
+			print("DHOVER saved mode=", BottomScreen.instance.mode)
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--hardlist"):
@@ -2823,6 +2892,22 @@ func _fxtest() -> void:
 			prev = times[i]
 			get_viewport().get_texture().get_image().save_png("user://mega%d_%d.png" % [style, i])
 			print("MEGA ", i, " ", T2.sp, " ", T2.visual.man.get("name", T2.visual.man.keys().slice(0, 4)))
+		get_tree().quit()
+		return
+	if OS.get_cmdline_user_args().has("--reviveshot"):
+		var T3: Mon = dungeon.fs.mons[1]
+		T3.pos = L.pos + Vector2i(1, 0)
+		T3.visual.position = dungeon._px(T3.pos)
+		dungeon.set_zoom(2.0)
+		T3.held = "reviver"
+		T3.hp = 0
+		await get_tree().create_timer(0.3).timeout
+		dungeon.faint(T3, null)
+		for i in 4:
+			await get_tree().create_timer(0.15).timeout
+			get_viewport().get_texture().get_image().save_png("user://revive_%d.png" % i)
+		await get_tree().create_timer(1.0).timeout
+		print("REVIVE hp=%d/%d held=%s alive=%s" % [T3.hp, T3.max_hp, T3.held, str(dungeon.fs.mons.has(T3))])
 		get_tree().quit()
 		return
 	if OS.get_cmdline_user_args().has("--beamshot"):

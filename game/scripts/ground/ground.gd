@@ -498,6 +498,8 @@ var _stick_zooming := false
 func _stick_zoom(dt: float) -> void:
 	if demo or (cur_map >= 223 and cur_map <= 227):
 		return
+	if BottomScreen.hover.begins_with("dungeon:") and BottomScreen.instance != null and BottomScreen.instance.is_active():
+		return                                   # the right stick scrolls the dungeon list on the second screen
 	var ax := 0.0
 	for dev in Input.get_connected_joypads():
 		var v := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y)

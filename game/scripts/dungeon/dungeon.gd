@@ -837,6 +837,17 @@ func _process_main(dt: float) -> void:
 			leader_action({"type": "wait"})
 		return
 	_blk_t = 0.0
+	# Red: holding A+B (or the Wait key) keeps passing turns -- after a short pause, about 10 turns a second
+	var wait_btn = hud._btns.get("wait") if hud != null else null
+	if (Input.is_action_pressed("gp_a") and Input.is_action_pressed("gp_b")) or Input.is_action_pressed("act_wait") \
+			or (wait_btn != null and wait_btn.visible and wait_btn.is_pressed()):
+		_hold_wait_t += dt
+		if _hold_wait_t >= 0.3:
+			_hold_wait_t = 0.2
+			leader_action({"type": "wait"})
+			return
+	else:
+		_hold_wait_t = 0.0
 	var d := _input_dir()
 	_running = Input.is_action_pressed("act_run") or Input.is_action_pressed("gp_b") or (hud != null and hud.pad_run and hud.pad_dir >= 0)
 	if d >= 0 and Input.is_action_pressed("gp_b"):
@@ -933,6 +944,7 @@ func _input(e: InputEvent) -> void:
 ## L+R throw set item · Select map · X moves · Y items.
 var _rotate := false
 var _b_t0 := -1.0
+var _hold_wait_t := 0.0
 var _b_moved := false
 var _r_t0 := -1.0
 
@@ -2308,8 +2320,12 @@ func faint(t: Mon, killer: Mon) -> void:
 					seed_i = -2
 		if seed_i != -2:
 			var sid: String = t.held if seed_i == -1 else str(Game.bag[seed_i].id)
+			# Red (dungeon_damage.c): a used Reviver Seed turns into a Plain Seed
+			var leftover := "plainseed" if sid == "reviver" and DB.items.has("plainseed") else ""
 			if seed_i == -1:
-				t.held = ""
+				t.held = leftover
+			elif leftover != "":
+				Game.bag[seed_i] = {"id": leftover, "n": 1}
 			else:
 				_take_bag(seed_i)
 			var frac := float(DB.items.get(sid, {}).get("v", 1))
@@ -2321,8 +2337,13 @@ func faint(t: Mon, killer: Mon) -> void:
 			if t.is_leader:
 				belly = belly_max
 			t.set_meta("fainting", false)
+			if t.visual:
+				t.visual.fade = 1.0
+				t.visual.play("Idle")
+			# sub_8042148: sound 0x1A7 and effect 318 (the beam of light) on the Pokémon
+			Audio.sfx("423")
+			await rescue_beam([t])
 			_msg("%s was revived by the %s!" % [_nm(t), DB.item_name(sid)])
-			Audio.sfx("heal")
 			exit_summary = {}
 			_update_hud()
 			return
@@ -2397,6 +2418,8 @@ func recruit_rate(r: Mon, t: Mon) -> int:
 		if r.level >= int(e[0]):
 			rate += int(e[1])
 			break
+	if fs != null and bool(fs.get_meta("inviting", false)):
+		rate *= 2                                        # Inviting Orb
 	return rate
 
 ## Red: each legendary joins only once. Shinies: a shiny one may still join when you only have the normal one.
@@ -2525,7 +2548,12 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 		if r.level >= int(e[0]):
 			rate += int(e[1])
 			break
-	if fs.rng.randi_range(0, 999) >= rate:
+	if bool(fs.get_meta("inviting", false)):
+		rate *= 2                                        # Inviting Orb: twice as likely on this floor
+	var missed := fs.rng.randi_range(0, 999) >= rate
+	if missed and r.held == "friendbow":
+		missed = fs.rng.randi_range(0, 999) >= rate
+	if missed:
 		return false
 	# it gets up and asks to join
 	t.hp = t.max_hp
@@ -3359,6 +3387,10 @@ func _use_item_id(m: Mon, id: String, announce := true) -> void:
 	if cat == "orbs":
 		await use_orb(m, id)
 		return
+	if str(I.get("kind", "")) == "inviting":            # EoS Inviting Orb / Rare Quality Orb
+		_msg("%s used the %s." % [_nm(m), I.get("name", id)])
+		await _item_effect(m, m, id, false)
+		return
 	var verb := TeamScreens.item_verb(id)
 	if cat in ["other", "link_box", "tms_hms", "used_tm", "held_items", "exclusive"] or verb == "":
 		_msg("The %s can't be used here." % I.get("name", id))
@@ -3399,6 +3431,10 @@ func _item_effect(user: Mon, m: Mon, id: String, thrown: bool) -> void:
 		m.hp = mini(m.max_hp, m.hp + maxi(1, m.max_hp / 8))
 		_msg("%s recovered some HP!" % _nm(m))
 	match kind:
+		"inviting":
+			fs.set_meta("inviting", true)
+			_msg("Defeated Pokémon are more likely to join\nthe team on this floor!")
+			return
 		"confuse_x":
 			_set_item_status(m, "cross_eyed", 10, "%s became cross-eyed!")
 			return

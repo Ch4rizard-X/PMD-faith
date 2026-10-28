@@ -42,6 +42,11 @@ const GOOD_C := Color(0.45, 1.0, 0.5)
 
 static var instance: BottomScreen
 static var hover := ""                # item under the cursor in the open menu: its description is shown here
+static var dh_row := 0                # dungeon hover: first portrait row shown (the list scrolls when it's long)
+var _dh_rows_max := 0                 # rows that don't fit
+var _drag_y := -1.0                   # touch / mouse drag on the second screen (scrolls the dungeon list)
+var _dh_drag_acc := 0.0
+var _stick_t := 0.0
 var hover_label: RichTextLabel
 
 var main: Node
@@ -81,6 +86,7 @@ static func hover_item(id: String) -> void:
 	if id == hover:
 		return
 	hover = id
+	dh_row = 0
 	if instance and instance.ui:
 		instance._refresh()
 
@@ -256,6 +262,8 @@ func _open_window() -> void:
 # ------------------------------------------------------------------ input
 ## A tap / click in SubViewport pixels. Every input source ends up here.
 func inject(pos: Vector2, pressed: bool) -> void:
+	_drag_y = pos.y if pressed else -1.0
+	_dh_drag_acc = 0.0
 	# a tap on the second screen also skips the boot intro (those taps never reach the main window)
 	if pressed and main != null and is_instance_valid(main.get("ground")) and main.ground.demo and main.ground.demo_cancel_ok:
 		main.ground._demo_tap = true
@@ -277,6 +285,13 @@ func inject(pos: Vector2, pressed: bool) -> void:
 func inject_drag(pos: Vector2) -> void:
 	if sub == null:
 		return
+	if hover.begins_with("dungeon:") and _drag_y >= 0.0:
+		_dh_drag_acc += _drag_y - pos.y                  # drag up = scroll down
+		_drag_y = pos.y
+		var step := 30.0 * P
+		while absf(_dh_drag_acc) >= step:
+			scroll_dungeon(1 if _dh_drag_acc > 0 else -1)
+			_dh_drag_acc -= step * signf(_dh_drag_acc)
 	var mm := InputEventMouseMotion.new()
 	mm.position = pos
 	mm.global_position = pos
@@ -299,7 +314,17 @@ func view_to_sub(local: Vector2) -> Vector2:
 	var off := (sz - Vector2(logical) * sc) / 2
 	return (local - off) / sc
 
+## Scroll the dungeon list by whole portrait rows.
+func scroll_dungeon(d: int) -> void:
+	var n := clampi(dh_row + d, 0, _dh_rows_max)
+	if n != dh_row:
+		dh_row = n
+
 func _on_view_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and e.pressed and e.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		scroll_dungeon(-1 if e.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
+		view.accept_event()
+		return
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
 		inject(view_to_sub(e.position), e.pressed)
 		view.accept_event()
@@ -335,6 +360,19 @@ func test_tap(key: String) -> bool:
 func _process(dt: float) -> void:
 	if mode == "" or sub == null:
 		return
+	if hover.begins_with("dungeon:"):                    # right stick up / down scrolls a long dungeon list
+		var ay := 0.0
+		for dev in Input.get_connected_joypads():
+			var v := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y)
+			if absf(v) > absf(ay):
+				ay = v
+		if absf(ay) > 0.5:
+			_stick_t -= dt
+			if _stick_t <= 0.0:
+				_stick_t = 0.18
+				scroll_dungeon(1 if ay > 0 else -1)
+		else:
+			_stick_t = 0.0
 	_track_scene()
 	_redraw_t -= dt
 	if _redraw_t <= 0.0:
@@ -367,12 +405,12 @@ func _state_key() -> String:
 			str(d.autoplay), str(d.busy), str(d.menu_open), str(d.result_sent), str(map_zoom), str(d.floor_i)])
 		for m in d.fs.mons:
 			parts.append("%d,%d,%d,%d" % [m.uid, m.pos.x, m.pos.y, m.hp])
-		parts.append(hover)
+		parts.append(hover + str(dh_row))
 		return "|".join(parts)
 	var t := _town() if _scene == "town" else null
 	if t:
-		return "town|%s|%d|%s|%s" % [str(Vector2i(t.pos)), Game.money, str(map_zoom), hover]
-	return _scene + "|" + hover
+		return "town|%s|%d|%s|%s%d" % [str(Vector2i(t.pos)), Game.money, str(map_zoom), hover, dh_row]
+	return _scene + "|" + hover + str(dh_row)
 
 func _push_frame() -> void:
 	var img := sub.get_texture().get_image()
@@ -701,6 +739,9 @@ func _draw_ui() -> void:
 func _draw_hover() -> void:
 	if hover_label == null:
 		return
+	if hover.begins_with("dungeon:"):
+		_draw_dungeon_hover(hover.substr(8))
+		return
 	var I: Dictionary = DB.items.get(hover, {}) if hover != "" else {}
 	if I.is_empty():
 		hover_label.visible = false
@@ -722,6 +763,61 @@ func _draw_hover() -> void:
 	hover_label.position = Vector2(r.position.x + 6 * P, y + UITheme.LINE + 2 * P)
 	hover_label.size = Vector2(r.size.x - 12 * P, r.end.y - hover_label.position.y - 4 * P)
 	hover_label.text = TeamScreens.item_desc(hover)
+
+## The dungeon under the cursor in a dungeon list: its wild Pokémon as portraits with their names in the
+## Pokédex colours (white = no Friend Area yet, green = Friend Area owned, cyan = recruited); a Pokémon not seen
+## yet is a dark silhouette named ???. Level range in the corner, "No recruiting here" where it applies.
+func _draw_dungeon_hover(dk: String) -> void:
+	hover_label.visible = false
+	var r := _hover_rect()
+	_panel(r, true)
+	var x0 := r.position.x + 6 * P
+	var y := r.position.y + 4 * P
+	_text(ui, Vector2(x0, y), _fit(Services.dname(dk), r.end.x - x0 - 60 * P), GOLD)
+	var rng := Pokedex.level_range(dk)
+	if int(rng[1]) > 0:
+		var info := "Lv %d-%d" % [int(rng[0]), int(rng[1])]
+		_text(ui, Vector2(r.end.x - 6 * P - _text_w(info), y), info, DIM)
+	y += UITheme.LINE + 2 * P
+	if not Dungeon.can_recruit_in(dk):
+		_text(ui, Vector2(x0, y), "No recruiting here", Color8(0xff, 0x80, 0x70), FS_SMALL)
+		y += FS_SMALL + 3 * P
+	var sps := Pokedex.species_in(dk)
+	if sps.is_empty():
+		_text(ui, Vector2(x0, y), "No wild Pokémon.", DIM)
+		return
+	var avail := r.size.x - 12 * P
+	var cols := maxi(1, int(avail / (30 * P)))
+	var cw := avail / cols
+	var ps := mini(int(cw) - 4 * P, 24 * P)           # portrait size
+	var ch := ps + FS_SMALL + 4 * P
+	var rows := maxi(1, int((r.end.y - 4 * P - y) / ch))
+	var total_rows := ceili(sps.size() / float(cols))
+	_dh_rows_max = maxi(0, total_rows - rows)
+	dh_row = clampi(dh_row, 0, _dh_rows_max)
+	var first := dh_row * cols
+	var shown := mini(sps.size() - first, cols * rows)
+	for j in shown:
+		var i := first + j
+		var sp: String = sps[i]
+		var cx := x0 + (j % cols) * cw
+		var cy := y + (j / cols) * ch
+		var seen := Pokedex.is_seen(sp)
+		var tex: Texture2D = Dialog.portrait_tex(sp)
+		var pr := Rect2(cx + (cw - ps) / 2.0, cy, ps, ps)
+		ui.draw_rect(pr.grow(P), OUTLINE)
+		if tex:
+			ui.draw_texture_rect(tex, pr, false, Color.WHITE if seen else Color(0.05, 0.05, 0.12))
+		var col: Color = PokedexUI.list_color(sp) if seen else DIM
+		var nm := _fit(str(DB.species.get(sp, {}).get("name", sp)) if seen else "???", cw - 2 * P, FS_SMALL)
+		_text(ui, Vector2(cx + (cw - _text_w(nm, FS_SMALL)) / 2.0, cy + ps + 2 * P), nm, col, FS_SMALL)
+	if _dh_rows_max > 0:                                # scroll marks: more above / below
+		var mx := r.end.x - 8 * P
+		if dh_row > 0:
+			ui.draw_colored_polygon(PackedVector2Array([Vector2(mx - 4 * P, y + 4 * P), Vector2(mx + 4 * P, y + 4 * P), Vector2(mx, y - 1 * P)]), GOLD)
+		if dh_row < _dh_rows_max:
+			var by := r.end.y - 6 * P
+			ui.draw_colored_polygon(PackedVector2Array([Vector2(mx - 4 * P, by - 4 * P), Vector2(mx + 4 * P, by - 4 * P), Vector2(mx, by + 1 * P)]), GOLD)
 
 func _draw_idle() -> void:
 	var W := float(logical.x)

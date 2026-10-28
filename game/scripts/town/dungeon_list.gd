@@ -23,6 +23,8 @@ static func pick(root: Control, opts: Array, ids: Array, title := "Dungeons", ic
 		var r := int(ids[k])
 		var row := {"text": str(opts[k]), "icon": _col_icon("")}
 		var dkey := str(keys[k]) if k < keys.size() else (_key_of(r) if r >= 0 else "")
+		if dkey != "":
+			row.item = "dungeon:" + dkey          # remake: the second screen lists what lives there
 		if show_cleared() and dkey != "" and dkey in Game.cleared:
 			row.right = TeamScreens.star_mark()           # remake: a cleared dungeon (Rescue Team DX style)
 		if k < icons.size():
