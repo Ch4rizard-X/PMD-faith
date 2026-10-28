@@ -1,7 +1,7 @@
 class_name Difficulty
 extends RefCounted
-## Remake option: Hard mode. Only enemy and boss levels change (AI, items, hunger, rescues and recruiting
-## stay Red's). Stored per adventure in Game.flags.hard_mode; picked at New Game, changeable any time in
+## Remake option: Hard mode. Enemy and boss levels scale, and wild Pokémon keep arriving up to 20 per floor,
+## one every 24 turns (TurnRules.HARD_*); AI, items, hunger, rescues and recruiting stay Red's. Stored per adventure in Game.flags.hard_mode; picked at New Game, changeable any time in
 ## Game Options -> Dungeon -> Difficulty.
 ##
 ## Scaling: when the team out-levels a floor, its Pokémon rise by the difference, keeping Red's spread

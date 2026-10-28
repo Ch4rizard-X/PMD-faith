@@ -968,8 +968,18 @@ static func _move_parts(n: String) -> Array:
 	var pw := int(d.get("p", 0))
 	var acc := int(d.get("a1", 100))
 	var parts: Array = [UITheme.red_text(desc), "\n\n"]
-	parts.append({"table": 2, "cells": ["Range  ", rng, "Type", "[color=%s]%s[/color]" % [CYAN, str(d.get("t", "Normal"))],
-		"Power", str(pw) if pw > 0 and str(d.get("c", "P")) != "X" else "--", "Accuracy  ", "--" if acc >= 100 else "%d%%" % acc]})
+	var pw_s := str(pw) if pw > 0 and str(d.get("c", "P")) != "X" else "--"
+	var acc_s := "--" if acc >= 100 else "%d%%" % acc
+	var cells := ["Range  ", rng, "Type", "[color=%s]%s[/color]" % [CYAN, str(d.get("t", "Normal"))], "Power", pw_s, "Accuracy  ", acc_s]
+	if MoveGrowth.enabled() and MoveGrowth.grows(n):
+		var g := MoveGrowth.info(n)
+		if int(g.power) > 0 and pw_s != "--":
+			cells[5] = "%s [color=#8fd8ff]+%d[/color]" % [pw_s, int(g.power)]
+		if int(g.acc) > 0 and acc_s != "--":
+			cells[7] = "%d%% [color=#8fd8ff]+%d[/color]" % [mini(100, acc + int(g.acc)), int(g.acc)]
+		cells.append_array(["Growth", "Lv. %d  %s" % [int(g.level), ("%d/%d" % [int(g.exp), int(g.need)]) if int(g.need) > 0 else "MAX"],
+			"PP bonus", "+%d" % int(g.pp)])
+	parts.append({"table": 2, "cells": cells})
 	return parts
 
 ## Red's move description (ShowMovesInfoWindow): Left/Right walks a linked chain.
@@ -1242,7 +1252,10 @@ static func _move_rows(x, leader: bool) -> Array:
 		var pp := int(d.get("pp", 0))
 		var linked := i > 0 and bool(d.get("linked", false))
 		var nm := str(d.name)
-		var row := {"text": ("[color=%s]%s[/color]" % [RED, nm]) if pp <= 0 else nm, "right": "%2d/%2d" % [pp, int(d.get("max_pp", pp))],
+		var shown := ("[color=%s]%s[/color]" % [RED, nm]) if pp <= 0 else nm
+		if MoveGrowth.enabled() and MoveGrowth.grows(nm):
+			shown += " [color=#8fd8ff]Lv.%d[/color]" % int(MoveGrowth.info(nm).level)
+		var row := {"text": shown, "right": "%2d/%2d" % [pp, int(d.get("max_pp", pp))],
 			"indent": linked, "skip": linked}
 		if leader:
 			row.icon = icon("set") if bool(d.get("set", false)) else icon("blank")

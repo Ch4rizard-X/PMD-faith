@@ -3,6 +3,14 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.46 (28 Oct 2026): Move Growth
+
+- **Move Growth** from Explorers Remixed (SkyTemple's patch, the Gates to Infinity system), option Game Options -> Dungeon -> Move growth (on by default). Damaging moves level 1-25 with Remixed's table (tools/eos/gen_move_growth.py reads BALANCE/mgrowth.bin): up to +30 power, +30 PP and +12 accuracy. Each use gives the move 3 Exp.; a move's level is shared by every team member that knows it; enemies never benefit.
+  - Ginseng gives 300 Move Exp. (1000 when lucky) to the leader's topmost growing move while the option is on; Red's Ginseng otherwise.
+  - Moves list shows "Lv.X"; the move info page shows the power / accuracy bonus, Exp. to the next level and the PP bonus.
+- **Red's Ginseng boost now counts in damage** (it was stored on the move but never added to its power).
+- **Hard mode:** wild Pokémon keep arriving up to 20 per floor (was 10), one every 24 turns (was 36). Floors with a Monster House keep Red's cap.
+
 ## v0.6.45 (28 Oct 2026): Hard mode
 
 - **Difficulty: Normal / Hard**, chosen when a new adventure starts and changeable any time in Game Options -> Dungeon -> Difficulty. Hard only changes levels; AI, items, hunger, rescues and recruiting stay Red's.

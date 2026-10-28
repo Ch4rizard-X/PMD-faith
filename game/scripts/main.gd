@@ -885,6 +885,48 @@ func _ready() -> void:
 			print("FATEST map keys sample=%s" % str(wm_keys.slice(0, 12)))
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--mgtest"):
+		(func():
+			Dialog.auto = true
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dungeon.test_invincible = true
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(0.5).timeout
+			var L: Mon = dungeon.fs.leader
+			var mi := 0
+			for k in L.moves.size():
+				if MoveGrowth.grows(str(L.moves[k].name)):
+					mi = k
+					break
+			var mvn := str(L.moves[mi].name)
+			for mv0 in L.moves:
+				print("MGTEST move ", mv0.name, " grows=", MoveGrowth.grows(str(mv0.name)), " pp ", mv0.pp, "/", mv0.max_pp)
+			var base: Dictionary = DB.moves[mvn]
+			print("MGTEST %s base p=%d a1=%s info0=%s" % [mvn, int(base.p), str(base.get("a1")), str(MoveGrowth.info(mvn))])
+			var foe: Mon = null
+			for x in dungeon.fs.mons:
+				if not x.is_team():
+					foe = x
+					break
+			for i in 40:
+				if foe:
+					foe.pos = L.pos + Vector2i(1, 0)
+					foe.hp = foe.max_hp
+				L.moves[mi].pp = 30
+				await dungeon.do_attack(L, mvn, 2)
+			print("MGTEST after 40 uses: exp=%d info=%s slot pp=%d/%d mg_pp=%s" % [MoveGrowth.exp_of(mvn), str(MoveGrowth.info(mvn)), int(L.moves[mi].pp), int(L.moves[mi].max_pp), str(L.moves[mi].get("mg_pp"))])
+			var ap := MoveGrowth.apply(L, mvn, base)
+			print("MGTEST applied p=%d a1=%s (base p=%d)" % [int(ap.p), str(ap.get("a1")), int(base.p)])
+			await dungeon._item_effect(L, L, "ginseng", false)
+			print("MGTEST after ginseng: exp=%d info=%s" % [MoveGrowth.exp_of(mvn), str(MoveGrowth.info(mvn))])
+			Game.flags.move_exp[mvn] = 99999
+			MoveGrowth.sync_all(dungeon)
+			print("MGTEST maxed: info=%s slot pp=%d/%d" % [str(MoveGrowth.info(mvn)), int(L.moves[mi].pp), int(L.moves[mi].max_pp)])
+			Game.settings.qol_movegrowth = false
+			MoveGrowth.sync_all(dungeon)
+			print("MGTEST off: slot pp=%d/%d applied p=%d" % [int(L.moves[mi].pp), int(L.moves[mi].max_pp), int(MoveGrowth.apply(L, mvn, base).p)])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--hardtest"):
 		(func():
 			Dialog.auto = true

@@ -65,6 +65,7 @@ func _entry(sp: String, nm: String, L: int) -> Dictionary:
 	return {"sp": sp, "name": nm, "level": L, "exp": DB.exp_at(sp, L), "moves": DB.default_moves(sp, L), "iq": 0, "held": "", "bonus": {}}
 
 func mon_from_entry(e: Dictionary) -> Mon:
+	MoveGrowth.sync_moves(e.get("moves", []))      # Move Growth PP bonus (or its removal) before the dungeon
 	var nm0 := str(e.get("name", ""))
 	if nm0.strip_edges() == "":
 		nm0 = str(DB.species.get(str(e.sp), {}).get("name", "???"))    # Red shows the species name for an unnamed Pokémon

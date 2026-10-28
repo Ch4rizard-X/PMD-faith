@@ -1817,6 +1817,10 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 				return
 			if not is_temp(m) and not (EosItems.has(m, "free_pp") and fs.rng.randi_range(0, 99) < 20):   # DX: temps use no PP
 				slot.pp = maxi(0, int(slot.pp) - IQSky.pp_cost(m, move_name, fs.rng, self))
+		if int(slot.get("ginseng", 0)) > 0:          # Red's Ginseng boost adds to the move's power (CalcDamage)
+			mv = mv.duplicate()
+			mv.p = int(mv.get("p", 0)) + int(slot.ginseng)
+		mv = MoveGrowth.apply(m, move_name, mv)       # remake option: Remixed's Move Growth
 	if announce:
 		m.last_move = move_name
 	if move_name != "" and announce:
@@ -1866,6 +1870,11 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			targets.erase(t_sp)
 	if not slot.is_empty() and announce and not is_temp(m):
 		slot.pp = maxi(0, int(slot.pp) - AbilityFx.pressure_extra(m, targets, fs))    # Pressure
+	if move_name != "" and announce and m.is_team() and not is_temp(m) and not slot.is_empty():
+		var mg_lv := MoveGrowth.add_exp(move_name, MoveGrowth.EXP_PER_USE)          # Move Growth: 3 Exp. a use
+		if mg_lv > 0:
+			MoveGrowth.sync_all(self)
+			_msg("[color=#7fe0ff]%s[/color] grew to Lv. %d!" % [move_name, mg_lv])
 	if move_name != "" and not _quiet:
 		await MoveFx.play(self, m, move_name, mv, d, targets)
 	var hits := maxi(1, int(mv.get("hits", 1)))
@@ -3441,6 +3450,25 @@ func _item_effect(user: Mon, m: Mon, id: String, thrown: bool) -> void:
 			_set_item_status(m, "cross_eyed", 10, "%s became cross-eyed!")
 			return
 		"ginseng":
+			if MoveGrowth.enabled():
+				# Remixed's Move Growth: Ginseng gives Move Exp. to the topmost growing move
+				var top := ""
+				for mv0 in m.moves:
+					if MoveGrowth.grows(str(mv0.name)):
+						top = str(mv0.name)
+						break
+				if top == "":
+					_msg("But nothing happened.")
+					return
+				var lucky := fs.rng.randi_range(0, 99) < 12
+				if lucky:
+					_msg("Lucky! The move got a lot stronger!")
+				var lv := MoveGrowth.add_exp(top, MoveGrowth.GINSENG_LUCKY_EXP if lucky else MoveGrowth.GINSENG_EXP)
+				_msg("[color=#7fe0ff]%s[/color] got stronger!" % top)
+				if lv > 0:
+					MoveGrowth.sync_all(self)
+					_msg("[color=#7fe0ff]%s[/color] grew to Lv. %d!" % [top, lv])
+				return
 			var up := 3 if fs.rng.randi_range(0, 99) < 12 else 1      # gGinsengPlus3BoostChance
 			var boosted := false
 			if m.is_leader:

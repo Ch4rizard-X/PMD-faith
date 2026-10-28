@@ -153,6 +153,9 @@ const KECLEON_SPAWN_INTERVAL := 5       # gKecleonSpawnIntervalFrames (after ste
 ## -> gMaxWildMonsInMonsterHouse (10); floor WITH a Monster House -> gMaxWildMonsInRoom (4).
 const MAX_WILD_MONS_IN_MONSTER_HOUSE := 10
 const MAX_WILD_MONS_IN_ROOM := 4
+## Remake Hard mode: wild Pokémon keep arriving up to 20 on a normal floor, one every 24 turns.
+const HARD_MAX_WILD := 20
+const HARD_SPAWN_INTERVAL := 24
 const SPAWN_MIN_LEADER_DISTANCE := 6    # sub_8083660 first pass: |dx| >= 6 or |dy| >= 6 from the leader
 const MONSTER_HOUSE_MIN_MONS := 8       # gMonsterHouseMinMons
 const MONSTER_HOUSE_MAX_MONS := 12      # gMonsterHouseMaxMons
@@ -531,6 +534,8 @@ static func _on_status_end(m: Mon, k: String, fs: FloorState, out: Array[String]
 static func spawn_interval(fs: FloorState) -> int:
 	if fs != null and bool(fs.get_meta("stole_from_kecleon", false)):
 		return KECLEON_SPAWN_INTERVAL
+	if Difficulty.hard():
+		return HARD_SPAWN_INTERVAL
 	return WILD_SPAWN_INTERVAL
 
 ## Wild-Pokémon cap checked by TrySpawnWildMonster (see the constants' note).
@@ -538,7 +543,7 @@ static func max_wild(fs: FloorState) -> int:
 	if fs != null and bool(fs.get_meta("stole_from_kecleon", false)):
 		return 9999
 	if fs == null or fs.monster_house_room < 0 or fs.monster_house_room == 255:
-		return MAX_WILD_MONS_IN_MONSTER_HOUSE
+		return HARD_MAX_WILD if Difficulty.hard() else MAX_WILD_MONS_IN_MONSTER_HOUSE
 	return MAX_WILD_MONS_IN_ROOM
 
 ## Whether a spawn may happen now (wild count excludes Pokémon standing on unbreakable tiles).
