@@ -3,6 +3,12 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.1 (28 Oct 2026)
+
+- **Recruiting in Explorers of Sky dungeons:** the story, Special Episode and post-game EoS dungeons now allow recruiting (EoS turned it off for story reasons that don't apply here). A boss floor (Pits, Peaks, Chambers, Summits ...) has no recruiting the first time; once its dungeon is cleared, recruiting works there and the boss itself can join (and be shiny-hunted). Lv 1 dungeons (Zero Isle East / West / South, Destiny Tower, Deep Concealed Ruins) still don't allow it; Red's own dungeons keep Red's rules.
+- **Prepare screen on Hard:** "Rec. Lv" and "foes X-Y" follow the planned level curve, with a Hard tag.
+- **Pokédex "Where it appears":** open Explorers of Sky dungeons are named instead of "???"; dungeons without recruiting are tagged; on Hard the levels follow the planned curve.
+
 ## v0.8.0 (28 Oct 2026): Move Growth, Hard mode level curve
 
 - **Move Growth** from Explorers Remixed (SkyTemple's patch, the Gates to Infinity system), option Game Options -> Dungeon -> Move growth (on by default). Damaging moves level 1-25 with Remixed's table (tools/eos/gen_move_growth.py reads BALANCE/mgrowth.bin): up to +30 power, +30 PP and +12 accuracy. Each use gives the move 3 Exp.; a move's level is shared by every team member that knows it; enemies never benefit.

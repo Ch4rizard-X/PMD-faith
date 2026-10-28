@@ -121,6 +121,10 @@ static func _dorder(dk: String) -> int:
 		return i
 	return 100 + int(DB.dungeons.get("dungeons", {}).get(dk, {}).get("index", 0))
 
+## A dungeon the player knows: opened, cleared, or an Explorers of Sky dungeon that's open now.
+static func dungeon_known(dk: String) -> bool:
+	return dk in Game.unlocked or dk in Game.cleared or dk in Story.eos_unlocked()
+
 static func locations(sp: String) -> Array:
 	_build()
 	return _loc.get(base(sp), [])
@@ -199,6 +203,9 @@ static func recruit_text(sp: String) -> String:
 
 ## Enemy level range in a dungeon: [min, max].
 static func level_range(dk: String) -> Array:
+	var hl := Difficulty.dungeon_levels(dk)      # Hard mode: the planned curve
+	if not hl.is_empty():
+		return [hl[0], hl[1]]
 	var lo := 999
 	var hi := 0
 	for f in DB.dungeons.get("dungeons", {}).get(dk, {}).get("floors", []):
@@ -210,6 +217,9 @@ static func level_range(dk: String) -> Array:
 
 ## Red's typical enemy level: spawn-weighted mean level over all floors (rounded).
 static func recommended_level(dk: String) -> int:
+	var hl := Difficulty.dungeon_levels(dk)      # Hard mode: the planned curve
+	if not hl.is_empty():
+		return int(hl[2])
 	var tot := 0.0
 	var w := 0.0
 	for f in DB.dungeons.get("dungeons", {}).get(dk, {}).get("floors", []):

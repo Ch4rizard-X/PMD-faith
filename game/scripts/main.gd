@@ -927,6 +927,19 @@ func _ready() -> void:
 			print("MGTEST off: slot pp=%d/%d applied p=%d" % [int(L.moves[mi].pp), int(L.moves[mi].max_pp), int(MoveGrowth.apply(L, mvn, base).p)])
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--hardlist"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for hard in [false, true]:
+				Difficulty.set_hard(hard)
+				for k in ["tiny_woods", "mt_steel", "sinister_woods", "magma_cavern", "sky_tower_summit", "uproar_forest", "wish_cave", "eos_zero_isle_east"]:
+					print("HARDLIST hard=%s %s rec %d range %s" % [hard, k, Pokedex.recommended_level(k), str(Pokedex.level_range(k))])
+			for k in ["tiny_woods", "eos_beach_cave", "eos_beach_cave_pit", "eos_dusk_forest", "eos_star_cave", "eos_zero_isle_east", "eos_zero_isle_north", "eos_destiny_tower", "eos_deep_concealed_ruins", "eos_regice_chamber"]:
+				print("RECRUIT %s %s" % [k, Dungeon.can_recruit_in(k)])
+			for l in Pokedex.locations("0004"):
+				print("DEXLOC %s known=%s hard=%s red=%d-%d" % [l.dkey, Pokedex.dungeon_known(str(l.dkey)), str(Difficulty.species_levels(str(l.dkey), "0004")), l.lv_min, l.lv_max])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--hardtest"):
 		(func():
 			Dialog.auto = true

@@ -139,8 +139,9 @@ class PrepView extends PanelContainer:
 		var rec := Pokedex.recommended_level(key)
 		var rng := Pokedex.level_range(key)
 		var rc := "#7fff7f" if avg >= rec else ("#ffdc4a" if avg >= rec - 3 else "#ff8070")
-		right.add_child(PokedexUI._rich("[color=#9ea8c7]Floors[/color] %s%dF  [color=#9ea8c7]Recruit[/color] %s" % ["" if up else "B", nf, "[color=#7fff7f]OK[/color]" if D.get("recruit", true) else "[color=#ff8070]No[/color]"]))
-		right.add_child(PokedexUI._rich("[color=#9ea8c7]Rec. Lv[/color] [color=%s]%d[/color] [color=#9ea8c7](foes %d-%d)[/color]" % [rc, rec, rng[0], rng[1]]))
+		right.add_child(PokedexUI._rich("[color=#9ea8c7]Floors[/color] %s%dF  [color=#9ea8c7]Recruit[/color] %s" % ["" if up else "B", nf, "[color=#7fff7f]OK[/color]" if Dungeon.can_recruit_in(key) else "[color=#ff8070]No[/color]"]))
+		right.add_child(PokedexUI._rich("[color=#9ea8c7]Rec. Lv[/color] [color=%s]%d[/color] [color=#9ea8c7](foes %d-%d)[/color]%s" % [rc, rec, rng[0], rng[1],
+			"  [color=#ff8070]Hard[/color]" if not Difficulty.dungeon_levels(key).is_empty() else ""]))
 		if party < Services.PARTY_MAX:
 			right.add_child(PokedexUI._rich("[color=#ffdc4a]Only %d may enter[/color]" % party))
 		var jobs := PrepareScreen.taken_jobs(key)

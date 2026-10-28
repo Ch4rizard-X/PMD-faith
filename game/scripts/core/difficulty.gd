@@ -53,9 +53,15 @@ static func team_level(dg) -> int:
 
 ## Red's usual wild level on this floor: the spawn-weighted average of the floor's list.
 static func floor_level(dg) -> int:
+	return floor_level_of(dg.ddata, int(dg.floor_i))
+
+static func floor_level_of(dd: Dictionary, fi: int) -> int:
 	var tot := 0.0
 	var w := 0.0
-	for e in dg.ddata.floors[dg.floor_i].get("pk", []):
+	var fls: Array = dd.get("floors", [])
+	if fi < 0 or fi >= fls.size():
+		return 0
+	for e in fls[fi].get("pk", []):
 		var p := float(e[2])
 		if p <= 0.0 or int(e[1]) >= 90:          # Kecleon (Lv 90) and other 0-weight entries don't count
 			continue
@@ -75,10 +81,12 @@ static func _red_to_hard(lv: int) -> int:
 	return best
 
 static func _post_game(dg) -> bool:
-	var k := str(dg.dkey)
+	return post_game_key(str(dg.dkey), dg.ddata)
+
+static func post_game_key(k: String, dd: Dictionary) -> bool:
 	if CURVE.has(k) or k in STORY_SIDE:
 		return false
-	if bool(dg.ddata.get("eos", false)):
+	if bool(dd.get("eos", false)):
 		return k in Story.EOS_POSTGAME
 	return true
 
@@ -87,15 +95,43 @@ static func _scaled(dg) -> bool:
 
 ## The Hard level of the current floor (the curve's value before the backstop).
 static func floor_target(dg) -> int:
-	var k := str(dg.dkey)
-	var n: int = maxi(1, dg.ddata.floors.size())
+	return floor_target_of(str(dg.dkey), dg.ddata, int(dg.floor_i))
+
+static func floor_target_of(k: String, dd: Dictionary, fi: int) -> int:
+	var n: int = maxi(1, (dd.get("floors", []) as Array).size())
 	if CURVE.has(k):
 		var c: Array = CURVE[k]
-		var t := 0.0 if n <= 1 else float(dg.floor_i) / float(n - 1)
+		var t := 0.0 if n <= 1 else float(fi) / float(n - 1)
 		return int(round(lerpf(float(c[0]), float(c[1]), clampf(t, 0.0, 1.0))))
-	if _post_game(dg):
-		return mini(MAX_LEVEL, POST_START + int(dg.floor_i) / 3)
-	return _red_to_hard(maxi(1, floor_level(dg)))
+	if post_game_key(k, dd):
+		return mini(MAX_LEVEL, POST_START + fi / 3)
+	return _red_to_hard(maxi(1, floor_level_of(dd, fi)))
+
+## For the Prepare screen / Pokédex: [lowest, highest, spawn-weighted mean] of a dungeon's wild levels on Hard
+## (the curve before the backstop). Empty when Hard is off or the dungeon keeps Red's levels (Lv 1 dungeons).
+static func dungeon_levels(k: String) -> Array:
+	var dd: Dictionary = DB.dungeons.get("dungeons", {}).get(k, {})
+	if not hard() or dd.is_empty() or bool(dd.get("level_reset", false)):
+		return []
+	var lo := 999
+	var hi := 0
+	var tot := 0.0
+	var w := 0.0
+	var fls: Array = dd.get("floors", [])
+	for fi in fls.size():
+		var target := floor_target_of(k, dd, fi)
+		var fl := floor_level_of(dd, fi)
+		for e in fls[fi].get("pk", []):
+			if int(e[2]) <= 0 or int(e[1]) <= 0 or int(e[1]) >= 90:
+				continue
+			var lv := clampi(target + (int(e[1]) - fl if fl > 0 else 0), 1, MAX_LEVEL)
+			lo = mini(lo, lv)
+			hi = maxi(hi, lv)
+			tot += lv * float(e[2])
+			w += float(e[2])
+	if hi <= 0:
+		return []
+	return [lo, hi, int(round(tot / w))]
 
 static func _backstop(dg, target: int) -> int:
 	var over := team_level(dg) - target - BACKSTOP_MARGIN
@@ -124,6 +160,28 @@ static func boss_level(dg, lv: int) -> int:
 	if bs > target:                             # a team far above the curve: bosses keep up too
 		want = maxi(want, bs + BOSS_BONUS)
 	return clampi(want, 1, MAX_LEVEL)
+
+## For the Pokédex: [lowest, highest] Hard level of one species in a dungeon (empty when Hard is off / Lv 1 dungeon).
+static func species_levels(k: String, sp: String) -> Array:
+	var dd: Dictionary = DB.dungeons.get("dungeons", {}).get(k, {})
+	if not hard() or dd.is_empty() or bool(dd.get("level_reset", false)):
+		return []
+	var lo := 999
+	var hi := 0
+	var fls: Array = dd.get("floors", [])
+	for fi in fls.size():
+		var target := -1
+		var fl := 0
+		for e in fls[fi].get("pk", []):
+			if str(e[0]).substr(0, 4) != sp.substr(0, 4) or int(e[2]) <= 0 or int(e[1]) >= 90:
+				continue
+			if target < 0:
+				target = floor_target_of(k, dd, fi)
+				fl = floor_level_of(dd, fi)
+			var lv := clampi(target + (int(e[1]) - fl if fl > 0 else 0), 1, MAX_LEVEL)
+			lo = mini(lo, lv)
+			hi = maxi(hi, lv)
+	return [lo, hi] if hi > 0 else []
 
 ## A boss's fixed HP (Red's boss HP / EoS arena HP), grown in step with its level.
 static func boss_hp(hp: int, base_lv: int, new_lv: int) -> int:

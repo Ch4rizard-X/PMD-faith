@@ -463,9 +463,16 @@ class DexEntry extends PanelContainer:
 		var start := (page - 1) * LOC_PER_PAGE
 		for i in range(start, mini(start + LOC_PER_PAGE, locs.size())):
 			var l: Dictionary = locs[i]
-			var known: bool = l.dkey in Game.unlocked
-			var lv := ("Lv%d" % l.lv_min) if int(l.lv_min) == int(l.lv_max) else ("Lv%d-%d" % [l.lv_min, l.lv_max])
-			lines.append("%s%s[/color] %s %s" % ["[color=#ffffff]" if known else "[color=#9ea8c7]", Services.dname(l.dkey) if known else "???", Pokedex.floors_text(l.dkey, l.floors), lv])
+			var known: bool = Pokedex.dungeon_known(str(l.dkey))
+			var lmin := int(l.lv_min)
+			var lmax := int(l.lv_max)
+			var hl := Difficulty.species_levels(str(l.dkey), sp)     # Hard mode: the planned curve
+			if not hl.is_empty():
+				lmin = int(hl[0])
+				lmax = int(hl[1])
+			var lv := ("Lv%d" % lmin) if lmin == lmax else ("Lv%d-%d" % [lmin, lmax])
+			var tag := "" if Dungeon.can_recruit_in(str(l.dkey)) else " [color=#ff8070]no recruiting[/color]"
+			lines.append("%s%s[/color] %s %s%s" % ["[color=#ffffff]" if known else "[color=#9ea8c7]", Services.dname(l.dkey) if known else "???", Pokedex.floors_text(l.dkey, l.floors), lv, tag])
 		return "\n".join(lines)
 
 	func _close(r: String) -> void:

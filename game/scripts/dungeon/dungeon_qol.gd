@@ -483,7 +483,7 @@ func recruit_text(m: Mon) -> String:
 		return ""
 	if m.side == "client":
 		return "[color=#7fe0ff]Client[/color]"
-	if not bool(dg.ddata.get("recruit", true)):
+	if not dg.recruit_ok_here():
 		return "[color=#ff8070]No recruiting here[/color]"
 	var S: Dictionary = DB.species.get(m.sp, {})
 	if int(S.get("recruit", 0)) == -999:

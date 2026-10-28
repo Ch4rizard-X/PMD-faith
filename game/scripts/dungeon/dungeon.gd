@@ -452,7 +452,7 @@ func _spawn_eos_bosses(a: Dictionary) -> void:
 			m.hp = m.max_hp
 		m.pos = p
 		m.facing = 0
-		m.recruit_ok = false
+		m.recruit_ok = dkey in Game.cleared        # remake: an EoS boss can join (and be shiny-hunted) once its dungeon is cleared
 		m.set_meta("eos_boss", true)
 		m.set_meta("boss", true)
 		fs.mons.append(m)
@@ -2420,6 +2420,25 @@ const RECRUIT_AFTER := {"0227": "CUTSCENE_FLAG_MT_STEEL_COMPLETE",
 const NEVER_RECRUIT := ["0380", "0381"]      # IsMonsterRecruitable: Latias and Latios never join
 
 ## The checks Red makes before rolling (IsMonsterRecruitable and TryRecruitMonster), without the roll.
+## Remake: Explorers of Sky dungeons recruit even where EoS didn't (story and Special Episode reasons don't
+## apply here). Not in Lv 1 dungeons, and a boss floor only after the dungeon has been cleared once.
+const EOS_NO_RECRUIT := ["eos_deep_concealed_ruins"]
+
+static func can_recruit_in(k: String) -> bool:
+	var dd: Dictionary = DB.dungeons.get("dungeons", {}).get(k, {})
+	if bool(dd.get("recruit", true)):
+		return true
+	if not bool(dd.get("eos", false)):
+		return false                             # Red's own rules stay
+	return not bool(dd.get("level_reset", false)) and not k in EOS_NO_RECRUIT
+
+func recruit_ok_here() -> bool:
+	if not can_recruit_in(dkey):
+		return false
+	if not bool(ddata.get("recruit", true)) and not eos_arena.is_empty():
+		return dkey in Game.cleared              # the boss room: one time without recruiting
+	return true
+
 func recruit_allowed(t: Mon) -> bool:
 	var sp4 := t.sp.substr(0, 4)
 	if sp4 in NEVER_RECRUIT:
@@ -2451,7 +2470,7 @@ static func is_temp(m: Mon) -> bool:
 ## Smarter partner AI: a foe the leader could recruit with its next hit (low HP, leader in range, allowed,
 ## room on the team). Partners leave it alone; not while the leader is in trouble.
 func recruit_candidate(t: Mon) -> bool:
-	if t.is_team() or not t.recruit_ok or not ddata.get("recruit", true) or not recruiting_unlocked():
+	if t.is_team() or not t.recruit_ok or not recruit_ok_here() or not recruiting_unlocked():
 		return false
 	if t.hp * 3 > t.max_hp:
 		return false
@@ -2472,7 +2491,7 @@ func recruit_candidate(t: Mon) -> bool:
 	return fs.team().size() < Services.PARTY_MAX
 
 func try_recruit(r: Mon, t: Mon) -> bool:
-	if not ddata.get("recruit", true) or not t.recruit_ok or not recruiting_unlocked():
+	if not recruit_ok_here() or not t.recruit_ok or not recruiting_unlocked():
 		return false
 	var dx := dx_recruiting()
 	if FloorState.cheb(r.pos, t.pos) > (DX_RANGE if dx else 1):
@@ -3817,7 +3836,7 @@ func _tile_menu() -> bool:
 func _others_menu() -> bool:
 	var sel := 0
 	while not result_sent:
-		var can_recruit := bool(ddata.get("recruit", true))
+		var can_recruit := recruit_ok_here()
 		var rows: Array = ["Game Options", "Quicksave or Give Up", "Message log", "Mission objectives",
 			{"text": "Recruitment search" if can_recruit else "[color=#ff8070]Recruitment search[/color]", "disabled": not can_recruit}, "Hints"]
 		var m := TeamScreens.menu("Others", rows, 288)
