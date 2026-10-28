@@ -3,23 +3,20 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
-## v0.6.47 (28 Oct 2026): Hard mode level curve
-
-- **Hard mode follows a planned level curve** instead of following the team: every story dungeon has its own wild range (first to last floor) and boss level, ending with Rayquaza at Lv 70 (Mt. Steel 8-11 / Skarmory 14, Sinister Woods 12-18 / Team Meanies 20, Mt. Thunder Peak / Zapdos 32, Mt. Blaze Peak / Moltres 46, Frosty Grotto / Articuno 50, Magma Cavern Pit / Groudon 65 ...). Red's spread between the species of a floor is kept.
-  - Side dungeons and EoS dungeons that open during the story: Red's level mapped onto the curve.
-  - Post-game dungeons: Lv 70 on the first floor, +1 every 3 floors, up to 100; bosses there at least Lv 75.
-  - Backstop: a team 10+ levels above a floor raises its Pokémon by half of the difference past 10.
-  - Lv 1 dungeons and Kecleon are unchanged; fixed boss HP grows with the boss's level.
-
-## v0.6.46 (28 Oct 2026): Move Growth
+## v0.8.0 (28 Oct 2026): Move Growth, Hard mode level curve
 
 - **Move Growth** from Explorers Remixed (SkyTemple's patch, the Gates to Infinity system), option Game Options -> Dungeon -> Move growth (on by default). Damaging moves level 1-25 with Remixed's table (tools/eos/gen_move_growth.py reads BALANCE/mgrowth.bin): up to +30 power, +30 PP and +12 accuracy. Each use gives the move 3 Exp.; a move's level is shared by every team member that knows it; enemies never benefit.
   - Ginseng gives 300 Move Exp. (1000 when lucky) to the leader's topmost growing move while the option is on; Red's Ginseng otherwise.
   - Moves list shows "Lv.X"; the move info page shows the power / accuracy bonus, Exp. to the next level and the PP bonus.
 - **Red's Ginseng boost now counts in damage** (it was stored on the move but never added to its power).
 - **Hard mode:** wild Pokémon keep arriving up to 20 per floor (was 10), one every 24 turns (was 36). Floors with a Monster House keep Red's cap.
+- **Hard mode follows a planned level curve** instead of following the team: every story dungeon has its own wild range (first to last floor) and boss level, ending with Rayquaza at Lv 70 (Mt. Steel 8-11 / Skarmory 14, Sinister Woods 12-18 / Team Meanies 20, Mt. Thunder Peak / Zapdos 32, Mt. Blaze Peak / Moltres 46, Frosty Grotto / Articuno 50, Magma Cavern Pit / Groudon 65 ...). Red's spread between the species of a floor is kept.
+  - Side dungeons and EoS dungeons that open during the story: Red's level mapped onto the curve.
+  - Post-game dungeons: Lv 70 on the first floor, +1 every 3 floors, up to 100; bosses there at least Lv 75.
+  - Backstop: a team 10+ levels above a floor raises its Pokémon by half of the difference past 10.
+  - Lv 1 dungeons and Kecleon are unchanged; fixed boss HP grows with the boss's level.
 
-## v0.6.45 (28 Oct 2026): Hard mode
+## v0.7.0 (28 Oct 2026): Hard mode
 
 - **Difficulty: Normal / Hard**, chosen when a new adventure starts and changeable any time in Game Options -> Dungeon -> Difficulty. Hard only changes levels; AI, items, hunger, rescues and recruiting stay Red's.
   - Wild Pokémon: when the team's average level is above the floor's usual level, every wild Pokémon rises by the difference (Red's spread between species is kept), plus 3 levels.
