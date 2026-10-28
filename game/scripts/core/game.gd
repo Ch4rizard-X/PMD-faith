@@ -58,7 +58,8 @@ func new_game(hero_sp: String, hero_name: String, partner_sp: String, partner_na
 	friend_areas = []
 	friends = []
 	storage = {}
-	save_game()
+	Story.sync_base_kind()      # the base looks like the hero's (Red: sBaseKindTable)
+	save_game(true)       # a new adventure replaces the old save even with Auto save off
 
 func _entry(sp: String, nm: String, L: int) -> Dictionary:
 	return {"sp": sp, "name": nm, "level": L, "exp": DB.exp_at(sp, L), "moves": DB.default_moves(sp, L), "iq": 0, "held": "", "bonus": {}}
@@ -68,6 +69,7 @@ func mon_from_entry(e: Dictionary) -> Mon:
 	if nm0.strip_edges() == "":
 		nm0 = str(DB.species.get(str(e.sp), {}).get("name", "???"))    # Red shows the species name for an unnamed Pokémon
 	var m := DB.make_mon(e.sp, int(e.level), "team", {"name": nm0, "exp": int(e.exp), "moves": e.moves.duplicate(true), "held": e.get("held", ""), "iq": int(e.get("iq", 0))})
+	m.held_n = maxi(1, int(e.get("held_n", 1)))
 	m.set_meta("bonus", e.get("bonus", {}))
 	m.set_meta("entry", e)
 	if bool(e.get("shiny", false)):
@@ -87,6 +89,7 @@ func store_mon(m: Mon) -> void:
 		e.exp = m.exp
 	e.moves = m.moves.duplicate(true)
 	e.held = m.held
+	e.held_n = m.held_n if m.held != "" else 1
 	e.iq = m.iq
 	if m.mega == "" and not DB.species.get(m.sp, {}).has("megaBase"):
 		e.sp = m.sp
@@ -103,13 +106,115 @@ func bag_add(id: String, n := 1) -> bool:
 	bag.append({"id": id, "n": n})
 	return true
 
-func save_game() -> void:
+## Every automatic save in the game goes through here. Game Options -> Auto save: Off keeps the save file as
+## it was at the last real save (Save at the bed / the save points, Quicksave) and only updates the settings.
+## force = an explicit save by the player.
+func save_game(force := false) -> void:
+	if not force and not bool(settings.get("qol_autosave", true)) and FileAccess.file_exists(SAVE_PATH):
+		_save_settings_only()
+		return
 	var d := {"v": 2, "team_name": team_name, "team": team, "bag": bag, "money": money, "bank": bank, "flags": flags, "settings": settings,
 		"rank_points": rank_points, "jobs": jobs, "board": board, "board_day": board_day, "day": day, "unlocked": unlocked, "cleared": cleared,
 		"friend_areas": friend_areas, "friends": friends, "storage": storage, "nature": nature, "gender": gender, "story": _story_out()}
+	for e in team + friends:
+		ensure_uid(e)
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(d))
+
+func _save_settings_only() -> void:
+	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var d = JSON.parse_string(f.get_as_text())
+	f.close()
+	if not (d is Dictionary):
+		return
+	d["settings"] = settings
+	var w := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if w:
+		w.store_string(JSON.stringify(d))
+
+## Every team / Friend Area entry gets an id, so the same Pokémon is still one Pokémon after a save and load
+## (JSON writes a team member that also lives in a Friend Area twice).
+func ensure_uid(e: Dictionary) -> void:
+	if str(e.get("uid", "")) == "":
+		e["uid"] = "%x%04x" % [int(Time.get_unix_time_from_system()), randi() % 0x10000] + str(randi() % 1000)
+
+## The same Pokémon as e: same id, or (saves from before ids) same species and name with no more progress.
+static func _same_mon(e: Dictionary, o: Dictionary) -> bool:
+	var a := str(e.get("uid", ""))
+	var b := str(o.get("uid", ""))
+	if a != "" and b != "":
+		return a == b
+	return str(e.get("sp", "")) == str(o.get("sp", "")) and str(e.get("name", "")) == str(o.get("name", "")) \
+			and bool(e.get("shiny", false)) == bool(o.get("shiny", false)) \
+			and int(o.get("exp", 0)) <= int(e.get("exp", 0)) and int(o.get("iq", 0)) <= int(e.get("iq", 0)) \
+			and str(o.get("role", "")) in ["", str(e.get("role", ""))]
+
+## After loading: a team member's Friend Area copy becomes the team entry itself again, and copies made by
+## the old split (the same Pokémon twice on the team, or a stale twin in a Friend Area) are dropped.
+static func _moves_common(a: Dictionary, b: Dictionary) -> int:
+	var n := 0
+	var bn: Array = []
+	for mv in b.get("moves", []):
+		bn.append(str(mv.get("name", "")))
+	for mv in a.get("moves", []):
+		if str(mv.get("name", "")) in bn:
+			n += 1
+	return n
+
+func link_entries() -> void:
+	var dropped: Array = []
+	var i := 0
+	while i < team.size():
+		var t: Dictionary = team[i]
+		var j := i + 1
+		while j < team.size():
+			var o: Dictionary = team[j]
+			if _same_mon(t, o) or _same_mon(o, t):
+				var keep: Dictionary = t if int(t.get("exp", 0)) >= int(o.get("exp", 0)) else o
+				var gone: Dictionary = o if keep == t else t
+				if str(gone.get("role", "")) != "" and str(keep.get("role", "")) == "":
+					keep["role"] = gone.role
+				team[i] = keep
+				team.remove_at(j)
+				dropped.append(str(gone.get("name", "?")))
+				t = keep
+				continue
+			j += 1
+		i += 1
+	for t in team:
+		if friends.any(func(f): return is_same(f, t)):
+			continue
+		# the team member's own Friend Area listing: the matching entry with the most moves in common
+		var cands: Array = []
+		for f in friends:
+			if _same_mon(t, f):
+				cands.append(f)
+		if cands.is_empty():
+			continue
+		var best: Dictionary = cands[0]
+		for f in cands:
+			if _moves_common(t, f) > _moves_common(t, best) or (_moves_common(t, f) == _moves_common(t, best) and int(f.exp) > int(best.exp)):
+				best = f
+		if t.get("area", "") == "" and str(best.get("area", "")) != "":
+			t["area"] = best.area
+		friends[friends.find(best)] = t
+		# exact twins of that listing (same progress and moves) are copies too; anything else is kept
+		for f in cands:
+			if not is_same(f, best) and int(f.exp) == int(best.exp) and _moves_common(f, best) == best.get("moves", []).size():
+				friends.erase(f)
+				dropped.append(str(f.get("name", "?")))
+	for e in team + friends:
+		ensure_uid(e)
+	if dropped.size() > 0:
+		print("LINK dropped duplicate entries: ", dropped)
+	for e in team:
+		if str(e.get("role", "")) == "hero":
+			hero = e
+		elif str(e.get("role", "")) == "partner":
+			partner = e
 
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH) and team.size() > 0
@@ -161,10 +266,12 @@ func load_game() -> void:
 	unlocked = d.get("unlocked", ["tiny_woods"])
 	cleared = d.get("cleared", [])
 	friend_areas = d.get("friend_areas", [])
+	Story.normalize_friend_areas()      # one spelling per area (old saves mixed Red's enum names in)
 	friends = d.get("friends", [])
 	for e in friends:
 		e.level = int(e.level)
 		e.exp = int(e.exp)
+	link_entries()
 	storage = d.get("storage", {})
 	nature = d.get("nature", "")
 	gender = d.get("gender", "")

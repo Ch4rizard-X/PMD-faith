@@ -48,7 +48,7 @@ static func _price_rows(list: Array, price_of: Callable) -> Array:
 		var nm := DB.item_name(str(b.id))
 		if DB.items.get(b.id, {}).get("stack", false) and int(b.get("n", 0)) > 0:
 			nm += " %d" % int(b.n)
-		rows.append({"text": nm, "right": str(price_of.call(b)), "icon": TeamScreens.item_icon(str(b.id))})
+		rows.append({"text": nm, "right": str(price_of.call(b)), "icon": TeamScreens.item_icon(str(b.id)), "item": str(b.id)})
 	return rows
 
 # ============================================================================ Kecleon Bros.
@@ -210,7 +210,7 @@ static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 		for i in Game.bag.size():
 			if EosItems.is_box(str(Game.bag[i].id)):
 				idx.append(i)
-				rows.append({"text": DB.item_name(str(Game.bag[i].id)), "right": str(fee), "icon": TeamScreens.item_icon(str(Game.bag[i].id))})
+				rows.append({"text": DB.item_name(str(Game.bag[i].id)), "right": str(fee), "icon": TeamScreens.item_icon(str(Game.bag[i].id)), "item": str(Game.bag[i].id)})
 		if idx.is_empty():
 			return
 		var mb := _money_box(root)
@@ -638,6 +638,7 @@ static func _multi_list(root: Control, title: String, labels: Array, marks: Dict
 				row["right"] = str(rights[k])
 			if k < ids.size():
 				row["icon"] = TeamScreens.item_icon(str(ids[k]))
+				row["item"] = str(ids[k])
 			rows.append(row)
 		var m := TeamScreens.menu(title, rows, 16 * 8 * P)
 		m.pages = pages

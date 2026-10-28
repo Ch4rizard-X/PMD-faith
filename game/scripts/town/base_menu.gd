@@ -353,19 +353,20 @@ static func teach_tm(root: Control, e: Dictionary, k: int) -> void:
 static func give_item(root: Control, e: Dictionary, k: int) -> void:
 	var it: Dictionary = Game.bag[k]
 	var held := str(e.get("held", ""))
+	var held_n := TeamScreens.held_n_of(e) if TeamScreens.held_stacks(held) else 1
 	Game.bag.remove_at(k)
 	if held != "":
-		Game.bag_add(held)
-	e.held = str(it.id)
+		Game.bag_add(held, held_n)
+	TeamScreens.set_held(e, str(it.id), int(it.get("n", 1)))
 	Audio.sfx("333")
 	var key := PL + ("sUnknown_80DD5B8" if held != "" else "sUnknown_80DD594")
 	await RedText.say(root, key, "", "", {"item1": DB.item_name(str(it.id)), "item0": DB.item_name(held)})
 
 static func take_item(root: Control, e: Dictionary) -> void:
 	var held := str(e.get("held", ""))
-	if held == "" or not Game.bag_add(held):
+	if held == "" or not Game.bag_add(held, TeamScreens.held_n_of(e) if TeamScreens.held_stacks(held) else 1):
 		return
-	e.held = ""
+	TeamScreens.set_held(e, "")
 	Audio.sfx("333")
 	await RedText.say(root, PL + "sUnknown_80DD60C", "", "", {"item0": DB.item_name(held)})
 
@@ -389,7 +390,7 @@ static func _member_rows(list: Array) -> Array:
 static func _item_window(root: Control, e: Dictionary) -> PanelContainer:
 	var w := _win(root, Vector2(2 * 8 * P, root.get_viewport_rect().size.y - 2 * 8 * P - 6 * P), Vector2(26 * 8 * P, 2 * 8 * P))
 	var held := str(e.get("held", ""))
-	w.add_child(TeamScreens._rtl(RedText.line(RedText.get_text(PL + "sPartyMenuItemPlaceholder"), {"item0": DB.item_name(held) if held != "" else ""})))
+	w.add_child(TeamScreens._rtl(RedText.line(RedText.get_text(PL + "sPartyMenuItemPlaceholder"), {"item0": TeamScreens.held_name(e)})))
 	return w
 
 ## can this member go on standby (friend_list_menu.c FriendListMenu_isOnTeam / party_list sub_8026E88)?
@@ -567,10 +568,11 @@ static func party_menu(host, root: Control, e: Dictionary, talking: bool) -> int
 					await RedText.say(root, PL + "sUnknown_80DD564", "", "", {"mon1": nm})
 					var held := str(e.get("held", ""))
 					if held != "":
-						if Game.bag_add(held):
+						var fn := TeamScreens.held_n_of(e) if TeamScreens.held_stacks(held) else 1
+						if Game.bag_add(held, fn):
 							await RedText.say(root, PL + "sUnknown_80DD60C", "", "", {"item0": DB.item_name(held)})
 						else:
-							Game.storage[held] = int(Game.storage.get(held, 0)) + 1
+							Game.storage[held] = int(Game.storage.get(held, 0)) + fn
 							await RedText.say(root, PL + "sUnknown_80DD63C", "", "", {"item0": DB.item_name(held)})
 					Game.friends.erase(e)
 					Game.save_game()

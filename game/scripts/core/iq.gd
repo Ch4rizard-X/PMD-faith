@@ -772,4 +772,4 @@ static func summary_text(m) -> String:
 		name_of(m), S.get("name", sp), level_of(m), eff_iq(m),
 		int(st.atk) + int(bonus.get("atk", 0)), int(st.def) + int(bonus.get("def", 0)),
 		int(st.spa) + int(bonus.get("spa", 0)), int(st.spd) + int(bonus.get("spd", 0)), int(st.hp) + int(bonus.get("hp", 0)),
-		"/".join(types_of(m)), DB.item_name(held) if held != "" else "None", tactic_name(tactic_of(m))]
+		"/".join(types_of(m)), (TeamScreens.held_name(m) if m is Mon else TeamScreens.held_name(e)) if held != "" else "None", tactic_name(tactic_of(m))]

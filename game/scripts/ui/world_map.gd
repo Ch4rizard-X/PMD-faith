@@ -74,7 +74,7 @@ static func trip_red(root: Control, key: String) -> bool:
 	for k in _red_visible():
 		var p: Array = D.get(k, {}).get("pos", [])
 		if p.size() == 2:
-			wm._add_marker(Vector2(p[0], p[1]), 3)
+			wm._cleared_tint(wm._add_marker(Vector2(p[0], p[1]), 3), k)
 	wm._add_marker(Vector2(base[0], base[1]), 14)
 	var to := Vector2(base[0], base[1]) if dest.size() != 2 else Vector2(dest[0], dest[1])
 	var ok := await wm._trip(Vector2(base[0], base[1]), to, key)
@@ -102,7 +102,7 @@ static func trip_eos(root: Control, key: String) -> bool:
 	for k in Story.eos_unlocked():
 		var m: Array = E.get("markers", {}).get(str(int(DB.dungeons.dungeons[k].get("eos_id", -1))), [])
 		if m.size() == 3 and m[0] == map_name:
-			wm._add_marker(Vector2(m[1], m[2]), 3)
+			wm._cleared_tint(wm._add_marker(Vector2(m[1], m[2]), 3), k)
 	var from := wm.map_size / 2.0
 	if map_name == str(start[0]):
 		from = Vector2(start[1], start[2])
@@ -175,6 +175,11 @@ func _marker_tex(pose: int) -> AtlasTexture:
 	return at
 
 ## wmapspr pose: 3 = dungeon / location (anim 1), 14 = the base (anim 12), 6..13 = arrows (anims 4..11).
+## Remake option (Cleared marks): a cleared dungeon's marker is drawn gold.
+func _cleared_tint(s: Sprite2D, key: String) -> void:
+	if s and DungeonList.show_cleared() and key in Game.cleared:
+		s.modulate = Color(1.0, 0.85, 0.25)
+
 func _add_marker(p: Vector2, pose: int) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.texture = _marker_tex(pose)

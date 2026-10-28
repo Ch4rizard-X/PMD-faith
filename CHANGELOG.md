@@ -3,6 +3,41 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.6.45 (28 Oct 2026): Hard mode
+
+- **Difficulty: Normal / Hard**, chosen when a new adventure starts and changeable any time in Game Options -> Dungeon -> Difficulty. Hard only changes levels; AI, items, hunger, rescues and recruiting stay Red's.
+  - Wild Pokémon: when the team's average level is above the floor's usual level, every wild Pokémon rises by the difference (Red's spread between species is kept), plus 3 levels.
+  - Bosses (story and EoS): the higher of their own level and the team's average, plus 3. Fixed boss HP (Rayquaza's 600, the EoS arenas) grows with the level. No extra moves.
+  - Kecleon and other Lv 90 Pokémon, and Lv 1 dungeons, are not scaled.
+
+## v0.6.44 (28 Oct 2026)
+
+- **Silent Chasm entrance:** the mist layer is blended onto the cliff as on the GBA (BLDALPHA 16/16) instead of covering it in black, and drifts right 1 px every 4 frames (GroundMap action for MAP_SILENT_CHASM_ENTRY). The same blending fixes the Personality Test and Nightmare backdrops.
+
+## v0.6.43 (28 Oct 2026)
+
+- **No more cloned team members:** a team member that also lives in a Friend Area was written to the save twice and became two Pokémon after loading, so the Prepare screen could add it again. Every Pokémon now has an id; loading merges the copies and removes clones made by older builds (shinies and look-alikes with other moves are kept).
+- **Kecleon Shop wares are picked up by walking onto them** (still unpaid, price shown in the Toolbox), with Red's messages, instead of "That's for sale."
+
+## v0.6.42 (28 Oct 2026)
+
+- **Job clients leave in Red's beam of light** (effect 318 with sound 850, dungeon_jobs.c sub_8042A34) after a rescue, delivery or escort; the game waits for it before asking to leave.
+- **Mega Evolution** (Empowerment Seed) uses a DX-style glow: the Pokémon turns white in a burst of light and sparkles, changes form, and the glow fades.
+
+## v0.6.41 (28 Oct 2026)
+
+- Leaving a dungeon from the "mission completed, leave now?" prompt counts as leaving (Red's STARTMODE 10): no boss arena or "dungeon cleared" scripts.
+
+## v0.6.34 - v0.6.40 (27-28 Oct 2026)
+
+- **Partner AI:** partners no longer refuse swaps, ping-pong in corridors or take detours; better following with 3+ members.
+- **Throwables** are given to a partner as a whole stack; exclusive items show their star rating; the item under the cursor is described on the second screen.
+- **Croagunk's Swap Shop** (from Explorers Remixed): in front of the base next to Kecleon, Remixed's recipes, daily stock (tools/data/gen_swap_shop.py).
+- **EoS jobs** get the job envelope marker in the dungeon list; **cleared marks** option (stars in dungeon lists, gold world-map markers, DX).
+- **Boss floors:** Sinister Woods / Mt. Steel and other dungeons with a boss after the last normal floor go on to the boss instead of ending.
+- **Options:** Auto save on/off, right-stick zoom in dungeons and on story maps, Debug NPC (Porygon at the base: flags, jump to a chapter, side stories).
+- **Story fixes:** forming the team no longer jumps the story to the post-game (wrong base upgrade, Zero Isle / Destiny Tower showing up early); EoS unlocks use team levels only and post-game dungeons wait for the post-game; Friend Areas open again from the map; the base matches the hero's species.
+
 ## v0.6.33 (27 Oct 2026)
 
 - **Leader statuses:** as in Red (sub_80701A4), the leader's turn passes by itself while asleep, frozen, wrapped, petrified, unable to move, infatuated or biding, with Red's message ("... is asleep!"). Before, you could still act.

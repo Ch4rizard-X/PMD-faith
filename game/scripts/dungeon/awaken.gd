@@ -32,8 +32,11 @@ static func awaken(d, m: Mon) -> void:
 		d._msg("But nothing happened.")
 		return
 	m.status["awakened"] = 0x7F
-	await _flash(d, m)
 	var mk := mega_of(m.sp) if m.mega == "" else ""
+	if mk != "" and DB.species.has(mk):
+		await _mega_fx(d, m, mk)
+	else:
+		await _flash(d, m)
 	if mk != "" and DB.species.has(mk):
 		m.set_meta("awk_prev", {"sp": m.sp, "types": m.types.duplicate(), "ab": m.ability, "ab2": m.ability2})
 		var S: Dictionary = DB.species[mk]
@@ -54,6 +57,75 @@ static func awaken(d, m: Mon) -> void:
 	else:
 		d._msg("[color=#ffdc4a]%s became Awakened![/color]" % d._nm(m))
 	d._msg("%s's stats rose sharply!" % d._nm(m))
+
+## How Mega Evolution looks: 0 = white flashes, 1 = the job-client light beam (effect 318 + sound 850),
+## 2 = DX-style: the Pokémon glows white inside a burst of light and sparkles, changes form, the glow fades.
+static var fx_style := 2
+
+static func _mega_fx(d, m: Mon, mk: String) -> void:
+	if m.visual == null or not is_instance_valid(m.visual):
+		return
+	var vis = m.visual
+	match fx_style:
+		1:
+			d.rescue_beam([m])                       # not awaited: the form changes while the beam shines
+			await d.get_tree().create_timer(0.3).timeout
+			vis.set_species(mk)
+			await d.get_tree().create_timer(0.4).timeout
+		2:
+			Audio.sfx("evolve")
+			var g := MegaGlow.new()
+			g.position = vis.position + Vector2(0, -6)
+			g.z_index = 6
+			d.fx_layer.add_child(g)
+			var tw: Tween = d.create_tween()
+			tw.tween_property(vis, "flash", 3.0, 0.45)
+			await tw.finished
+			vis.set_species(mk)
+			g.burst()
+			await d.get_tree().create_timer(0.25).timeout
+			var tw2: Tween = d.create_tween()
+			tw2.tween_property(vis, "flash", 0.0, 0.4)
+			await tw2.finished
+		_:
+			await _flash(d, m)
+
+
+## DX-style Mega Evolution light: a pulsing ring with rainbow-tinted sparkles drawn in, then a burst outward.
+class MegaGlow extends Node2D:
+	var t := 0.0
+	var bt := -1.0
+	func burst() -> void:
+		bt = 0.0
+	func _process(dt: float) -> void:
+		t += dt
+		if bt >= 0.0:
+			bt += dt
+			if bt > 0.6:
+				queue_free()
+				return
+		queue_redraw()
+	func _draw() -> void:
+		var hues := [0.0, 0.12, 0.3, 0.5, 0.62, 0.8]
+		if bt < 0.0:
+			var k := minf(t / 0.45, 1.0)
+			draw_circle(Vector2.ZERO, 6.0 + 10.0 * k, Color(1, 1, 1, 0.25 * k))
+			draw_arc(Vector2.ZERO, 30.0 - 14.0 * k, 0.0, TAU, 40, Color(1, 1, 0.8, 0.8 * k), 2.0)
+			for i in 12:
+				var a := TAU * i / 12.0 + t * 4.0
+				var r := 34.0 * (1.0 - k) + 8.0
+				_star(Vector2(cos(a), sin(a)) * r, Color.from_hsv(hues[i % 6], 0.45, 1.0, k), 2.5)
+		else:
+			var e := bt / 0.6
+			draw_circle(Vector2.ZERO, 14.0 + 30.0 * e, Color(1, 1, 1, 0.55 * (1.0 - e)))
+			draw_arc(Vector2.ZERO, 16.0 + 40.0 * e, 0.0, TAU, 48, Color(1, 0.95, 0.6, 1.0 - e), 3.0)
+			for i in 16:
+				var a := TAU * i / 16.0
+				_star(Vector2(cos(a), sin(a)) * (12.0 + 46.0 * e), Color.from_hsv(hues[i % 6], 0.45, 1.0, 1.0 - e), 3.0)
+	func _star(p: Vector2, c: Color, s: float) -> void:
+		draw_line(p - Vector2(s, 0), p + Vector2(s, 0), c, 1.0)
+		draw_line(p - Vector2(0, s), p + Vector2(0, s), c, 1.0)
+		draw_rect(Rect2(p - Vector2(0.75, 0.75), Vector2(1.5, 1.5)), Color(1, 1, 1, c.a))
 
 static func _flash(d, m: Mon) -> void:
 	if m.visual == null or not is_instance_valid(m.visual):

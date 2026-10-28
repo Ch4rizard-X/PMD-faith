@@ -11,8 +11,8 @@ extends Node
 ##   DX recruiting (Rescue Team DX: defeated Pokémon join for the dungeon from 2 tiles; keep them at the exit).
 
 const DEFAULTS := {"qol_run": true, "qol_tap": true, "qol_preview": true, "qol_info": true,
-	"qol_minimap": false, "qol_pickup": 0, "qol_lowhp": true, "qol_itemask": true, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1}
-const KEYS := ["qol_run", "qol_tap", "qol_preview", "qol_info", "qol_minimap", "qol_pickup", "qol_lowhp", "qol_itemask", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_msgsize"]
+	"qol_minimap": false, "qol_pickup": 0, "qol_lowhp": true, "qol_itemask": true, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true}
+const KEYS := ["qol_run", "qol_tap", "qol_preview", "qol_info", "qol_minimap", "qol_pickup", "qol_lowhp", "qol_itemask", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_msgsize", "qol_autosave"]
 const PICKUP_NAMES := ["All", "No thrown", "Poké+food", "None"]
 const PARTNER_AI_NAMES := ["Red", "Smarter"]   # Smarter: dungeon/partner_ai.gd for Let's go together!
 const RECRUIT_NAMES := ["Red", "DX"]
@@ -523,7 +523,7 @@ func info_text(m: Mon) -> String:
 	if st.size() > 0:
 		lines.append("[color=#ffb080]%s[/color]" % ", ".join(st))
 	if m.held != "" and m.is_team():
-		lines.append("Holding %s" % DB.item_name(m.held))
+		lines.append("Holding %s" % TeamScreens.held_name(m))
 	var rt := recruit_text(m)
 	if rt != "":
 		lines.append(rt)
@@ -923,6 +923,7 @@ func option_row(k: String, v: Dictionary) -> Dictionary:
 		"qol_lowhp": return {"text": "Low-HP warning", "right": oo.call(v[k])}
 		"qol_itemask": return {"text": "Team item prompts", "right": oo.call(v[k])}
 		"qol_statusfade": return {"text": "Burn/poison wear off", "right": oo.call(v[k])}
+		"qol_autosave": return {"text": "Auto save", "right": oo.call(v[k])}
 		"qol_msgsize": return {"text": "Message size", "right": "%s %s %s" % [TeamScreens.ARROW_L, MSG_SIZE_NAMES[int(v[k])], TeamScreens.ARROW_R]}
 		"qol_partner_ai": return {"text": "Partner AI", "right": "%s %s %s" % [TeamScreens.ARROW_L, PARTNER_AI_NAMES[int(v[k])], TeamScreens.ARROW_R]}
 		"qol_recruit": return {"text": "Recruiting", "right": "%s %s %s" % [TeamScreens.ARROW_L, RECRUIT_NAMES[int(v[k])], TeamScreens.ARROW_R]}

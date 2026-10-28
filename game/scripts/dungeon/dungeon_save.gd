@@ -66,10 +66,12 @@ static func save(dungeon) -> void:
 	if f:
 		f.store_string(JSON.stringify(head))
 		f.close()
-	Game.save_game()
+	Game.save_game(true)
 
 ## Autosave at the start of a floor (same file, no message).
 static func autosave(dungeon) -> void:
+	if not bool(Game.settings.get("qol_autosave", true)):
+		return                      # Game Options -> Auto save: Off
 	save(dungeon)
 
 ## The dungeon's "Quicksave" command: write the file, stop the dungeon and hand over to main.gd

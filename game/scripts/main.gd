@@ -736,6 +736,358 @@ func _ready() -> void:
 			print("BACKTEST friend map: back=%s closed=%s result='%s'" % [had_b3, res3.done, res3.get("v", "?")])
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--clearmarkshot"):
+		(func():
+			GData.load_all()
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.settings["qol_clearmark"] = true
+			Game.cleared = ["tiny_woods", "thunderwave_cave", "mt_steel", "eos_beach_cave", "eos_drenched_bluff"]
+			Game.jobs.append({"id": "t1", "dungeon": "mt_steel", "floor": 3, "state": "taken", "kind": "rescue"})
+			var ui := CanvasLayer.new()
+			add_child(ui)
+			var r0 := Control.new()
+			r0.set_anchors_preset(Control.PRESET_FULL_RECT)
+			ui.add_child(r0)
+			var rid := func(n): return GData.rescue_id("RESCUE_DUNGEON_" + n)
+			DungeonList.pick(r0, ["Tiny Woods", "Thunderwave Cave", "Mt. Steel", "Sinister Woods", "Explorers of Sky dungeons (4)"],
+				[rid.call("TINY_WOODS"), rid.call("THUNDERWAVE_CAVE"), rid.call("MT_STEEL"), rid.call("SINISTER_WOODS"), -100])
+			await get_tree().create_timer(0.6).timeout
+			get_viewport().get_texture().get_image().save_png("user://clear_a.png")
+			for c in r0.get_children(): c.queue_free()
+			var ek := ["eos_beach_cave", "eos_drenched_bluff", "eos_mt_bristle", "eos_waterfall_cave"]
+			DungeonList.pick(r0, ["Beach Cave  [Lv 1]", "Drenched Bluff  [Lv 2]", "Mt. Bristle  [Lv 4]", "Waterfall Cave  [Lv 6]"], [-1, -1, -1, -1], "Explorers of Sky", ["", "", "ENVELOPE_OPEN", ""], ek)
+			await get_tree().create_timer(0.6).timeout
+			get_viewport().get_texture().get_image().save_png("user://clear_b.png")
+			for c in r0.get_children(): c.queue_free()
+			WorldMap.force_visible = ["tiny_woods", "thunderwave_cave", "mt_steel", "sinister_woods", "silent_chasm"]
+			WorldMap.trip_red(r0, "sinister_woods")
+			await get_tree().create_timer(2.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://clear_c.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--debugnpctest"):
+		(func():
+			Game.load_game()
+			Game.settings["qol_debugnpc"] = true
+			continue_story()
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if is_instance_valid(ground) and ground.lives[0].kind_id != -1 and ground.vis_map >= 0 and i > 6:
+					break
+			ground.select_map(GData.map_id("MAP_TEAM_BASE"), true)
+			ground.lives_select(0, 1)
+			var dk := -1
+			for i in ground.N_LIVES:
+				if ground.lives[i].kind_id == GData.debug_kind:
+					dk = i
+			print("DEBUGNPC map=%d slot=%d" % [ground.vis_map, dk])
+			if dk >= 0:
+				ground.camera.follow(1, dk)
+			await get_tree().create_timer(1.2).timeout
+			get_viewport().get_texture().get_image().save_png("user://debugnpc_base.png")
+			print("DEBUGNPC flags: ", DebugNpc.flags_text().replace("\n", " | "))
+			DebugNpc.jump_to(7)
+			print("DEBUGNPC after jump 7: ", DebugNpc.flags_text().replace("\n", " | "), " cleared=", Game.cleared.slice(0, 8))
+			print("DEBUGNPC side story mankey: ", DebugNpc.run_setup_script("s_script_EVENT_S01E01A_START"), " ", DebugNpc.flags_text().replace("\n", " | "))
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--basekindtest"):
+		(func():
+			Game.load_game()
+			GData.load_all()
+			print("BASEKIND before=%d hero=%s" % [GVars.get_val(null, GVars.BASE_KIND), Story.hero_species()])
+			Story.sync_base_kind()
+			print("BASEKIND after=%d talk=%d" % [GVars.get_val(null, GVars.BASE_KIND), GVars.get_val(null, GVars.PARTNER_TALK_KIND)])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--eoslisttest"):
+		(func():
+			Game.load_game()
+			GData.load_all()
+			print("EOSLIST scen=%s post=%s team=%s" % [str(GVars.scenario(GVars.SCENARIO_MAIN)), GVars.after(GVars.SCENARIO_MAIN, 17, -1), str(Game.team.map(func(e): return int(e.level)))])
+			var L := Story.eos_unlocked()
+			print("EOSLIST %d: %s" % [L.size(), str(L.filter(func(k): return k.contains("zero") or k.contains("destiny")))])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--fatest3"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			GData.load_all()
+			Game.friend_areas = ["wildplains", "boulderquarry"]
+			var res := ["?"]
+			var run := func():
+				res[0] = await WorldMap.friend_areas(root, "")
+			run.call()
+			var press := func(act: String):
+				var ev := InputEventAction.new()
+				ev.action = act
+				ev.pressed = true
+				Input.parse_input_event(ev)
+				await get_tree().create_timer(0.1).timeout
+				var ev2 := InputEventAction.new()
+				ev2.action = act
+				ev2.pressed = false
+				Input.parse_input_event(ev2)
+			await get_tree().create_timer(2.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://fa3_a.png")
+			await press.call("ui_accept")
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://fa3_b.png")
+			await press.call("ui_accept")
+			for w in 20:
+				await get_tree().create_timer(0.5).timeout
+				print("FATEST3 t=%.1f res=%s" % [w * 0.5, str(res[0])])
+				if str(res[0]) != "?": break
+			print("FATEST3 result=%s map=%d" % [str(res[0]), Story.map_of_fa_key(str(res[0]))])
+			get_viewport().get_texture().get_image().save_png("user://fa3_c.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--fatest2"):
+		(func():
+			Game.load_game()
+			GData.load_all()
+			var m := Story.map_of_fa_key("wildplains")
+			if not "wildplains" in Game.friend_areas:
+				Game.friend_areas.append("wildplains")
+			print("FATEST2 wild plains map=%d fa=%d unlocked=%s areas=%s" % [m, GData.fa_of_map(m), Story.friend_area_unlocked(GData.fa_of_map(m)), str(Game.friend_areas)])
+			GVars.set_val(null, GVars.GROUND_ENTER, m)
+			GVars.set_val(null, GVars.GROUND_ENTER_LINK, 0)
+			Dialog.auto = true
+			start_story(Ground.STARTMODE_GROUND)
+			for i in 30:
+				await get_tree().create_timer(0.5).timeout
+				if is_instance_valid(ground) and ground.vis_map >= 0 and i > 6:
+					break
+			print("FATEST2 now vis_map=%d cur_map=%d lives0=%d genter=%d" % [ground.vis_map, ground.cur_map, ground.lives[0].kind_id, GVars.get_val(null, GVars.GROUND_ENTER)])
+			get_viewport().get_texture().get_image().save_png("user://fatest2.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--fatest"):
+		(func():
+			GData.load_all()
+			var bad := []
+			var n := 0
+			var wm_keys := []
+			for L in WorldMap.data().get("friend_locations", []):
+				for k in L.get("keys", []):
+					if str(k) != "":
+						wm_keys.append(str(k))
+			for k in wm_keys:
+				n += 1
+				var m := Story.map_of_fa_key(k)
+				if m < 0:
+					bad.append(k)
+			print("FATEST map keys=%d unmapped=%s" % [n, str(bad)])
+			var fa_keys: Array = []
+			for v in GData.extra.enums.friend_areas:
+				fa_keys.append(Story.fa_key(int(v)))
+			print("FATEST enum keys sample=%s" % str(fa_keys.slice(0, 12)))
+			print("FATEST map keys sample=%s" % str(wm_keys.slice(0, 12)))
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--hardtest"):
+		(func():
+			Dialog.auto = true
+			for hard in [false, true]:
+				for lvl in [12, 40]:
+					Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+					Difficulty.set_hard(hard)
+					for e in Game.team:
+						e.level = lvl
+						e.exp = DB.exp_at(str(e.sp), lvl)
+					Dungeon.test_invincible = true
+					await start_dungeon("mt_steel", 2)
+					await get_tree().create_timer(0.3).timeout
+					var wl := []
+					for m in dungeon.fs.mons:
+						if not m.is_team() and m.side != "client":
+							wl.append("%s%d" % [m.name.substr(0, 4), m.level])
+					print("HARDTEST hard=%s team=%d F3 wild: %s" % [hard, lvl, " ".join(wl)])
+					await start_dungeon("mt_steel", 8)
+					await get_tree().create_timer(0.3).timeout
+					var bl := []
+					for m in dungeon.fs.mons:
+						if not m.is_team() and m.side != "client":
+							bl.append("%s Lv%d HP%d" % [m.name, m.level, m.max_hp])
+					print("HARDTEST hard=%s team=%d boss floor: %s" % [hard, lvl, ", ".join(bl)])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--linktest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Test")
+			var z: Dictionary = Game._entry("0041", "Zubat", 8)
+			z["area"] = "x"
+			Game.friends.append(z)
+			Game.team.append(z)                 # Zubat on the team and living in its area (shared dict)
+			Game.save_game(true)
+			Game.load_game()                    # old split: team Zubat and area Zubat are now two dicts
+			Game.team[2].exp = int(Game.team[2].exp) + 500
+			Game.team.append(Game.friends[Game.friends.size() - 1])   # the "clone": stale area copy added again
+			var z2: Dictionary = Game._entry("0041", "Zubat", 3)   # a second, real Zubat in the area (different moves)
+			z2["area"] = "x"
+			z2.moves = [{"name": "Supersonic", "pp": 20, "max_pp": 20, "linked": false, "on": true}]
+			Game.friends.push_front(z2)
+			var sz: Dictionary = Game._entry("0145", "Zapdos", 40)
+			sz["area"] = "y"
+			Game.team.append(sz)
+			var sz2: Dictionary = Game._entry("0145", "Zapdos", 30)
+			sz2["area"] = "y"
+			sz2["shiny"] = true
+			Game.friends.append(sz2)
+			for e in Game.team + Game.friends:
+				e.erase("uid")                  # pretend it's a save from before ids
+			Game.save_game(true)
+			Game.load_game()
+			var names := []
+			for e in Game.team:
+				names.append("%s:%d" % [e.name, int(e.exp)])
+			var fn := []
+			for e in Game.friends:
+				fn.append("%s:%d same=%s" % [e.name, int(e.exp), str(Game.team.any(func(t): return is_same(t, e)))])
+			print("LINKTEST team=", names, " friends=", fn)
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--autosavetest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.money = 100
+			Game.save_game(true)
+			Game.settings["qol_autosave"] = false
+			Game.money = 999
+			Game.settings["msg_speed"] = 2
+			Game.save_game()
+			var d = JSON.parse_string(FileAccess.get_file_as_string(Game.SAVE_PATH))
+			var ok1: bool = int(d.money) == 100 and int(d.settings.msg_speed) == 2 and not bool(d.settings.qol_autosave)
+			Game.save_game(true)
+			d = JSON.parse_string(FileAccess.get_file_as_string(Game.SAVE_PATH))
+			var ok2: bool = int(d.money) == 999
+			print("AUTOSAVETEST %s off-keeps-progress+saves-settings=%s explicit-save=%s" % ["ok" if ok1 and ok2 else "BAD", ok1, ok2])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--swapshot"):
+		(func():
+			Game.load_game()
+			Game.settings["second_screen"] = "window"
+			BottomScreen.instance.refresh_mode()
+			continue_story()
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if is_instance_valid(ground) and ground.lives[0].kind_id != -1 and ground.vis_map >= 0 and i > 6:
+					break
+			var ids := {}
+			for k in DB.items:
+				ids[str(DB.items[k].get("name", ""))] = k
+			Game.bag_add(ids["Bulba-Claw"])
+			Game.bag_add(ids["Bulba-Fang"])
+			Game.money = max(Game.money, 500)
+			ground.select_map(SwapShop.MAP, true)
+			ground.lives_select_map(SwapShop.MAP, 1, 0)
+			var ck := -1
+			for i in ground.N_LIVES:
+				if ground.lives[i].kind_id == GData.croagunk_kind:
+					ck = i
+			if ground.lives[0].kind_id == -1:
+				ground.lives_add(-1, {"kind": 0, "u1": 4, "pos": [50, 38, 0, 2], "scripts": [null, null, null, null]}, 0, 0)
+			var L = ground.lives[0]
+			var c: Vector2i = ground.lives[ck].get_center() + Vector2i(0, 16 << 8)
+			L.p144 = c - L.half
+			L.p14C = c + L.half
+			L.direction1 = 4
+			L.dir_dirty = true
+			await get_tree().create_timer(0.8).timeout
+			print("SWAPSHOT lives0=", ground.lives[0].kind_id, " ck=", ck)
+			print("SWAPSHOT talk=", ground.lives_player_talk(0, ck))
+			await get_tree().create_timer(1.5).timeout
+			get_viewport().get_texture().get_image().save_png("user://swap_a.png")
+			# a Swap list with the cursor on an exclusive item: the second screen shows its info
+			var rows: Array = []
+			for nm in ["Grass-Guard", "Leafy Tie", "Flash Tag"]:
+				rows.append({"text": "%s %s" % [nm, SwapShop.star_text(ids[nm])], "icon": TeamScreens.item_icon(ids[nm]), "item": ids[nm], "right": "Set"})
+			var m := TeamScreens.menu("Swap", rows, 22 * 8 * UITheme.PX)
+			m.sel = 1
+			TeamScreens.run_menu(ground.ui_root, m, Vector2(2 * 8 * UITheme.PX, 2 * 8 * UITheme.PX))
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://swap_b.png")
+			BottomScreen.instance.screenshot(OS.get_user_data_dir() + "/swap_bottom.png")
+			TeamScreens.item_info(ground.ui_root, ids["Leafy Tie"])
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://swap_c.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--swaptest"):
+		(func():
+			Game.new_game("0001", "Bulbasaur", "0004", "Charmander", "Q")
+			Game.money = 1000
+			var ids := {}
+			for k in DB.items:
+				ids[str(DB.items[k].get("name", ""))] = k
+			Game.bag_add(ids["Bulba-Claw"])
+			Game.bag_add(ids["Bulba-Fang"])
+			Game.storage[ids["Shinx Claw"]] = 2
+			Game.storage[ids["Sky Silk"]] = 1
+			var res := []
+			var st := SwapShop.stock()
+			res.append(["stock has Grass-Guard (set owned)", ids["Grass-Guard"] in st])
+			res.append(["stock size >= 8", st.size() >= 8])
+			var team_ok := 0
+			for id in st.slice(0, 8):
+				for e in Game.team:
+					if SwapShop.usable_by(e, id):
+						team_ok += 1
+						break
+			res.append(["most of the daily stock fits the team (%d/8)" % team_ok, team_ok >= 4])
+			res.append(["owned counts storage (5)", SwapShop.owned().size() == 5])
+			Dialog.auto = true
+			ListMenu.auto = true
+			var own := SwapShop.owned()
+			var give := own.filter(func(o): return o.id in [ids["Bulba-Claw"], ids["Bulba-Fang"]])
+			await SwapShop._do_swap(root, ids["Grass-Guard"], give)
+			res.append(["got Grass-Guard", Game.bag.any(func(b): return str(b.id) == ids["Grass-Guard"])])
+			res.append(["set used up", not Game.bag.any(func(b): return str(b.id) == ids["Bulba-Claw"])])
+			res.append(["fee paid (850)", Game.money == 850])
+			# generic: 2 storage items for a 1-star
+			var own2 := SwapShop.owned().filter(func(o): return o.where == "storage").slice(0, 2)
+			await SwapShop._do_swap(root, ids["Vulpix Tail"] if ids.has("Vulpix Tail") else ids["Shinx Fang"], own2)
+			res.append(["storage items taken", int(Game.storage.get(ids["Shinx Claw"], 0)) + int(Game.storage.get(ids["Sky Silk"], 0)) == 1])
+			var d := TeamScreens.item_desc(ids["Leafy Tie"])
+			print("SWAPTEST desc: ", d.substr(0, 400))
+			res.append(["star marks in the info text", d.contains("STAR") or d.contains("glyphs.png")])
+			var bad := 0
+			for r in res:
+				print("SWAPTEST %s  %s" % ["ok " if r[1] else "BAD", r[0]])
+				if not r[1]: bad += 1
+			print("SWAPTEST summary ok=%d bad=%d" % [res.size() - bad, bad])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--croashot"):
+		(func():
+			var spots: Array = []
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--spots="):
+					for sp in a.substr(8).split(";"):
+						var xy := sp.split(",")
+						spots.append([int(xy[0]), int(xy[1]), 0, 2])
+			Game.load_game()
+			continue_story()
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				if is_instance_valid(ground) and ground.lives[0].kind_id != -1 and ground.vis_map >= 0 and i > 6:
+					break
+			for k in spots.size():
+				SwapShop.spot_override = spots[k]
+				ground.select_map(SwapShop.MAP, true)
+				ground.lives_select_map(SwapShop.MAP, 1, 0)
+				var ck := -1
+				for i in ground.N_LIVES:
+					if ground.lives[i].kind_id == GData.croagunk_kind:
+						ck = i
+				print("CROASHOT spot=%s croagunk slot=%d" % [str(spots[k]), ck])
+				if ck >= 0:
+					ground.camera.follow(1, ck)
+				await get_tree().create_timer(1.2).timeout
+				get_viewport().get_texture().get_image().save_png("user://croashot_%d.png" % k)
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--groundpad"):
 		(func():
 			Game.load_game()
@@ -1078,8 +1430,11 @@ func _ready() -> void:
 			check.call("attacks ignore the shopkeeper", not d.fs.is_foe(L, k) and not d.targets_for(L, DB.moves.get("Regular Attack", {"r": "front"}), AI.dir_toward(L.pos, k.pos)).has(k) or FloorState.cheb(L.pos, k.pos) > 1)
 			# pick up a ware (unpaid)
 			var price1 := int(fs.items[w1].price)
-			Game.bag.append({"id": "oran", "n": 1, "price": price1})
-			fs.items.erase(w1)
+			var lp := L.pos
+			L.pos = w1
+			await d._after_leader_step_i()          # stepping on a ware picks it up, unpaid (Red)
+			L.pos = lp
+			check.call("stepping on a ware picks it up unpaid", not fs.items.has(w1) and Game.bag.any(func(b): return str(b.id) == "oran" and int(b.get("price", 0)) == price1))
 			check.call("owed after taking a ware", d.shop.owed() == price1, "owed %d" % d.shop.owed())
 			# leave own item for sale
 			fs.items[w1] = {"id": "apple", "n": 1, "price": 0}
@@ -1118,13 +1473,34 @@ func _ready() -> void:
 			for a in OS.get_cmdline_user_args():
 				if a.begins_with("--dungeon="): key = a.substr(10)
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
-			Game.team.append(Game.make_entry("0025", "Pikachu", 10) if Game.has_method("make_entry") else Game.team[1].duplicate(true))
+			var size := 3
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--size="): size = int(a.substr(7))
+			var extra_sp := ["0025", "0152", "0158", "0133", "0063", "0066"]
+			var extra_nm := ["Pikachu", "Chikorita", "Totodile", "Eevee", "Abra", "Machop"]
+			while Game.team.size() < mini(size, 4):
+				var k2 := Game.team.size() - 2
+				Game.team.append(Game._entry(extra_sp[k2], extra_nm[k2], 10))
 			for e in Game.team:
 				e.level = 20
 				e.exp = DB.exp_at(str(e.sp), 20)
 			PartnerAI.debug = true
+			PartnerAI.stats = {}
 			Dungeon.test_invincible = true
 			await start_dungeon(key)
+			# beyond 4: DX temporary recruits (up to 8), as try_recruit makes them
+			for k3 in range(4, mini(size, 8)):
+				var t: Mon = DB.make_mon(extra_sp[k3 - 2], 20, "team")
+				t.side = "team"
+				t.set_meta("recruited", true)
+				t.set_meta("temp_recruit", true)
+				t.set_meta("tactic", "lets_go_together")
+				t.set_meta("entry", {"sp": t.sp, "name": t.name, "level": t.level, "exp": t.exp, "moves": t.moves.duplicate(true), "iq": 0, "held": "", "bonus": {}})
+				t.pos = dungeon.fs.free_tile_near(dungeon.fs.leader.pos, null, 4)
+				dungeon.fs.mons.append(t)
+				dungeon.team_mons.append(t)
+				dungeon._add_sprite(t)
+			print("PARTNERSOAK team size %d" % dungeon.fs.team().size())
 			dungeon.auto_answer = true
 			dungeon.set_autoplay(true)
 			var t := 0.0
@@ -1132,7 +1508,14 @@ func _ready() -> void:
 				await get_tree().create_timer(0.5).timeout
 				t += 0.5
 				if not dungeon.autoplay and not dungeon.result_sent: dungeon.set_autoplay(true)
+				if int(t * 2) % 60 == 0:
+					for nm in PartnerAI.stats:
+						var st0: Dictionary = PartnerAI.stats[nm]
+						print("PARTNERSTAT t=%d %s turns=%d avg_dist=%.2f far(>4)=%d%% max_dist=%d longest_still=%d" % [int(t), nm, st0.n, float(st0.d) / maxi(1, st0.n), 100 * st0.far / maxi(1, st0.n), st0.max, st0.still_max])
 			print("PARTNERSOAK done t=%.0f floor=%d" % [t, dungeon.floor_i + 1 if is_instance_valid(dungeon) else -1])
+			for nm in PartnerAI.stats:
+				var st: Dictionary = PartnerAI.stats[nm]
+				print("PARTNERSTAT %s turns=%d avg_dist=%.2f far(>4)=%d%% max_dist=%d longest_still=%d" % [nm, st.n, float(st.d) / maxi(1, st.n), 100 * st.far / maxi(1, st.n), st.max, st.still_max])
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--msgshot"):
@@ -1150,6 +1533,46 @@ func _ready() -> void:
 			dungeon.open_log()
 			await get_tree().create_timer(0.6).timeout
 			get_viewport().get_texture().get_image().save_png("user://msg_log_small.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--heldstacktest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(1.0).timeout
+			dungeon.auto_answer = true
+			var P: Mon = dungeon.fs.team()[1]
+			TeamScreens.set_held(P, "ironthorn", 7)
+			print("HELD set: %s x%d entry=%s" % [P.held, P.held_n, str(P.get_meta("entry", {}).get("held_n", "?"))])
+			print("HELD name: ", TeamScreens.held_name(P))
+			await dungeon.execute(P, {"type": "throw", "held": true, "dir": 0})
+			print("HELD after throw: %s x%d" % [P.held, P.held_n])
+			var ok1 := P.held == "ironthorn" and P.held_n == 6
+			Game.bag.clear()
+			Game.bag_add(TeamScreens.held_of(P), TeamScreens.held_n_of(P))
+			TeamScreens.set_held(P, "")
+			var ok2 := Game.bag.size() == 1 and int(Game.bag[0].n) == 6
+			print("HELDSTACK %s throw-one=%s take-all=%s" % ["ok" if ok1 and ok2 else "BAD", ok1, ok2])
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--eosmarkshot"):
+		(func():
+			GData.load_all()
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.jobs.append({"id": "t1", "dungeon": "eos_beach_cave", "floor": 2, "state": "taken", "kind": "rescue"})
+			print("EOSMARK any=%s beach=%d" % [DungeonList._eos_jobs_any(), DungeonList.jobs_in_key("eos_beach_cave")])
+			var ui := CanvasLayer.new()
+			add_child(ui)
+			var root := Control.new()
+			root.set_anchors_preset(Control.PRESET_FULL_RECT)
+			ui.add_child(root)
+			DungeonList.pick(root, ["Tiny Woods", "Explorers of Sky dungeons (3)"], [0, -100])
+			await get_tree().create_timer(0.6).timeout
+			get_viewport().get_texture().get_image().save_png("user://eosmark_a.png")
+			for c in root.get_children(): c.queue_free()
+			DungeonList.pick(root, ["Beach Cave  [Lv 1]", "Drenched Bluff  [Lv 2]"], [-1, -1], "Explorers of Sky", ["ENVELOPE_OPEN", ""])
+			await get_tree().create_timer(0.6).timeout
+			get_viewport().get_texture().get_image().save_png("user://eosmark_b.png")
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--eosjobtest"):
@@ -1544,6 +1967,59 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--quiztest"):
 		Quiz.autotest.call_deferred(root, pick_species)
 		return
+	if OS.get_cmdline_user_args().has("--allmaps"):      # every ground map, whole map in view: user://allmaps/
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			_clear()
+			Story.host = self
+			ground = Ground.new()
+			ground.host = self
+			ground.ui_root = root
+			add_child(ground)
+			if ground.hud:
+				ground.hud.visible = false
+			await get_tree().process_frame
+			DirAccess.make_dir_recursive_absolute("user://allmaps")
+			var from := 0
+			var to: int = GData.common.map_conv.size()
+			for a1 in OS.get_cmdline_user_args():
+				if a1.begins_with("--from="): from = int(a1.substr(7))
+				if a1.begins_with("--to="): to = int(a1.substr(5))
+			for mi in range(from, to):
+				ground._load_map(mi)
+				var info: Dictionary = ground.map_info
+				var mw := float(info.get("w_px", info.get("w", 240))) if info.get("dungeon_map", false) else float(info.get("w", 240))
+				var mh := float(info.get("h_px", info.get("h", 160))) if info.get("dungeon_map", false) else float(info.get("h", 160))
+				var vs := get_viewport().get_visible_rect().size
+				ground.zoom = minf(vs.x / mw, vs.y / mh) * UITheme.ui_scale()
+				for f in 120:
+					ground._scroll_update()
+				await get_tree().create_timer(0.25).timeout
+				get_viewport().get_texture().get_image().save_png("user://allmaps/m%03d_%s.png" % [mi, ground.map_file])
+			print("ALLMAPS done")
+			get_tree().quit()).call_deferred()
+		return
+	for a0 in OS.get_cmdline_user_args():
+		if a0.begins_with("--mapshot="):              # ground map render check: --mapshot=186
+			(func():
+				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				_clear()
+				Story.host = self
+				ground = Ground.new()
+				ground.host = self
+				ground.ui_root = root
+				add_child(ground)
+				await get_tree().process_frame
+				ground._load_map(int(a0.substr(10)))
+				for a1 in OS.get_cmdline_user_args():
+					if a1.begins_with("--zoom="): ground.set_ground_zoom(float(a1.substr(7)))
+				for i in 3:
+					await get_tree().create_timer(0.6).timeout
+					get_viewport().get_texture().get_image().save_png("user://mapshot_%s_%d.png" % [a0.substr(10), i])
+					for f in 240:
+						ground._scroll_update()      # 4 s of drift between shots (ticks don't run outside a scene)
+				get_tree().quit()).call_deferred()
+			return
 	if OS.get_cmdline_user_args().has("--wmaptest"):      # world map / Friend Areas map (tests/test_world_map.gd)
 		add_child(load("res://tests/test_world_map.gd").new())
 		return
@@ -1766,6 +2242,14 @@ func story_choose_team() -> void:
 	Game.gender = str(qr.get("gender", ""))
 	if took_quiz:
 		await Quiz.end_text(root)
+	if not keep and not Dialog.auto and not ListMenu.auto:
+		await choose_difficulty()
+
+## New adventure: Normal or Hard (either can be changed any time in Game Options -> Dungeon -> Difficulty).
+func choose_difficulty() -> void:
+	var dm := ListMenu.make("Choose a difficulty (you can change it later in Game Options)", ["Normal", "Hard"], false)
+	_center(dm)
+	Difficulty.set_hard(await dm.choose() == 1)
 
 # ------------------------------------------------------------------ story (Red's ground scripts)
 var ground: Ground
@@ -1993,6 +2477,17 @@ func start_dungeon(key: String, first_floor := 0, stop := -1) -> void:
 var last_dungeon := ""
 
 func _on_dungeon_finished(res: String) -> void:
+	var job_exit: bool = is_instance_valid(dungeon) and dungeon.has_meta("job_exit")
+	if res == "boss_next" and Game.story.has("vars"):
+		# Red's split story dungeons (Mt. Steel, Sinister Woods): reaching the boss arena's floor is not a clear.
+		# No results, no "You cleared ...!", nothing unlocked: the ground cutscene (script3) runs, then the arena.
+		_clear()
+		Game.save_game()
+		story_dungeon = false
+		start_story(Ground.STARTMODE_DUNGEON_WON)
+		return
+	if res == "boss_next":
+		res = "cleared"
 	var ok := res != "defeated"
 	Audio.play_music("052" if ok else "051")
 	if dungeon and dungeon.has_method("show_last_outing"):
@@ -2043,7 +2538,12 @@ func _on_dungeon_finished(res: String) -> void:
 	Game.save_game()
 	if story_dungeon or Game.story.has("vars"):
 		story_dungeon = false
-		start_story(Ground.STARTMODE_DUNGEON_WON if ok else Ground.STARTMODE_DUNGEON_LOST)
+		# Red (run_dungeon.c): only reaching the end is DUNGEON_WON; leaving early (a finished job's "leave now?",
+		# an Escape Orb) is STARTMODE_10, so the dungeon's script doesn't carry on to its boss arena
+		var mode := Ground.STARTMODE_DUNGEON_LOST
+		if ok:
+			mode = Ground.STARTMODE_10 if (res == "escaped" or job_exit) else Ground.STARTMODE_DUNGEON_WON
+		start_story(mode)
 		return
 	start_town("base", "world_map")
 
@@ -2246,6 +2746,42 @@ func _fxtest() -> void:
 		dungeon.set_process(false)
 		await get_tree().create_timer(0.3).timeout
 		get_viewport().get_texture().get_image().save_png("user://edge_dg.png")
+		get_tree().quit()
+		return
+	if OS.get_cmdline_user_args().has("--megashot"):
+		var T2: Mon = dungeon.fs.mons[1]
+		T2.pos = L.pos + Vector2i(1, 0)
+		T2.visual.position = dungeon._px(T2.pos)
+		dungeon.set_zoom(2.0)
+		var style := 2
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--style="):
+				style = int(a.substr(8))
+		Awaken.fx_style = style
+		T2.sp = "0006"
+		T2.visual.set_species("0006")
+		await get_tree().create_timer(0.3).timeout
+		Awaken.awaken(dungeon, T2)
+		var times := [0.1, 0.35, 0.5, 0.75, 1.2] if style == 2 else [0.1, 0.25, 0.45, 0.65, 1.2]
+		var prev := 0.0
+		for i in times.size():
+			await get_tree().create_timer(times[i] - prev).timeout
+			prev = times[i]
+			get_viewport().get_texture().get_image().save_png("user://mega%d_%d.png" % [style, i])
+			print("MEGA ", i, " ", T2.sp, " ", T2.visual.man.get("name", T2.visual.man.keys().slice(0, 4)))
+		get_tree().quit()
+		return
+	if OS.get_cmdline_user_args().has("--beamshot"):
+		var T2: Mon = dungeon.fs.mons[1]
+		T2.pos = L.pos + Vector2i(1, 0)
+		T2.visual.position = dungeon._px(T2.pos)
+		dungeon.set_zoom(2.0)
+		await get_tree().create_timer(0.3).timeout
+		Missions._remove_mon(dungeon, T2)
+		dungeon.rescue_beam([T2])
+		for i in 4:
+			await get_tree().create_timer(0.12).timeout
+			get_viewport().get_texture().get_image().save_png("user://beam_%d.png" % i)
 		get_tree().quit()
 		return
 	if OS.get_cmdline_user_args().has("--dmgtest"):

@@ -15,6 +15,24 @@ static func hero_species() -> String:
 static func partner_species() -> String:
 	return str(Game.partner.get("sp", "0004"))
 
+## main_loops.c sBaseKindTable / sTalkKindTable: the team base's look follows the HERO's species (BASE_KIND,
+## 6 maps each: basic / construction / final, outside + inside); the partner's lines follow PARTNER_TALK_KIND.
+## Red sets both when the team is made and on every start; the remake never did, so every base was Pikachu's
+## (kind 0) once Team Meanies were beaten and the base was rebuilt.
+const BASE_KIND_OF := {"0025": 0, "0052": 1, "0133": 2, "0300": 3, "0007": 4, "0158": 5, "0258": 6, "0054": 7,
+	"0004": 8, "0255": 9, "0155": 10, "0104": 11, "0066": 12, "0001": 13, "0152": 14, "0252": 15}
+const TALK_KIND_OF := {"0007": 1, "0158": 1, "0255": 3, "0152": 3}
+
+static func sync_base_kind() -> void:
+	if not Game.story.has("vars") or Game.hero.is_empty():
+		return
+	var kind := int(BASE_KIND_OF.get(hero_species().substr(0, 4), 0))
+	if DebugNpc.style_override() >= 0:
+		kind = DebugNpc.style_override()          # the Debug NPC's base style, for this session
+	GVars.set_val(null, GVars.BASE_KIND, kind)
+	if not Game.partner.is_empty():
+		GVars.set_val(null, GVars.PARTNER_TALK_KIND, int(TALK_KIND_OF.get(partner_species().substr(0, 4), 2)))
+
 static func leader_species() -> String:
 	return str(Game.team[0].sp) if Game.team.size() > 0 else hero_species()
 
@@ -138,15 +156,32 @@ static func unit_sum() -> int:
 
 # ------------------------------------------------------------------ friend areas
 static func map_of_fa_key(k: String) -> int:
+	k = norm_fa_key(k)
 	for v in GData.extra.enums.friend_areas:
 		var fa := int(v)
 		if fa_key(fa) == k:
 			return GData.map_of_fa(fa)
 	return -1
 
+## Red's enum names that differ from the remake's Friend Area keys (data/friend_areas.json, the world map,
+## Wigglytuff, residents' "area"): the remake key is the one used everywhere.
+const FA_ALIASES := {"mistriseforest": "mistrise", "flyawayforest": "flyaway", "agedchamberoexclaim": "agedchambero"}
+
+static func norm_fa_key(k: String) -> String:
+	return FA_ALIASES.get(k, k)
+
 static func fa_key(fa: int) -> String:
 	var n := GData.enum_name("friend_areas", fa)
-	return n.trim_prefix("FRIEND_AREA_").to_lower().replace("_", "")
+	return norm_fa_key(n.trim_prefix("FRIEND_AREA_").to_lower().replace("_", ""))
+
+## Old saves could hold both spellings of the same area ("mistriseforest" and "mistrise"): one, the remake key.
+static func normalize_friend_areas() -> void:
+	var out: Array = []
+	for k in Game.friend_areas:
+		var n := norm_fa_key(str(k))
+		if not n in out:
+			out.append(n)
+	Game.friend_areas = out
 
 static func unlock_friend_area(fa: int) -> void:
 	if fa <= 0:
@@ -259,6 +294,8 @@ static func daily_update() -> void:       # sub_8001D88 (event_flag.c): opens po
 	var S1 := GVars.SCENARIO_SUB1
 	if GVars.before(S1, 31, 0):
 		if GVars.after(GVars.SCENARIO_MAIN, 0xf, 7):
+			if Dialog.auto:
+				print("    DAILY base upgrade: main=%s sub1=%s" % [str(m), str(GVars.scenario(S1))])
 			GVars.scenario_calc(S1, 31, 0)
 			GVars.rescue_set_conquered(_rd("UPROAR_FOREST"), true)
 			GVars.set_val(null, GVars.BASE_LEVEL, 2)
@@ -321,17 +358,27 @@ static var eos_pick := ""
 
 ## Explorers of Sky dungeons open by the team's highest level (their first floor's usual enemy level);
 ## the level-reset ones (Zero Isles, Destiny Tower ...) wait for the post-game.
+## Explorers of Sky's post-game dungeons: only after Red's story is over (whatever the team's level).
+const EOS_POSTGAME := ["eos_zero_isle_north", "eos_zero_isle_east", "eos_zero_isle_west", "eos_zero_isle_south",
+	"eos_zero_isle_center", "eos_destiny_tower"]
+
+## The Explorers of Sky dungeons on the dungeon list: those at or below the level of the team you're taking
+## (not Friend Area residents: a Lv. 90 recruit, such as a Kecleon from a shop, used to open everything), and
+## the level-reset and post-game ones after the story.
 static func eos_unlocked() -> Array:
 	var top := 1
-	for e in Game.team + Game.friends:
+	for e in Game.team:
 		top = maxi(top, int(e.get("level", 1)))
-	var post := Game.story.has("vars") and GVars.after(GVars.SCENARIO_MAIN, 17, -1)
+	# post-game: the story past its last chapter AND Sky Tower beaten (either alone has opened them by mistake)
+	# post-game: Red's own "reached the post-game" quest flag AND Sky Tower beaten (the scenario number alone
+	# changes mid-script, which could flash these dungeons into the list)
+	var post := Game.story.has("vars") and GVars.quest(GVars.QUEST_REACHED_POSTGAME) and "sky_tower_summit" in Game.cleared
 	var out: Array = []
 	for k in DB.dungeons.get("dungeons", {}):
 		var d: Dictionary = DB.dungeons.dungeons[k]
 		if not d.get("eos", false):
 			continue
-		if d.get("level_reset", false):
+		if d.get("level_reset", false) or k in EOS_POSTGAME:
 			if post:
 				out.append(k)
 		elif top >= int(d.get("eos_level", 1)):
@@ -657,7 +704,7 @@ static func special_text(G, kind: int, a1: int, a2: int, s) -> int:
 				GVars.set_val(null, GVars.START_MODE, 1)
 			AdventureLog.update()
 			if Dialog.auto or ListMenu.auto:
-				Game.save_game()
+				Game.save_game(true)
 			else:
 				await SaveUI.save_ground(root)     # save_write.c texts + saving icon
 			return 0
@@ -837,6 +884,8 @@ static func _job_doable(j: Dictionary) -> bool:
 
 static func _dungeon_list(root: Control, G = null) -> int:
 	daily_update()          # textbox.c: sub_8001D88 runs when the dungeon list opens
+	if ListMenu.auto and Dialog.auto and Dungeon.test_invincible:
+		Game.save_game(true)    # tests: keep the story's progress for the next --continue segment
 	var opts: Array = []
 	var ids: Array = []
 	var prio: Array = []
@@ -896,13 +945,12 @@ static func _dungeon_list(root: Control, G = null) -> int:
 		return -1
 	if int(ids[i]) == -100:
 		var labels: Array = []
+		var icons: Array = []
 		for k in eos:
 			var d: Dictionary = DB.dungeons.dungeons[k]
 			labels.append("%s  [Lv %d]" % [str(d.name), int(d.get("eos_level", 1))])
-		var lm2 := ListMenu.make("Explorers of Sky", labels)
-		root.add_child(lm2)
-		lm2.position = Vector2(8, 8)
-		var j := await lm2.choose()
+			icons.append("ENVELOPE_OPEN" if DungeonList.jobs_in_key(str(k)) > 0 else "")
+		var j := await DungeonList.pick(root, labels, eos.map(func(_k): return -1), "Explorers of Sky", icons, eos)
 		if j < 0 or G == null:
 			return -1
 		eos_pick = str(eos[j])

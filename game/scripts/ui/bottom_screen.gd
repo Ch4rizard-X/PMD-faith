@@ -41,6 +41,8 @@ const TEAL := Color(0.45, 0.92, 0.95)
 const GOOD_C := Color(0.45, 1.0, 0.5)
 
 static var instance: BottomScreen
+static var hover := ""                # item under the cursor in the open menu: its description is shown here
+var hover_label: RichTextLabel
 
 var main: Node
 var mode := ""                    # "", "window", "android"
@@ -74,6 +76,14 @@ var frames_pushed := 0            # for tests / debugging
 var taps := 0
 
 # ------------------------------------------------------------------ public API
+## Menus call this as the cursor moves ("" = no item under the cursor / menu closed).
+static func hover_item(id: String) -> void:
+	if id == hover:
+		return
+	hover = id
+	if instance and instance.ui:
+		instance._refresh()
+
 static func setup(m: Node) -> void:
 	if is_instance_valid(instance):
 		return
@@ -357,11 +367,12 @@ func _state_key() -> String:
 			str(d.autoplay), str(d.busy), str(d.menu_open), str(d.result_sent), str(map_zoom), str(d.floor_i)])
 		for m in d.fs.mons:
 			parts.append("%d,%d,%d,%d" % [m.uid, m.pos.x, m.pos.y, m.hp])
+		parts.append(hover)
 		return "|".join(parts)
 	var t := _town() if _scene == "town" else null
 	if t:
-		return "town|%s|%d|%s" % [str(Vector2i(t.pos)), Game.money, str(map_zoom)]
-	return _scene
+		return "town|%s|%d|%s|%s" % [str(Vector2i(t.pos)), Game.money, str(map_zoom), hover]
+	return _scene + "|" + hover
 
 func _push_frame() -> void:
 	var img := sub.get_texture().get_image()
@@ -458,7 +469,25 @@ func _build_scene() -> void:
 				_town_mons.append(Game.mon_from_entry(e))
 		_:
 			pass
+	hover_label = TeamScreens._rtl("")
+	hover_label.fit_content = false
+	hover_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hover_label.scroll_active = false
+	hover_label.clip_contents = true
+	hover_label.visible = false
+	hover_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(hover_label)
 	_refresh()
+
+## Where the hovered item's description goes: over the map + team (dungeon), the team (town), or the middle.
+func _hover_rect() -> Rect2:
+	var W := float(logical.x)
+	var H := float(logical.y)
+	if R.has("map") and R.has("team"):
+		return Rect2(R.map.position, Vector2(R.team.end.x - R.map.position.x, R.team.end.y - R.map.position.y))
+	if R.has("team"):
+		return R.team
+	return Rect2(6, 6, W - 12, H - 12)
 
 func _button_rows(rows: Array, y: float, bh: float, g: float) -> void:
 	var W := float(logical.x)
@@ -666,6 +695,33 @@ func _draw_ui() -> void:
 		"dungeon": _draw_dungeon()
 		"town": _draw_town()
 		_: _draw_idle()
+	_draw_hover()
+
+## The item under the menu cursor: its sprite, name and description (EoS shows item info on the lower screen).
+func _draw_hover() -> void:
+	if hover_label == null:
+		return
+	var I: Dictionary = DB.items.get(hover, {}) if hover != "" else {}
+	if I.is_empty():
+		hover_label.visible = false
+		return
+	var r := _hover_rect()
+	_panel(r, true)
+	var x := r.position.x + 6 * P
+	var y := r.position.y + 4 * P
+	var ic: Texture2D = TeamScreens.item_icon(hover)
+	if ic:
+		ui.draw_texture(ic, Vector2(x, y + 2))
+		x += ic.get_width() + 3 * P
+	_text(ui, Vector2(x, y), _fit(DB.item_name(hover), r.end.x - x - 6 * P), GOLD)
+	var price := int(I.get("price", 0))
+	if price > 0 and str(I.get("kind", "")) != "exclusive":
+		var ps := "%d P" % price
+		_text(ui, Vector2(r.end.x - 6 * P - _text_w(ps), y), ps, DIM)
+	hover_label.visible = true
+	hover_label.position = Vector2(r.position.x + 6 * P, y + UITheme.LINE + 2 * P)
+	hover_label.size = Vector2(r.size.x - 12 * P, r.end.y - hover_label.position.y - 4 * P)
+	hover_label.text = TeamScreens.item_desc(hover)
 
 func _draw_idle() -> void:
 	var W := float(logical.x)
@@ -789,7 +845,7 @@ func _draw_team_rows(r: Rect2, mons: Array, in_dungeon: bool) -> void:
 		hx = _num(m.max_hp, hx, hy, hsc)
 		gx = hx
 		if not in_dungeon and m.held != "":
-			var it: String = DB.item_name(m.held)
+			var it: String = TeamScreens.held_name(m)
 			var iw := minf(_text_w(it), rr.size.x * 0.4)
 			_text(ui, Vector2(rr.end.x - iw - 2, rr.position.y), _fit(it, iw), TEAL)
 		# HP bar under it (or beside it when the row is short)

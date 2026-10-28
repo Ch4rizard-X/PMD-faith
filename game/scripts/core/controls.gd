@@ -142,7 +142,7 @@ static func menu(root: Control) -> void:
 				await Dialog.talk(root, [
 					"Controller (Red's GBA controls):\nA: attack / talk.  A+B together: wait a turn.\nL+A / L+B / L+X / L+Y: use move 1 / 2 / 3 / 4.",
 					"Tap B: menu.  Hold B + direction: run.\nHold R: diagonal moves only.\nTap R: face the nearest foe.  Start: turn in place.",
-					"L+Select: message log.  L+R: throw the set item.\nSelect: map.  X: moves.  Y: items."])
+					"L+Select: message log.  L+R: throw the set item.\nSelect: map.  X: moves.  Y: items.\nRight stick up/down: zoom in/out."])
 			3:
 				reset()
 				Game.save_game()

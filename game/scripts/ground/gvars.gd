@@ -176,6 +176,8 @@ static func get_arr(local, id: int, idx: int) -> int:
 	return 0
 
 static func set_val(local, id: int, v: int) -> void:
+	if Dialog.auto and local == null and id == BASE_LEVEL and v != get_val(null, BASE_LEVEL):
+		print("    BASE_LEVEL %d -> %d at scen %s" % [get_val(null, BASE_LEVEL), v, str(scenario(SCENARIO_MAIN))])
 	var r := _ref(local, id)
 	var i: Dictionary = r[0]
 	var t := int(i.type)

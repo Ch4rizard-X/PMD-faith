@@ -349,7 +349,7 @@ func _controller() -> Array:          # returns [result, r6 action, dir]
 						return [4, 1, -1]
 					4:
 						ctrl.s0 = 4
-						G.map_execute_event(GData.fn_id("FORMATION_HERO"), false)
+						G.formation_changed()
 						return [4, 1, -1]
 				G.lock_jump_zero(2)
 		6, 7:

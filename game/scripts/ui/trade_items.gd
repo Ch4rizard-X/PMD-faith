@@ -44,7 +44,7 @@ static func _send(root: Control) -> bool:
 		a.position = Vector2(21 * 8, 4 * 8) * UITheme.PX
 		var r := await a.choose()
 		if r == 1:
-			await Dialog.say(root, "[color=#ffdc4a]%s[/color]\n%s" % [DB.item_name(id), UITheme.red_text(str(DB.items.get(id, {}).get("desc", ""))).replace("\n", " ")])
+			await Dialog.say(root, "[color=#ffdc4a]%s[/color]\n%s" % [DB.item_name(id), TeamScreens.item_desc(id)])
 			continue
 		if r != 0:
 			return false

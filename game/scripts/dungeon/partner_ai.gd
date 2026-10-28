@@ -48,6 +48,7 @@ func applies(m: Mon, mem: Dictionary) -> bool:
 	return AI.tactic_of(m, mem) == "lets_go_together"
 
 static var debug := false             # tests: print partners that stand still away from the leader
+static var stats := {}                 # tests: name -> {n, d, far, max, still, still_max}
 
 ## Called from AI.decide after Red's status / item checks. {} = let Red's AI decide.
 func decide(m: Mon, mem: Dictionary) -> Dictionary:
@@ -57,6 +58,12 @@ func decide(m: Mon, mem: Dictionary) -> Dictionary:
 		# still stuck = Red's own AI for the turn
 		var away := FloorState.cheb(m.pos, dg.fs.leader.pos) > 1
 		var idle := r.is_empty() or (str(r.get("type", "")) == "wait")
+		# a "move" that keeps failing (the step is refused) counts as standing still too
+		var lp = mem.get("smart_pos")
+		if lp != null and lp == m.pos and int(mem.get("smart_moved", 0)) == 1:
+			idle = true
+		mem.smart_pos = m.pos
+		mem.smart_moved = 1 if str(r.get("type", "")) == "move" else 0
 		mem.smart_still = int(mem.get("smart_still", 0)) + 1 if (away and idle) else 0
 		if int(mem.smart_still) >= 6:
 			mem.smart_still = 0
@@ -67,7 +74,23 @@ func decide(m: Mon, mem: Dictionary) -> Dictionary:
 			mem.follow_only = false
 	if debug and applies(m, mem):
 		var L: Mon = dg.fs.leader
-		var still := str(r.get("type", "")) == "wait" or r.is_empty()
+		var dl := FloorState.cheb(m.pos, L.pos)
+		var key := "%s#%d" % [m.name, m.uid]
+		var st: Dictionary = stats.get(key, {"n": 0, "d": 0, "far": 0, "max": 0, "still": 0, "still_max": 0, "last": Vector2i(-99, -99)})
+		st.n += 1
+		st.d += dl
+		st.far += 1 if dl > 4 else 0
+		st.max = maxi(int(st.max), dl)
+		st.still = int(st.still) + 1 if (st.last == m.pos and dl > 2) else 0
+		st.still_max = maxi(int(st.still_max), int(st.still))
+		st.last = m.pos
+		stats[key] = st
+		if OS.get_cmdline_user_args().has("--trace") and dg.floor_i == 0 and dg.fs.turn <= 30:
+			print("PTRACE t=%d %s at %s leader %s dist %d act=%s goal=%s" % [dg.fs.turn, m.name, m.pos, L.pos, dl, str(r), str(mem.get("last_goal", "?"))])
+		if dl > 8 and int(st.n) % 8 == 0:
+			print("PARTNERFAR %s at %s leader %s dist %d goal=%s act=%s room=%d/%d turn=%d" % [m.name, m.pos, L.pos, dl, str(mem.get("last_goal", "?")), str(r), dg.fs.room_at(m.pos), dg.fs.room_at(L.pos), dg.fs.turn])
+		var still: bool = str(r.get("type", "")) == "wait" or r.is_empty() or mem.get("dbg_pos") == m.pos
+		mem.dbg_pos = m.pos
 		var k := "dbg_still"
 		mem[k] = int(mem.get(k, 0)) + 1 if still else 0
 		if int(mem[k]) >= 4 and FloorState.cheb(m.pos, L.pos) > 1:
@@ -136,11 +159,53 @@ func _decide(m: Mon, mem: Dictionary) -> Dictionary:
 	var o := fs.mon_at(to)
 	if o != null:
 		if o.is_team() and not o.is_leader and not Missions.is_client(o) and not o.get_meta("story_npc", false) \
-				and not _busy(o):
+				and not _busy(o) and _may_swap(m, o, L):
 			return {"type": "move", "dir": step, "swap": true}
+		# a teammate in the way: step around it when there's room (rooms), else queue up behind it (corridors)
+		var side := _sidestep(m, to, goal)
+		if side >= 0:
+			return {"type": "move", "dir": side}
 		mem.ally_skip = true
 		return {"type": "wait", "ally_skip": true}
 	return {"type": "move", "dir": step}
+
+## A free neighbouring tile that still gets closer to the goal (around a teammate standing in the way).
+func _sidestep(m: Mon, blocked: Vector2i, goal: Vector2i) -> int:
+	var fs: FloorState = dg.fs
+	var cur := FloorState.cheb(m.pos, goal)
+	var best := -1
+	var best_d := cur
+	for d in 8:
+		var p: Vector2i = m.pos + DB.DIRS[d]
+		if p == blocked or not _free(m, p) or not _edge_ok(m, m.pos, d):
+			continue
+		var k := FloorState.cheb(p, goal)
+		if k < best_d:
+			best_d = k
+			best = d
+	return best
+
+## Passing a teammate: not one already in place near the leader (it would swap straight back, and the two
+## ping-pong on the same tiles every turn), nor the one that just swapped with this partner.
+## For the plan: can the path go through teammate o (it walks on or can be swapped with later)?
+func _may_pass(m: Mon, o: Mon, L: Mon) -> bool:
+	if not dg.fs.walkable(m.pos, o):
+		return false
+	return not (FloorState.cheb(o.pos, L.pos) <= 2 and FloorState.cheb(o.pos, L.pos) < FloorState.cheb(m.pos, L.pos))
+
+func _may_swap(m: Mon, o: Mon, L: Mon) -> bool:
+	if not dg.fs.walkable(m.pos, o):
+		return false                       # o can't stand where m is (water, lava: a Squirtle can't trade places into lava)
+	if FloorState.cheb(o.pos, L.pos) <= 2 and FloorState.cheb(o.pos, L.pos) < FloorState.cheb(m.pos, L.pos):
+		return false
+	var sb = m.get_meta("swapped_by", [])
+	if sb is Array and sb.size() == 2 and int(sb[0]) == o.uid and int(sb[1]) == dg.fs.turn:
+		return false
+	# only pass a teammate that's standing still: one that is walking the same way moves out of the way by
+	# itself (two followers passing each other back and forth used to trade places for 10 turns at a corridor)
+	if int(o.get_meta("moved_turn", -99)) >= dg.fs.turn - 1:
+		return false
+	return true
 
 # ------------------------------------------------------------------ foes and targets
 func _foes(m: Mon) -> Array:
@@ -373,7 +438,10 @@ func _bfs(m: Mon, max_depth: int) -> Dictionary:
 		if pd >= max_depth:
 			continue
 		var o0: Mon = _occ.get(p)
-		if o0 != null and o0 != m and (not o0.is_team() or o0.is_leader or Missions.is_client(o0) or _busy(o0)):
+		if o0 != null and o0 != m and (not o0.is_team() or o0.is_leader or Missions.is_client(o0) or _busy(o0) \
+				or not dg.fs.walkable(m.pos, o0)):
+			# teammates don't block the plan (they move, can be passed or stepped around); planning around them
+			# sent followers on long detours through other corridors while the leader walked off
 			continue                              # reachable as a goal next to, but not through (nor a teammate mid-fight)
 		for d in 8:
 			var to: Vector2i = p + DB.DIRS[d]

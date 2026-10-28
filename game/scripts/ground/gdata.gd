@@ -17,6 +17,8 @@ static var common: Dictionary = {}
 static var extra: Dictionary = {}
 static var _enum_rev := {}            # enum kind -> {NAME: value}
 static var _loaded := false
+static var croagunk_kind := -1
+static var debug_kind := -1         # remake: the Swap Shop's Croagunk (see Ground.lives_select_map)
 
 static func load_all() -> void:
 	if _loaded:
@@ -30,6 +32,11 @@ static func load_all() -> void:
 	maps = _json("res://data/ground/maps.json")
 	common = _json("res://data/ground/common.json")
 	extra = _json("res://data/ground/extra.json")
+	# remake: Croagunk's Swap Shop (Explorers of Sky) gets a lives kind of its own, shaped like the Kecleon brothers
+	croagunk_kind = extra.lives_types.size()
+	extra.lives_types.append([5, 0, 2, 1])
+	debug_kind = extra.lives_types.size()          # remake: the Debug NPC (Game Options -> Debug NPC)
+	extra.lives_types.append([5, 0, 2, 1])
 	GVars.init()
 
 static func _json(p: String) -> Variant:

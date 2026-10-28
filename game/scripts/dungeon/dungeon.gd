@@ -99,8 +99,9 @@ func start(key: String, team_entries: Array) -> void:
 		Game.bag.clear()
 		for e in team_entries:
 			if str(e.get("held", "")) != "":
-				Game.storage[e.held] = int(Game.storage.get(e.held, 0)) + 1
+				Game.storage[e.held] = int(Game.storage.get(e.held, 0)) + (int(e.get("held_n", 1)) if TeamScreens.held_stacks(str(e.held)) else 1)
 				e.held = ""
+				e.held_n = 1
 				stored += 1
 	for i in team_entries.size():
 		var m: Mon = Game.mon_from_entry(team_entries[i])
@@ -200,7 +201,8 @@ func build_floor() -> void:
 	fs.set_meta("fixed_floor", fixed_no != 0)
 	# team
 	var start: Vector2i = gen.player
-	for m in team_mons:
+	var order: Array = team_mons.filter(func(x): return x.is_leader) + team_mons.filter(func(x): return not x.is_leader)
+	for m in order:
 		if m.hp <= 0:
 			continue
 		var p := start if m.is_leader else fs.free_tile_near(start, m, 4)
@@ -327,8 +329,11 @@ func _spawn_fixed(gen: Dictionary) -> void:
 				occ = null
 		if occ != null:
 			continue
-		var lv := BossScene.level_for(dkey, floor_i, sp)
+		var lv0 := BossScene.level_for(dkey, floor_i, sp)
+		var lv := Difficulty.boss_level(self, lv0)       # Hard mode: story Pokémon scale with the team
 		var m := DB.make_mon(sp, maxi(1, lv), "enemy")
+		if lv != lv0:
+			m.set_meta("hard_base_lv", lv0)
 		TurnRules.init_spawned(m, fs.rng)
 		m.pos = e.pos
 		m.facing = 0
@@ -439,10 +444,11 @@ func _spawn_eos_bosses(a: Dictionary) -> void:
 			p = fs.free_tile_near(p, null, 4)
 			if p.x < 0:
 				continue
-		var m := DB.make_mon(sp, maxi(1, int(e.level)), "enemy")
+		var blv := Difficulty.boss_level(self, maxi(1, int(e.level)))     # Hard mode
+		var m := DB.make_mon(sp, blv, "enemy")
 		TurnRules.init_spawned(m, fs.rng)
 		if int(e.hp) > 0:
-			m.max_hp = int(e.hp)
+			m.max_hp = Difficulty.boss_hp(int(e.hp), maxi(1, int(e.level)), blv)
 			m.hp = m.max_hp
 		m.pos = p
 		m.facing = 0
@@ -574,6 +580,35 @@ func _refresh_mon_visual(m: Mon) -> void:
 		m.visual = null
 	_add_sprite(m)
 
+## Red sub_8042A34 (dungeon_jobs.c): effect 318 — a beam of light from the sky with sound 850 — on the tile
+## of a job client who is rescued / gets their item / meets their escort. The client is taken away as the
+## beam starts (HandleFaint DELETED_FOR_EVENT) and the game waits for it to end (sub_804178C).
+func rescue_beam(ms: Array) -> void:
+	var E: Dictionary = GData.ornaments().get("fx318", {})
+	var tex := DB.tex("res://assets/ground/orn/fx318.png")
+	if Dialog.auto and not OS.get_cmdline_user_args().has("--fx"):
+		return
+	Audio.sfx("850")
+	if E.is_empty() or tex == null:
+		return
+	var frames: Array = []
+	for fr in E.anims[0][0]:
+		var P: Array = E.poses[int(fr[0])]
+		frames.append([P[0], P[1], P[2], P[3], int(P[4]) + int(fr[2]), int(P[5]) + int(fr[3]), int(fr[1])])   # [src x, y, w, h, dst x, y, frames]
+	var last: MoveFx.FxNode = null
+	for m in ms:
+		if m == null:
+			continue
+		var n := MoveFx.FxNode.new()
+		n.tex = tex
+		n.frames = frames
+		n.position = Vector2(m.pos.x * T + 12, m.pos.y * T + 16)
+		n.z_index = 6
+		fx_layer.add_child(n)
+		last = n
+	if last:
+		await last.done
+
 func _px(p: Vector2i) -> Vector2:
 	return Vector2(p.x * T + T / 2.0, p.y * T + T / 2.0)
 
@@ -652,7 +687,7 @@ func _spawn_wild(p: Vector2i) -> Mon:
 	var e = _pick_weighted(pairs)
 	if e == null:
 		return null
-	var m := DB.make_mon(str(e[0]), maxi(1, int(e[1])), "enemy")
+	var m := DB.make_mon(str(e[0]), Difficulty.wild_level(self, maxi(1, int(e[1]))), "enemy")
 	if Shiny.roll(fs.rng):
 		m.set_meta("shiny", true)                    # DX: a rare shiny
 	TurnRules.init_spawned(m, fs.rng)
@@ -734,6 +769,7 @@ var _perf: Array = []
 var _perf_last := 0
 func _process(dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
+	_stick_zoom(dt)
 	_process_main(dt)
 	_advance_walkers(dt)      # after input, so a step chosen this frame continues the motion with no pause
 	if perf_log:
@@ -847,6 +883,26 @@ func set_zoom(z: float) -> void:
 	z = clampf(z, 0.75, 3.0)
 	Game.settings.zoom = z
 	cam.zoom = Vector2.ONE * z / UITheme.ui_scale()      # menu size scales the canvas; the floor keeps its size
+
+## Controller: the right stick zooms the floor (up = in, down = out), smoothly; saved when the stick is let go.
+const STICK_DEAD := 0.3
+const STICK_ZOOM_SPEED := 1.6      # zoom units a second at full tilt
+var _stick_zooming := false
+func _stick_zoom(dt: float) -> void:
+	if fs == null or result_sent or cam == null:
+		return
+	var ax := 0.0
+	for dev in Input.get_connected_joypads():
+		var v := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y)
+		if absf(v) > absf(ax):
+			ax = v
+	if absf(ax) > STICK_DEAD:
+		var tilt := (absf(ax) - STICK_DEAD) / (1.0 - STICK_DEAD) * signf(ax)
+		set_zoom(float(Game.settings.get("zoom", 1.25)) - tilt * STICK_ZOOM_SPEED * dt)
+		_stick_zooming = true
+	elif _stick_zooming:
+		_stick_zooming = false
+		Game.save_game()
 
 var _pinch := {}
 func _input(e: InputEvent) -> void:
@@ -1358,8 +1414,8 @@ func end_of_turn_i() -> void:
 	if str(wt.message) != "":
 		_msg(str(wt.message))
 	# tests: warp ahead when a floor drags on (the user allowed the story test to skip slow floors)
-	if test_invincible and _test_floor_t0 > 0 and Time.get_ticks_msec() - _test_floor_t0 > 75000 and not _test_story_floor():
-		print("  TEST warp: floor %d took over 75 s" % (floor_i + 1))
+	if test_invincible and _test_floor_t0 > 0 and Time.get_ticks_msec() - _test_floor_t0 > 30000 and not _test_story_floor():
+		print("  TEST warp: floor %d took over 30 s" % (floor_i + 1))
 		_test_floor_t0 = 0
 		await next_floor()
 		return
@@ -1407,7 +1463,14 @@ func execute(m: Mon, a: Dictionary) -> bool:
 			var id := ""
 			if a.get("held", false):
 				id = m.held
-				m.held = ""
+				m.held_n = maxi(1, m.held_n) - 1
+				if m.held_n <= 0 or not TeamScreens.held_stacks(id):
+					m.held = ""
+					m.held_n = 1
+				var he: Dictionary = m.get_meta("entry", {})
+				if not he.is_empty():
+					he.held = m.held
+					he.held_n = m.held_n
 			elif int(a.get("bag", -1)) >= 0 and int(a.bag) < Game.bag.size():
 				id = str(Game.bag[int(a.bag)].id)
 				_take_bag(int(a.bag))
@@ -1432,6 +1495,8 @@ func do_move(m: Mon, d: int, swap := false) -> bool:
 	if not fs.can_step(m.pos, d, m):
 		if m.visual:
 			m.visual.queue_redraw()
+		if swap and PartnerAI.debug:
+			print("PARTNERDBG swap refused (can_step) %s %s dir %d" % [m.name, m.pos, d])
 		return false
 	var to: Vector2i = m.pos + DB.DIRS[d]
 	var o := fs.mon_at(to)
@@ -1444,9 +1509,12 @@ func do_move(m: Mon, d: int, swap := false) -> bool:
 		if m.is_leader and bool(o.get_meta("shopkeeper", false)) and shop:
 			await shop.talk(o)                       # Red: walking into Kecleon talks to it
 			return false
-		if (m.is_leader and o.is_team()) or (swap and o.is_team() and not o.is_leader and not Missions.is_client(o)):
+		if swap and PartnerAI.debug and not (o.is_team() and not o.is_leader and not Missions.is_client(o)):
+			print("PARTNERDBG swap refused (occupant %s side %s leader %s) %s" % [o.name, o.side, o.is_leader, m.name])
+		if (m.is_leader and o.is_team()) or (swap and o.is_team() and not o.is_leader and not Missions.is_client(o) and fs.walkable(m.pos, o)):
 			# swap places with a teammate (partners too, with the smarter partner AI)
 			var oold := o.pos
+			o.set_meta("swapped_by", [m.uid, fs.turn])
 			o.pos = m.pos
 			AI.on_moved(o, oold)
 			o.facing = (d + 4) % 8
@@ -1455,6 +1523,7 @@ func do_move(m: Mon, d: int, swap := false) -> bool:
 			return false
 	var old := m.pos
 	m.pos = to
+	m.set_meta("moved_turn", fs.turn)
 	AI.on_moved(m, old)
 	_queue_walk(m)
 	_tile_effects(m)
@@ -1489,7 +1558,11 @@ func _mon_try_pick_up(m: Mon) -> void:
 			Audio.sfx("pickup")
 			_msg("%s picked up the %s and put it in the Toolbox." % [nm, iname])
 	elif m.held == "" and str(it.id) != "poke" and not is_temp(m):
-		m.held = str(it.id)
+		if m.is_team():
+			TeamScreens.set_held(m, str(it.id), int(it.get("n", 1)))
+		else:
+			m.held = str(it.id)
+			m.held_n = maxi(1, int(it.get("n", 1))) if TeamScreens.held_stacks(str(it.id)) else 1
 		fs.items.erase(m.pos)
 		if seen:
 			Audio.sfx("pickup")
@@ -1594,7 +1667,7 @@ func _after_leader_step_i() -> void:
 		_msg("It's a [color=#ff8070]Monster House[/color]!")
 		Audio.play_music("128")
 	# items (the Auto-pickup option can leave some on the ground: Ground menu picks them up)
-	if fs.items.has(L.pos) and int(fs.items[L.pos].get("price", 0)) == 0 and qol and not qol.auto_pickup(fs.items[L.pos]):
+	if fs.items.has(L.pos) and qol and not qol.auto_pickup(fs.items[L.pos]):
 		_msg("There's the [color=#ffdc4a]%s[/color] underfoot." % DB.item_name(fs.items[L.pos].id))
 	elif fs.items.has(L.pos):
 		var it: Dictionary = fs.items[L.pos]
@@ -1605,7 +1678,15 @@ func _after_leader_step_i() -> void:
 			Audio.sfx("coin")
 			_msg("Picked up %d Poké." % int(it.n))
 		elif int(it.get("price", 0)) > 0:
-			_msg("That's for sale.")
+			# Red (dungeon_items.c): a Kecleon ware is picked up like any item, still unpaid (IN_SHOP); its price
+			# shows in the Toolbox and Kecleon asks for the money when the leader walks out of the shop
+			if Game.bag.size() < Game.BAG_MAX:
+				Game.bag.append({"id": it.id, "n": int(it.get("n", 1)), "price": int(it.price)})
+				fs.items.erase(L.pos)
+				Audio.sfx("pickup")
+				_msg("Picked up the [color=#ffdc4a]%s[/color] and\nput it in the Toolbox." % DB.item_name(it.id))
+			else:
+				_msg("%s stepped on\nthe [color=#ffdc4a]%s[/color]." % [_nm(L), DB.item_name(it.id)])
 		elif test_want != "" and str(it.id) == test_want and Game.bag.size() >= Game.BAG_MAX and Game.bag.pop_back() == null:
 			pass
 		elif Game.bag_add(it.id, int(it.n)):
@@ -2568,7 +2649,10 @@ func next_floor() -> void:
 	for m in team_mons:
 		Awaken.revert(m)
 		Game.store_mon(m)
-	if floor_i >= ddata.floors.size() or (stop_floor >= 0 and floor_i >= stop_floor):
+	if stop_floor >= 0 and floor_i >= stop_floor and floor_i < ddata.floors.size():
+		_end("boss_next")           # Red: the floors before the boss arena end straight into the ground cutscene
+		return
+	if floor_i >= ddata.floors.size():
 		_end("cleared")
 		return
 	AdventureLog.add("floors")             # IncrementAdventureFloorsExplored
@@ -3101,10 +3185,16 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 				return false
 			var t: Mon = team[w]
 			var old := t.held
-			_take_bag(bag_i)
-			TeamScreens.set_held(t, id)
+			var old_n := t.held_n
+			var gn := 1
+			if TeamScreens.held_stacks(id):
+				gn = maxi(1, int(Game.bag[bag_i].get("n", 1)))       # the whole stack is handed over
+				Game.bag.remove_at(bag_i)
+			else:
+				_take_bag(bag_i)
+			TeamScreens.set_held(t, id, gn)
 			if old != "":
-				Game.bag.insert(mini(bag_i, Game.bag.size()), {"id": old, "n": 1})
+				Game.bag.insert(mini(bag_i, Game.bag.size()), {"id": old, "n": old_n if TeamScreens.held_stacks(old) else 1})
 				_msg("%s took the %s and returned the [color=#ffdc4a]%s[/color]." % [_nm(t), nm, DB.item_name(old)])
 			else:
 				_msg("The item %s was given to %s." % [nm, _nm(t)])
@@ -3183,7 +3273,9 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 			await _menu_turn()
 			return true
 		"take":
-			Game.bag_add(id)
+			if not Game.bag_add(id, TeamScreens.held_n_of(holder) if TeamScreens.held_stacks(id) else 1):
+				_msg("The Toolbox is full.")
+				return false
 			TeamScreens.set_held(holder, "")
 			_msg("%s returned the %s." % [_nm(holder), nm])
 			await _menu_turn()
@@ -3193,8 +3285,9 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 			if k3 < 0:
 				return false
 			var b4: Dictionary = Game.bag[k3]
-			TeamScreens.set_held(holder, b4.id)
-			Game.bag[k3] = {"id": id, "n": 1}
+			var hn := TeamScreens.held_n_of(holder) if TeamScreens.held_stacks(id) else 1
+			TeamScreens.set_held(holder, b4.id, int(b4.get("n", 1)))
+			Game.bag[k3] = {"id": id, "n": hn}
 			_msg("The %s was exchanged for the [color=#ffdc4a]%s[/color] in the Toolbox." % [nm, DB.item_name(b4.id)])
 			await _menu_turn()
 			return true
@@ -4347,7 +4440,7 @@ func _faint_summary(t: Mon, killer: Mon) -> Dictionary:
 func _end_summary(res: String) -> Dictionary:
 	var who: Mon = fs.leader if fs and fs.leader else (team_mons[0] if not team_mons.is_empty() else null)
 	match res:
-		"cleared":
+		"cleared", "boss_next":
 			return LastOuting.summary("cleared", who)
 		"rescued":
 			return LastOuting.summary("rescue", who)
@@ -4476,6 +4569,12 @@ func _test_story_floor() -> bool:
 		return true
 	if test_want != "" and _floor_has_want():
 		return true
+	# a taken job on this floor (find-item jobs until the item is in the Toolbox)
+	for j in Game.jobs:
+		if str(j.get("state", "")) == "taken" and str(j.get("dungeon", "")) == dkey and int(j.get("floor", -1)) == floor_i + 1:
+			if str(j.get("kind", "")) == "find" and Missions.bag_has(str(j.get("item", ""))):
+				continue
+			return true
 	for m in fs.mons:
 		if Missions.still_needs_item(m):
 			continue          # a delivery the team can't make: nothing more to do here

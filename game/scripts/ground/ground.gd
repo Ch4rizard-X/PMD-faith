@@ -238,6 +238,7 @@ func _demo_cancel_check() -> void:
 
 # ------------------------------------------------------------------ start (xxx_script_related_8098468)
 func start(mode: int) -> void:
+	Story.sync_base_kind()          # Red: BASE_KIND / PARTNER_TALK_KIND from the hero / partner on every start
 	start_mode = mode
 	req = REQ_GROUND
 	req_count = 0
@@ -486,7 +487,33 @@ func _process(dt: float) -> void:
 			return
 	if n >= cap:
 		_acc = 0.0
+	_stick_zoom(dt)
 	_render()
+
+## Controller: the right stick zooms the town / ground maps (up = in, down = out); saved when let go.
+## Not on the boot, title and personality-quiz screens (Red's fixed 240x160 views).
+const ZOOM_MIN := 1.0
+const ZOOM_MAX := 3.5
+var _stick_zooming := false
+func _stick_zoom(dt: float) -> void:
+	if demo or (cur_map >= 223 and cur_map <= 227):
+		return
+	var ax := 0.0
+	for dev in Input.get_connected_joypads():
+		var v := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y)
+		if absf(v) > absf(ax):
+			ax = v
+	if absf(ax) > 0.3:
+		var tilt := (absf(ax) - 0.3) / 0.7 * signf(ax)
+		set_ground_zoom(_zoom - tilt * 1.6 * dt)
+		_stick_zooming = true
+	elif _stick_zooming:
+		_stick_zooming = false
+		Game.save_game()
+
+func set_ground_zoom(z: float) -> void:
+	_zoom = clampf(z, ZOOM_MIN, ZOOM_MAX)
+	Game.settings["ground_zoom"] = _zoom
 
 func _tick() -> void:
 	_frame += 1
@@ -611,6 +638,10 @@ func _input(e: InputEvent) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if text.handle_input(e):
 		get_viewport().set_input_as_handled()
+		return
+	if e is InputEventMouseButton and e.pressed and (e.button_index == MOUSE_BUTTON_WHEEL_UP or e.button_index == MOUSE_BUTTON_WHEEL_DOWN) \
+			and not demo and not (cur_map >= 223 and cur_map <= 227):
+		set_ground_zoom(_zoom + (0.1 if e.button_index == MOUSE_BUTTON_WHEEL_UP else -0.1))      # PC: the mouse wheel zooms too
 		return
 	if hud and hud.pad.visible and (hud._pad_touch != -1 or _on_pad(e)):
 		return          # the on-screen pad has this finger (also its emulated mouse events): not tap-to-walk
@@ -1033,7 +1064,31 @@ func _load_map(m: int, dungeon_id := -1, floor_n := 0) -> void:
 				layer_sprites[str(lf)] = s
 		_build_anims(map_info)
 		_build_pal_anim(map_info)
+		_apply_blend(map_info)
 		_build_edge_fill(w, h)
+
+## GBA colour blending of a map layer (BLDCNT/BLDALPHA: out = layer*eva/16 + below*evb/16). evb = 0 is plain
+## drawing; otherwise the layer is added onto what's below it (the Silent Chasm fog, the Personality Test
+## and Nightmare backdrops, whose black parts must vanish), and an opaque layer dims the one below by evb/16.
+func _apply_blend(info: Dictionary) -> void:
+	for sp in layer_sprites.values():
+		sp.modulate = Color.WHITE
+	var b: Dictionary = info.get("blend", {})
+	var evb := int(b.get("evb", 0))
+	var spr = layer_sprites.get(str(b.get("layer", "")), null)
+	if b.is_empty() or evb <= 0 or spr == null:
+		return
+	if spr.material == null:
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		spr.material = mat
+	var ka := clampf(int(b.get("eva", 16)) / 16.0, 0.0, 1.0)
+	spr.modulate = Color(ka, ka, ka, 1.0)
+	if evb < 16:
+		var kb := evb / 16.0
+		for k in layer_sprites:
+			if layer_sprites[k] != spr:
+				layer_sprites[k].modulate = Color(kb, kb, kb, 1.0)
 
 ## BPL palette animations that have no pre-rendered overlays (long cycles): recolour the layers with a
 ## shader driven by a live 16x16 palette texture (sub_80A49E8 advances each row every 'frame_ticks' frames).
@@ -1243,6 +1298,19 @@ func map_collide(p: Vector2i, sz: Vector2i, bit: int) -> bool:
 ## sub_80A3BB0 / GroundMap_Action: the personality-test backdrops drift (layer 0 down, layer 1 up, 0.5 px/frame).
 func _scroll_update() -> void:
 	var nm := str(map_file)
+	if nm == "silent_chasm_entry":
+		# sub_80A59DC MAP_SILENT_CHASM_ENTRY: the mist layer drifts right 1 px every 4 frames, wrapping around
+		scroll.f0 = int(scroll.f0) + 1
+		scroll.f8 = Vector2i(scroll.f8.x + int(scroll.f0) / 4, 0)
+		scroll.f0 = int(scroll.f0) & 3
+		var ww := int(map_info.get("w", 672))
+		var spr = layer_sprites.get(str(map_info.get("blend", {}).get("layer", "")), null)
+		if spr and spr.texture:
+			var k := float(spr.texture.get_width()) / float(maxi(ww, 1))
+			spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+			spr.region_enabled = true
+			spr.region_rect = Rect2(float(posmod(-int(scroll.f8.x), ww)) * k, 0, spr.texture.get_width(), spr.texture.get_height())
+		return
 	if not nm.begins_with("personality_test"):
 		return
 	scroll.f4 = int(scroll.f4) + 2
@@ -1361,6 +1429,15 @@ func lives_select_map(map: int, grp: int, sec: int) -> void:
 		return
 	for d in S.lives:
 		lives_add(-1, d, grp, sec)
+	# remake: Croagunk's Swap Shop stands in Pokémon Square whenever the Kecleon shop there is open
+	# remake: the Debug NPC at the team base (off unless Game Options -> Debug NPC is on)
+	if DebugNpc.enabled() and grp == 0 and sec >= 1 and sec <= 6 and cur_map == GData.map_id("MAP_TEAM_BASE"):
+		lives_add(-1, {"kind": GData.debug_kind, "u1": DebugNpc.DIR, "pos": DebugNpc.SPOT, "scripts": [null, null, null, null]}, grp, sec)
+	if map == SwapShop.MAP and SwapShop.unlocked():
+		for d in S.lives:
+			if int(d.kind) == 71 and d.scripts[2] != null:
+				lives_add(-1, {"kind": GData.croagunk_kind, "u1": SwapShop.DIR, "pos": SwapShop.spot(), "scripts": [null, null, null, null]}, grp, sec)
+				break
 
 func lives_cancel(grp: int, sec: int) -> void:
 	for i in N_LIVES:
@@ -1470,6 +1547,10 @@ func species_of_resolved(k: int) -> String:
 		var e: Dictionary = Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), k - 14)
 		return str(e.get("sp", ""))
 	var types: Array = GData.extra.lives_types
+	if k == GData.croagunk_kind:
+		return "0453"
+	if k == GData.debug_kind:
+		return DebugNpc.SPECIES
 	if k == 71:
 		return "0352p"            # the Kecleon Wares brother: GetPokemonOverworldPalette(id, kecleonShop) -> purple
 	if k < types.size() and int(types[k][1]) == 422:
@@ -1692,11 +1773,56 @@ func lives_player_talk(id1: int, id2: int) -> bool:
 	var L2: GLive = lives[id2]
 	if L1.kind_id == -1 or L2.kind_id == -1:
 		return false
+	if L2.kind_id == GData.croagunk_kind and GData.croagunk_kind >= 0:
+		_croagunk_talk(L1, L2)
+		return true
+	if L2.kind_id == GData.debug_kind and GData.debug_kind >= 0:
+		_debug_talk(L1, L2)
+		return true
 	var info := L2.action.predefined_info(2)
 	if info.ptr == GData.NULL_PTR:
 		return false
 	L2.action.execute_predefined(3, Vector2i(1, id1))
 	return _player_script(L1, Vector2i(1, id2), info)
+
+## The team formation changed in the menu (Make Leader, members swapped). Red can only do that in the
+## post-game, where FORMATION_HERO also moves the story to 19,2 (the post-game tutorial). The remake lets you
+## change the team any time, and running FORMATION_HERO mid-story threw the save into the post-game (19,2:
+## Zero Isle / Destiny Tower opened, the base finished). Before the post-game only its reload part runs.
+func formation_changed() -> void:
+	if GVars.after(GVars.SCENARIO_MAIN, 18, -1):
+		map_execute_event(GData.fn_id("FORMATION_HERO"), false)
+		return
+	GVars.set_val(null, GVars.GROUND_GETOUT, GVars.get_val(null, GVars.GROUND_ENTER))
+	GVars.set_val(null, GVars.START_MODE, 2)
+	map_execute_event(GData.fn_id("EVENT_DIVIDE"), false)
+
+## remake: talking to the Swap Shop's Croagunk (no Red script: the shop runs straight away).
+func _croagunk_talk(L1: GLive, L2: GLive) -> void:
+	set_player_mode(11)
+	var t := GDir.sized_delta8(L2.get_center(), L2.get_size(), L1.get_center(), L1.get_size())
+	if t != -1:
+		L2.direction1 = t
+		L2.dir_dirty = true
+	await get_tree().process_frame
+	await SwapShop.open(ui_root)
+	set_player_mode(0)
+
+## remake: the Debug NPC's menu; a story change reloads the ground from the base (EVENT_DIVIDE runs it).
+func _debug_talk(L1: GLive, L2: GLive) -> void:
+	set_player_mode(11)
+	var t := GDir.sized_delta8(L2.get_center(), L2.get_size(), L1.get_center(), L1.get_size())
+	if t != -1:
+		L2.direction1 = t
+		L2.dir_dirty = true
+	await get_tree().process_frame
+	var reload: bool = await DebugNpc.open(self)
+	if reload and host and host.has_method("start_story"):
+		GVars.set_val(null, GVars.GROUND_ENTER, GData.map_id("MAP_TEAM_BASE"))
+		GVars.set_val(null, GVars.GROUND_ENTER_LINK, 0)
+		host.call_deferred("start_story", STARTMODE_GROUND)
+		return
+	set_player_mode(0)
 
 func _player_script(L: GLive, trig, info) -> bool:
 	L.anim_speed = 0x300

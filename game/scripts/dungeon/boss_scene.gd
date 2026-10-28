@@ -372,7 +372,7 @@ func _step(st: Array, visual: bool) -> void:
 				dg.cs_hide(m8, false)
 				m8.set_meta("boss", true)
 				if int(st[2]) > 0:
-					m8.max_hp = int(st[2])
+					m8.max_hp = Difficulty.boss_hp(int(st[2]), int(m8.get_meta("hard_base_lv", m8.level)), m8.level)
 					m8.hp = m8.max_hp
 					m8.set_meta("boss_hp", m8.max_hp)
 				if Dialog.auto:

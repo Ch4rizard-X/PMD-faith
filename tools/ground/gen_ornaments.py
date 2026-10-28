@@ -269,7 +269,7 @@ def effect_table():
 
 def used_effect_ids():
     s = json.load(open(os.path.join(CM.DATA, "ground", "scripts.json")))  # gen_ground_scripts.py output
-    ids = set(range(88, 95))
+    ids = set(range(88, 95)) | {318}   # 318: job client rescued (dungeon_jobs.c sub_8042A34)
     for v in s.values():
         for c in v:
             if c[0] == 0x56 and c[3]:

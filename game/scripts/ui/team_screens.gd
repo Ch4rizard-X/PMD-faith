@@ -65,6 +65,7 @@ static func as_mon(x) -> Mon:
 	if e.has("moves"):
 		m.moves = e.moves
 	m.held = str(e.get("held", ""))
+	m.held_n = maxi(1, int(e.get("held_n", 1)))
 	m.is_leader = Game.team.size() > 0 and is_same(Game.team[0], e)
 	return m
 
@@ -87,14 +88,34 @@ static func held_of(x) -> String:
 		return x.held
 	return str(x.get("held", ""))
 
-static func set_held(x, id: String) -> void:
+## n: how many (a stack of throwing items is held whole, like Red's held Item quantity).
+static func set_held(x, id: String, n := 1) -> void:
+	n = maxi(1, n) if held_stacks(id) else 1
 	if x is Mon:
 		x.held = id
+		x.held_n = n
 		var e: Dictionary = x.get_meta("entry", {})
 		if not e.is_empty():
 			e.held = id
+			e.held_n = n
 	else:
 		x.held = id
+		x.held_n = n
+
+static func held_n_of(x) -> int:
+	if x is Mon:
+		return maxi(1, x.held_n)
+	return maxi(1, int(x.get("held_n", 1)))
+
+## The held item's name, with the count for a stack ("Iron Thorn (5)").
+static func held_name(x) -> String:
+	var id := held_of(x)
+	if id == "":
+		return ""
+	return "%s (%d)" % [DB.item_name(id), held_n_of(x)] if held_stacks(id) else DB.item_name(id)
+
+static func held_stacks(id: String) -> bool:
+	return id != "" and bool(DB.items.get(id, {}).get("stack", false))
 
 static var leader_changed := false
 
@@ -243,7 +264,7 @@ static func item_row(b: Dictionary, show_set := true) -> Dictionary:
 		nm = UITheme.glyph("ICON_STICKY") + nm
 	if show_set and bool(b.get("set", false)):
 		nm = UITheme.glyph("ICON_SET") + nm
-	var row := {"text": nm, "icon": item_icon(id)}
+	var row := {"text": nm, "icon": item_icon(id), "item": id}
 	if I.get("stack", false) and int(b.get("n", 1)) > 0:
 		row.right = str(int(b.get("n", 1)))
 	if int(b.get("price", 0)) > 0:          # an unpaid Kecleon ware: its price, in the shop's colour
@@ -338,7 +359,14 @@ class RedMenu extends PanelContainer:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		custom_minimum_size.x = min_w
 		TeamScreens._stack.append(self)
-		tree_exiting.connect(func(): TeamScreens._stack.erase(self))
+		tree_exiting.connect(func():
+			TeamScreens._stack.erase(self)
+			# the second screen goes back to the item under the cursor of the menu below (or nothing)
+			var under = TeamScreens._stack.back() if not TeamScreens._stack.is_empty() else null
+			if under != null and is_instance_valid(under) and under.has_method("push_hover"):
+				under.push_hover()
+			else:
+				BottomScreen.hover_item(""))
 		var vb := VBoxContainer.new()
 		vb.add_theme_constant_override("separation", 0)
 		vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -458,7 +486,14 @@ class RedMenu extends PanelContainer:
 		var hgt := 10.0 * P
 		hb.draw_rect(Rect2(x0, (hb.size.y - hgt) / 2.0, hb.size.x - x0, hgt), UITheme.FRAME_MID)
 
+	## The second screen shows the description of the item under the cursor (top menu only).
+	func push_hover() -> void:
+		if TeamScreens._stack.is_empty() or TeamScreens._stack.back() != self:
+			return
+		BottomScreen.hover_item(str(rows[sel].get("item", "")) if sel >= 0 and sel < rows.size() else "")
+
 	func _refresh() -> void:
+		push_hover()
 		for k in _rows.size():
 			_rows[k].queue_redraw()
 			var i: int = top + k
@@ -952,8 +987,43 @@ static func move_info_chain(root: Control, names: Array) -> void:
 ## Red's item description window (InitItemDescriptionWindow).
 static func item_info(root: Control, id: String) -> void:
 	var I: Dictionary = DB.items.get(id, {})
+	var desc := item_desc(id)
+	await run_page(root, page(str(I.get("name", id)), [desc if desc != "" else "No description."]))
+
+## An item's description as BBCode. Explorers of Sky exclusive items: the star rating after "Rarity:" (the ROM's
+## star marks are lost from the text) and "Item for:" on its own line, as EoS lays the page out.
+static func item_desc(id: String) -> String:
+	var I: Dictionary = DB.items.get(id, {})
 	var desc := str(I.get("desc", ""))
-	await run_page(root, page(str(I.get("name", id)), [UITheme.red_text(desc if desc != "" else "No description.")]))
+	desc = desc.replace(" Select detail: or /View detail:", "").replace("Select detail: or /View detail:", "")
+	var t := UITheme.red_text(desc)
+	if str(I.get("kind", "")) == "exclusive" and t.begins_with("Rarity:"):
+		var stars := ""
+		for _k in clampi(int(I.get("rarity", 1)), 1, 3):
+			stars += star_mark()
+		t = t.substr(7).strip_edges()
+		var rest := t
+		var for_line := ""
+		if t.begins_with("Item for:"):
+			var cut := t.find(" ", 10)
+			# "Item for: Bulbasaur Slightly boosts ..." / "Item for: Grass-type Pokémon ..." up to the effect
+			var r := RegEx.new()
+			r.compile("^Item for: ((?:[^ ]+-type Pokémon)|(?:[^ ]+))\\s*")
+			var m := r.search(t)
+			if m:
+				for_line = "Item for: " + m.get_string(1)
+				rest = t.substr(m.get_end())
+			elif cut > 0:
+				for_line = t.substr(0, cut)
+				rest = t.substr(cut + 1)
+		rest = rest.replace(" -rarity", " %s-rarity" % stars)      # "An item with a ★★★-rarity rating ..."
+		t = "Rarity: %s\n%s%s" % [stars, (for_line + "\n") if for_line != "" else "", rest]
+	return t
+
+## A star rating mark (Red's STAR_BULLET glyph; a drawn star when the glyph sheet is missing).
+static func star_mark() -> String:
+	var g := UITheme.glyph("STAR_BULLET")
+	return g if g != "" else "[color=#f8e040]*[/color]"
 
 # ============================================================================ summary
 const STATUS_INDEX := {"sleep": "1", "nightmare": "2", "yawn": "3", "napping": "4", "burn": "6", "poison": "7", "badpoison": "8",

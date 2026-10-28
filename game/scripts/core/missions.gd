@@ -871,6 +871,7 @@ static func on_talk(dungeon: Dungeon, m: Mon) -> void:
 		await say_pages(root, _sub(txt("dj_cant_talk"), subs))
 		return
 	dungeon.menu_open = true
+	var escorted: Mon = null
 	if j.kind == "escort":
 		var esc: Mon = null
 		for t in dungeon.fs.mons:
@@ -886,7 +887,7 @@ static func on_talk(dungeon: Dungeon, m: Mon) -> void:
 			dungeon.menu_open = false
 			return
 		await say_pages(root, _sub(txt("dj_escorted"), subs))
-		_remove_mon(dungeon, esc)
+		escorted = esc
 	elif j.kind == "deliver":
 		if await ask_pages(root, _sub(txt("dj_found_deliver"), subs), ["Yes", "No"]) != 0:
 			dungeon.menu_open = false
@@ -912,8 +913,11 @@ static func on_talk(dungeon: Dungeon, m: Mon) -> void:
 			return
 		await say_pages(root, _sub(txt("dj_badge"), subs))
 	j.state = "done_pending"                      # sub_80843BC: MAIL_TYPE_UNK8
-	_remove_mon(dungeon, m)
+	_remove_mon(dungeon, m)                       # HandleFaint DELETED_FOR_EVENT as the beam starts
+	if escorted:
+		_remove_mon(dungeon, escorted)
 	dungeon.obj_layer.queue_redraw()
+	await dungeon.rescue_beam([m, escorted])      # sub_8042A34: light beam + sound 850, waited for
 	# "A mission has been completed! Would you like to leave now?"
 	while true:
 		if dungeon.autoplay or dungeon.auto_answer:
@@ -921,6 +925,7 @@ static func on_talk(dungeon: Dungeon, m: Mon) -> void:
 		if await ask_pages(root, txt("dj_done_leave"), ["Yes", "No"], false) == 0:
 			if await ask_pages(root, txt("dj_really_leave"), ["Yes", "No"], false) == 0:
 				dungeon.menu_open = false
+				dungeon.set_meta("job_exit", true)     # left mid-dungeon: not a clear (no story / arena scripts)
 				dungeon._end("rescued")
 				return
 		elif await ask_pages(root, txt("dj_continue"), ["Yes", "No"], false) == 0:

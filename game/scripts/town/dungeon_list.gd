@@ -9,9 +9,11 @@ const P := UITheme.PX
 const PER_PAGE := 10
 
 ## opts: labels, ids: rescue dungeon ids (or -100). Returns the picked index or -1.
-static func pick(root: Control, opts: Array, ids: Array) -> int:
+## title / icons: the Explorers of Sky list reuses the window (icons = glyph per row, overrides the ids).
+## keys: dungeon keys per row (the Explorers of Sky list), for the "cleared" star (Game Options -> Cleared marks).
+static func pick(root: Control, opts: Array, ids: Array, title := "Dungeons", icons: Array = [], keys: Array = []) -> int:
 	if ListMenu.auto:
-		var lm := ListMenu.make("Dungeons", opts)
+		var lm := ListMenu.make(title, opts)
 		root.add_child(lm)
 		lm.position = Vector2(8, 8)
 		return await lm.choose()
@@ -20,7 +22,15 @@ static func pick(root: Control, opts: Array, ids: Array) -> int:
 	for k in opts.size():
 		var r := int(ids[k])
 		var row := {"text": str(opts[k]), "icon": _col_icon("")}
-		if r >= 0:
+		var dkey := str(keys[k]) if k < keys.size() else (_key_of(r) if r >= 0 else "")
+		if show_cleared() and dkey != "" and dkey in Game.cleared:
+			row.right = TeamScreens.star_mark()           # remake: a cleared dungeon (Rescue Team DX style)
+		if k < icons.size():
+			row.icon = _col_icon(str(icons[k]))
+		elif r == -100:
+			if _eos_jobs_any():
+				row.icon = _col_icon("ENVELOPE_OPEN")
+		elif r >= 0:
 			var go := (desert < 0 or r < desert) and GVars.rescue_job(r)
 			if go:
 				row.icon = _col_icon("ICON_GO")
@@ -33,7 +43,7 @@ static func pick(root: Control, opts: Array, ids: Array) -> int:
 	var sel := 0
 	while true:
 		var part := rows.slice(page * PER_PAGE, mini(rows.size(), (page + 1) * PER_PAGE))
-		var m := TeamScreens.menu("Dungeons  [color=#ffffff]%d[/color]" % (page + 1), part, 16 * 8 * P)
+		var m := TeamScreens.menu("%s  [color=#ffffff]%d[/color]" % [title, page + 1], part, 16 * 8 * P)
 		m.lr = pages > 1
 		m.max_rows = PER_PAGE
 		m.line_h = 10 * P
@@ -68,12 +78,29 @@ static func _col_icon(glyph: String) -> Texture2D:
 	_cols[glyph] = t
 	return t
 
+## Remake option (Game Options -> Others -> Cleared marks): stars on cleared dungeons, gold markers on the maps.
+static func show_cleared() -> bool:
+	return bool(Game.settings.get("qol_clearmark", false))
+
+static func _key_of(r: int) -> String:
+	var sd := GData.rescue_to_script(r)
+	return DB.dungeon_key(int(GData.dungeon_info(sd).dungeon)) if sd >= 0 else ""
+
 ## CountJobsinDungeon: accepted jobs (Job List) in that dungeon.
 static func _jobs_in(r: int) -> int:
 	var sd := GData.rescue_to_script(r)
 	if sd < 0:
 		return 0
-	var key := DB.dungeon_key(int(GData.dungeon_info(sd).dungeon))
+	return jobs_in_key(DB.dungeon_key(int(GData.dungeon_info(sd).dungeon)))
+
+## Any accepted job in an Explorers of Sky dungeon (the envelope on that row).
+static func _eos_jobs_any() -> bool:
+	for j in Game.jobs:
+		if str(j.get("dungeon", "")).begins_with("eos_") and not str(j.get("state", "")) in ["done", "done_pending"]:
+			return true
+	return false
+
+static func jobs_in_key(key: String) -> int:
 	var n := 0
 	for j in Game.jobs:
 		if str(j.get("dungeon", "")) == key and not str(j.get("state", "")) in ["done", "done_pending"]:

@@ -20,6 +20,7 @@ var types: Array = []            # e.g. ["Grass", "Poison"]
 var ability: String = ""          # e.g. "overgrow"
 var moves: Array = []             # [{name: String, pp: int, max_pp: int, linked: bool, on: bool}]
 var held: String = ""             # item id from data/items.json
+var held_n: int = 1               # how many of a stackable held item (Iron Thorns, Gravelerocks ...)
 var iq: int = 0
 var iq_skills: Array = []
 var stages := {"atk": 10, "spa": 10, "def": 10, "spd": 10, "acc": 10, "eva": 10}

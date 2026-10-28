@@ -160,7 +160,7 @@ static func delete_menu(root: Control) -> bool:
 	return ok
 
 static func _write() -> bool:
-	Game.save_game()
+	Game.save_game(true)
 	return FileAccess.file_exists(Game.SAVE_PATH)
 
 ## Deletes the adventure (save.json's game data + the dungeon suspend file) and resets the loaded game
@@ -191,7 +191,7 @@ static func delete_all() -> bool:
 	Game.nature = ""
 	Game.gender = ""
 	GVars.reset_all()
-	Game.save_game()          # keeps Game.settings; with no team there is no save to continue
+	Game.save_game(true)      # keeps Game.settings; with no team there is no save to continue
 	return not Game.has_save()
 
 ## Collects key presses from input events (polling is_action_just_pressed misses quick taps): pop() returns

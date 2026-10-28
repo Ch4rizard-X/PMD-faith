@@ -133,6 +133,10 @@ func drive() -> Dictionary:
 	if stuck > 90 or target_t > 900:
 		# keep pushing into the goal a little (doors behind solid tiles), then give up
 		_log("autopilot: gave up on %s at %s" % [target.key, pos])
+		_stuck_at = int(_stuck_at) + 1 if pos == _stuck_pos else 1
+		_stuck_pos = pos
+		if _stuck_at >= 3 and _hop_near(L, sz, r):
+			_stuck_at = 0
 		_bump(target.key, 0 if target.kind == "talk" else 3)
 		target = {}
 		return {}
@@ -140,6 +144,10 @@ func drive() -> Dictionary:
 		path = _bfs(pos, sz, r, int(target.side) if target.kind == "talk" else -1)
 		if path.is_empty():
 			_log("autopilot: no path to %s rect=%s side=%s pos=%s sz=%s" % [target.key, target.rect, target.get("side", -1), pos, sz])
+			_stuck_at = int(_stuck_at) + 1 if pos == _stuck_pos else 1
+			_stuck_pos = pos
+			if _stuck_at >= 6 and _hop_near(L, sz, r):
+				_stuck_at = 0
 			_bump(target.key, 0 if target.kind == "talk" else 5)   # talk: the pick already moved it to the next side
 			target = {}
 			return {}
@@ -156,6 +164,35 @@ func drive() -> Dictionary:
 		var step: Vector2i = path[0] - pos
 		o2.dir = GDir.vec_dir8(Vector2i(signi(step.x), signi(step.y)))
 	return o2
+
+var _stuck_at := 0
+var _stuck_pos := Vector2i(-1, -1)
+
+## Tests only: boxed in by a crowd of actors with nowhere to go (Pokémon Square at 15,8): hop the leader onto the
+## free tile nearest the target so the story can go on.
+func _hop_near(L, sz: Vector2i, r: Array) -> bool:
+	_collect_blockers()
+	var best := Vector2i(-1, -1)
+	var bd := 1 << 30
+	var c: Vector2i = (r[0] + r[1]) / 2
+	for y in range(c.y - 8, c.y + 9):
+		for x in range(c.x - 8, c.x + 9):
+			var p := Vector2i(x, y)
+			if p.x < r[1].x + 1 and p.x + sz.x > r[0].x - 1 and p.y < r[1].y + 1 and p.y + sz.y > r[0].y - 1:
+				continue
+			if not _free(p, sz):
+				continue
+			var d := (p - c).length_squared()
+			if d < bd:
+				bd = d
+				best = p
+	if best.x < 0:
+		return false
+	_log("autopilot: boxed in, hop to %s" % best)
+	var dv: Vector2i = Vector2i(best.x << 11, best.y << 11) - L.p144
+	L.p144 += dv
+	L.p14C += dv
+	return true
 
 func _ekey(i: int, e: Dictionary) -> String:
 	return "%d:e%d,%d" % [G.vis_map, e.a.x >> 11, e.a.y >> 11]
