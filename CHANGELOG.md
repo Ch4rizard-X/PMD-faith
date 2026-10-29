@@ -7,6 +7,7 @@ Everything listed here is code; the game's graphics, music and data are built fr
 
 - **Explorers of Sky dungeons in several parts are one trip,** as in Explorers of Sky: the dungeon list shows only the first part, clearing a part goes straight on into the next (HP, Belly, items and status carried over), and the last part (usually the boss) ends the trip. The parts follow EoS's own dungeon table (the parts that share a mappa group): Beach Cave, Mt. Bristle, Steam Cave, Amp Plains, Quicksand Cave, Crystal Crossing, Sealed Ruin, Brine Cave, Hidden Land, Temporal Tower, Mystifying Forest, Crevice Cave, Miracle Sea, Aegis Cave, Spacial Rift, Dark Crater, Concealed Ruins, Bottomless Sea, Shimmer Desert, Mt. Avalanche, Giant Volcano, World Abyss, Sky Stairway, Mystery Jungle, Sky Peak, Star Cave, Fortune Ravine, Barren Valley, Dark Ice Mountain, Vast Ice Mountain, Boulder Quarry, Limestone Cavern and Spring Cave. Each part counts as cleared as it is passed; a chain opens when the team is ready for its longest parts.
 - **README** lists Move Growth, Hard mode, the Exp. Share, Auto bank, Autoplay and the second screen.
+- **README:** the dungeon count counts a dungeon in several parts once (150, 86 from Explorers of Sky).
 
 ## v0.8.9 (29 Oct 2026)
 

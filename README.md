@@ -17,7 +17,7 @@ The game logic is ported from the community decompilation of the original game, 
 | Abilities | 76 | 170 |
 | IQ skills | 23 | 62 |
 | Items | 240 | 1,428 (909 exclusive items) |
-| Dungeons | 64 | 221 (157 from *Explorers of Sky*) |
+| Dungeons | 64 | 150 (86 from *Explorers of Sky*; a dungeon in several parts counts once) |
 
 Added or changed, among them:
 
