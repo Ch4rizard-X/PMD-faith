@@ -2670,6 +2670,9 @@ func _ready() -> void:
 		add_child(load("res://tests/test_world_map.gd").new())
 		return
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--fa3d="):            # mockup: Friend Areas as 3D dioramas (tests/test_fa3d.gd)
+			add_child(load("res://tests/test_fa3d.gd").new())
+			return
 		if a.begins_with("--storyui"):          # story screens visual checks (tests/test_story_ui.gd)
 			add_child(load("res://tests/test_story_ui.gd").new())
 			return

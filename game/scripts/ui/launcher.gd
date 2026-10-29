@@ -37,6 +37,7 @@ static func wanted() -> bool:
 
 func _ready() -> void:
 	layer = 40
+	DisplayServer.window_set_title("MD-Recomp")
 	cfg = LC.cfg().duplicate(true)
 	for k in DB.species:
 		var s := str(k)
@@ -52,17 +53,118 @@ func _ready() -> void:
 	_bg.theme = UITheme.theme()
 	_bg.draw.connect(_draw_bg)
 	add_child(_bg)
+	_load_backdrop()
 	_show_main()
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--launchershot"):
 			_shots.call_deferred()
 
+# ------------------------------------------------------------------ backdrop
+## Red's title artwork (built from the player's ROM: assets/ui/menu_artwork_*.png) slowly panning and
+## cross-fading, darkened behind the pages, with a few Pokémon walking along the bottom of the main page.
+const ART_TIME := 9.0
+const FADE_TIME := 1.6
+var _arts: Array = []
+var _t := 0.0
+var _walkers: Array = []          # [{sp, x, speed, anim}]
+var _dark := 0.35                 # backdrop dimming (more behind the sub pages)
+var _dark_to := 0.35
+
+func _load_backdrop() -> void:
+	for i in [1, 2, 3]:
+		var t: Texture2D = DB.tex("res://assets/ui/menu_artwork_%d.png" % i)
+		if t:
+			_arts.append(t)
+	var pool: Array = ["0004", "0001", "0007", "0025", "0152", "0155", "0158", "0252", "0255", "0258", "0133", "0052"]
+	pool = pool.filter(func(s): return DB.sprites.has(s) and (DB.sprites[s].get("anims", {}) as Dictionary).has("Walk"))
+	pool.shuffle()
+	for i in mini(4, pool.size()):
+		_walkers.append({"sp": pool[i], "x": 230.0 - i * 46.0, "speed": 22.0})
+
+func _process(dt: float) -> void:
+	_t += dt
+	_dark = move_toward(_dark, _dark_to, dt * 1.5)
+	for w in _walkers:
+		w.x += w.speed * dt
+		if w.x > _bg.size.x + 40.0:
+			w.x -= _bg.size.x + 40.0 + 46.0 * _walkers.size()
+	_bg.queue_redraw()
+
+func _draw_art(t: Texture2D, a: float, k: float) -> void:
+	var sz := _bg.size
+	var ts := t.get_size()
+	var sc := maxf(sz.x / ts.x, sz.y / ts.y) * 1.03
+	var ds := ts * sc
+	var off := (sz - ds) * Vector2(0.5 + 0.5 * sin(k * 0.7), 0.5 + 0.5 * cos(k * 0.5))     # slow drift
+	_bg.draw_texture_rect(t, Rect2(off, ds), false, Color(1, 1, 1, a))
+
 func _draw_bg() -> void:
-	var r := _bg.get_rect()
-	var n := 24
-	for i in n:
-		var c := BG_TOP.lerp(BG_BOT, i / float(n - 1))
-		_bg.draw_rect(Rect2(0, r.size.y * i / n, r.size.x, r.size.y / n + 1), c)
+	var sz := _bg.size
+	_bg.draw_rect(Rect2(Vector2.ZERO, sz), BG_BOT)
+	if not _arts.is_empty():
+		var n := _arts.size()
+		var cyc := _t / ART_TIME
+		var i := int(cyc) % n
+		var f := fmod(_t, ART_TIME)
+		_draw_art(_arts[i], 1.0, cyc)
+		if f > ART_TIME - FADE_TIME:
+			_draw_art(_arts[(i + 1) % n], (f - (ART_TIME - FADE_TIME)) / FADE_TIME, cyc + 1.0)
+	_bg.draw_rect(Rect2(Vector2.ZERO, sz), Color(BG_BOT, _dark))
+	# a soft band behind the logo and the menu
+	var steps := 16
+	for k in steps:
+		var y := sz.y * k / steps
+		_bg.draw_rect(Rect2(0, y, sz.x, sz.y / steps + 1), Color(BG_BOT, 0.35 * (k / float(steps)) * _dark / 0.35))
+	if _page and not _page.get_meta("sub", false):
+		_draw_walkers()
+
+func _draw_walkers() -> void:
+	var y := _bg.size.y - 14.0
+	for w in _walkers:
+		var man: Dictionary = DB.sprites[w.sp]
+		var A: Dictionary = man.anims.Walk
+		var tex := DB.tex("res://assets/sp/" + str(A.get("s", man.sheet)))
+		if tex == null:
+			continue
+		var dur: Array = A.dur
+		var total := 0
+		for d in dur:
+			total += int(d)
+		var tt := posmod(int(_t * 60.0), maxi(1, total))
+		var f := 0
+		var acc := 0
+		while f < dur.size():
+			acc += int(dur[f])
+			if tt < acc:
+				break
+			f += 1
+		f = mini(f, dur.size() - 1)
+		var wdt := int(A.w)
+		var hgt := int(A.h)
+		var row := mini(2, int(A.rows) - 1)        # facing right
+		var src := Rect2(int(A.get("x", 0)) + f * wdt, int(A.y) + row * hgt, wdt, hgt)
+		var gnd := 4.0                               # sprite centre -> feet (as MonSprite)
+		var shd: Array = man.get("shd", [])
+		if shd.size() > 0:
+			gnd = float(shd[mini(2, shd.size() - 1)][1])
+		_bg.draw_set_transform(Vector2(w.x, y), 0.0, Vector2(1.0, 0.45))
+		_bg.draw_circle(Vector2.ZERO, 7.0, Color(0, 0, 0, 0.4))
+		_bg.draw_set_transform(Vector2(w.x, y - gnd), 0.0, Vector2.ONE)
+		_bg.draw_texture_rect_region(tex, Rect2(-wdt / 2.0, -hgt / 2.0 - 2.0, wdt, hgt), src)
+		_bg.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## A Red window (the game's frame) around page content.
+func _window(child: Control, alpha := 1.0) -> PanelContainer:
+	var p := PanelContainer.new()
+	if alpha < 1.0:
+		var sb: StyleBox = UITheme.frame(alpha).duplicate()
+		sb.content_margin_left = 8
+		sb.content_margin_right = 8
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		p.add_theme_stylebox_override("panel", sb)
+	p.add_child(child)
+	return p
 
 func _input(e: InputEvent) -> void:
 	if e.is_action_pressed("ui_cancel") and _page and _page.get_meta("sub", false):
@@ -123,9 +225,14 @@ func _new_page(sub: bool) -> VBoxContainer:
 	m.set_meta("sub", sub)
 	_bg.add_child(m)
 	_page = m
+	_dark_to = 0.72 if sub else 0.3
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 5)
-	m.add_child(v)
+	if sub:
+		var w := _window(v, 0.86)
+		m.add_child(w)
+	else:
+		m.add_child(v)
 	return v
 
 func _top_bar(v: VBoxContainer, title: String, info: String) -> Label:
@@ -150,39 +257,53 @@ func _save() -> void:
 # ------------------------------------------------------------------ main
 func _show_main() -> void:
 	var v := _new_page(false)
-	v.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_theme_constant_override("separation", 6)
-	var t := _lbl("PMD-faith", 33, GOLD)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
+	var h := HBoxContainer.new()
+	h.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	h.add_theme_constant_override("separation", 12)
+	v.add_child(h)
+	# left: Red's logo and the version
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 2)
+	h.add_child(left)
+	var logo_tex: Texture2D = DB.tex("res://assets/ui/logo_transparent.png")
+	if logo_tex:
+		var logo := TextureRect.new()
+		logo.texture = logo_tex
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		logo.custom_minimum_size = Vector2(200, 124)
+		logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		left.add_child(logo)
+	else:
+		left.add_child(_lbl("MD-Recomp", 33, GOLD))
 	var P = get_node_or_null("/root/Patcher")
-	var ver := _lbl("Rescue Team remake  -  v%s" % (P.version_name() if P else "?"), SMALL, DIM)
+	var ver := _lbl("MD-Recomp  -  v%s" % (P.version_name() if P else "?"), SMALL, Color(1, 1, 1, 0.85))
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(ver)
-	var gap := Control.new()
-	gap.custom_minimum_size.y = 6
-	v.add_child(gap)
-	var g := GridContainer.new()
-	g.columns = 2
-	g.add_theme_constant_override("h_separation", 10)
-	g.add_theme_constant_override("v_separation", 6)
-	g.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	v.add_child(g)
-	var rows := [["Play", _play, "Start the game"],
+	ver.custom_minimum_size.x = 200
+	ver.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	left.add_child(ver)
+	# right: the menu in a Red window
+	var menu := VBoxContainer.new()
+	menu.add_theme_constant_override("separation", 3)
+	var win := _window(menu)
+	win.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	win.custom_minimum_size.x = 196
+	h.add_child(win)
+	var rows := [["Play", _play, "Start the adventure"],
 		["Pokémon", _show_mons, _mons_summary()],
 		["Dungeons", _show_dungeons, _dungeons_summary()],
 		["Difficulty", _show_difficulty, _difficulty_summary()]]
 	var first: Button = null
 	for r in rows:
 		var b := _btn(str(r[0]), r[1], BIG)
-		b.custom_minimum_size = Vector2(150, 34)
-		g.add_child(b)
-		var l := _lbl(str(r[2]), SMALL, DIM)
-		l.custom_minimum_size.x = 170
-		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		g.add_child(l)
+		b.custom_minimum_size = Vector2(176, 30)
+		menu.add_child(b)
+		var l := _lbl("  " + str(r[2]), SMALL, Color(0.78, 0.84, 1.0))
+		menu.add_child(l)
 		if first == null:
 			first = b
+			b.add_theme_color_override("font_color", GOLD)
 	first.grab_focus.call_deferred()
 
 func _play() -> void:
@@ -267,7 +388,7 @@ func _pick_gen(g: int) -> void:
 		c.queue_free()
 	for s in _mons_by_gen.get(g, []):
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(49, 52)
+		b.custom_minimum_size = Vector2(47, 52)
 		b.icon = _portrait(s)
 		b.expand_icon = true
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -3,6 +3,10 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.17 (30 Oct 2026)
+
+- **Launcher restyled:** Red's title artwork fills the background (slowly panning and cross-fading between the three pictures), the Red Rescue Team logo sits beside the menu, the menu and pages use the game's own window frame, and a few starters walk along the bottom. The Windows public build is now called **MD-Recomp** (launcher title and window).
+
 ## v0.8.16 (30 Oct 2026)
 
 - **Launcher (Windows public build):** the game opens to Play, Pokémon, Dungeons and Difficulty. Choices are saved for every save file and can be changed at every launch.
