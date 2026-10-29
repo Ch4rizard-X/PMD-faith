@@ -25,6 +25,7 @@ const DESCRIPTIONS := {
 }
 
 var host                          # main.gd
+var _ver: Label
 var bg: TextureRect
 var windows: Control              # list + description (hidden while L is held)
 var desc: RichTextLabel
@@ -63,6 +64,13 @@ func _ready() -> void:
 	ver.position += Vector2(-3, 1) * UITheme.PX
 	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(ver)
+	_ver = ver
+	# a download that finishes while the menu is open: say so at once (the restart offer comes on the next pick)
+	if Patcher.has_signal("update_ready"):
+		Patcher.update_ready.connect(func(v: String):
+			if is_instance_valid(_ver):
+				_ver.text = "v%s  [ v%s downloaded: pick any option to update ]" % [Patcher.version_name(), v]
+				_ver.add_theme_color_override("font_color", Color(1.0, 0.86, 0.3)))
 	windows = Control.new()
 	windows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	windows.mouse_filter = Control.MOUSE_FILTER_IGNORE

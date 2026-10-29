@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.15 (29 Oct 2026)
+
+- **Android updates fixed:** the Android build had no internet permission, so it could never reach the Releases page (Auto update and Check for Updates silently failed). The export preset now asks for it; install this APK once and updates work from then on.
+- **Main menu:** an update that finishes downloading while the menu is open shows at once in the version line; the restart offer comes with the next pick.
+
 ## v0.8.14 (29 Oct 2026)
 
 - **Weather in the 3D view:** rain soaks the floor and walls (darker, shinier, with highlights), splashes on the ground and rings on water; snow settles in drifts on wall tops, floors and grass tips; hail leaves a light coating; fog drifts over the floor in banks; sandstorms blow sand across it; sunny weather brightens and warms the light, cloudy and rainy weather dim and cool it. Wetness and snow build up and fade over a few seconds.
