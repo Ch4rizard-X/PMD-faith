@@ -231,7 +231,14 @@ static func item_icon(id: String) -> Texture2D:
 				break
 	var t: Texture2D = null
 	var src: Texture2D = DB.tex("res://assets/ui/items.png")
-	if a != null and src != null:
+	var extra := extra_icon_path(id)
+	if extra != "":
+		var xi: Image = (load(extra) as Texture2D).get_image()
+		if xi.is_compressed():
+			xi.decompress()
+		xi.resize(12 * P, 12 * P, Image.INTERPOLATE_NEAREST)       # drawn 24 px wide at 1:1 (PX 2)
+		t = ImageTexture.create_from_image(xi)
+	elif a != null and src != null:
 		var im := src.get_image().get_region(Rect2i(int(a[0]), int(a[1]), 16, 16))
 		im.resize(12 * P, 12 * P, Image.INTERPOLATE_NEAREST)
 		t = ImageTexture.create_from_image(im)
@@ -240,10 +247,18 @@ static func item_icon(id: String) -> Texture2D:
 	_icons[key] = t
 	return t
 
+## The remake's items with their own icon (assets/ui/item_extra/<id>.png, 24x24, local only): "" when none.
+static func extra_icon_path(id: String) -> String:
+	var p := "res://assets/ui/item_extra/%s.png" % id
+	return p if ResourceLoader.exists(p) else ""
+
 ## The item's sprite as BBCode (for rich text such as a job's reward line), "" when it has none.
 static func item_icon_bb(id: String) -> String:
 	if id == "":
 		return ""
+	var extra := extra_icon_path(id)
+	if extra != "":
+		return "[img=%dx%d]%s[/img]" % [12 * P, 12 * P, extra]
 	var a = DB.item_icons.get(id)
 	if a == null:
 		var I: Dictionary = DB.items.get(id, {})
@@ -334,6 +349,7 @@ class RedMenu extends PanelContainer:
 	var pages := 0                  # > 1: header arrows, Left/Right return left/right
 	var lr := false                 # Left/Right return left/right even on one page (option rows)
 	var allow_cancel := true
+	var remember := true            # come back to the row picked last time (ListMenu.recall)
 	var shift_keys := false         # Shift + Up/Down returns shift (Red: R + Up/Down)
 	var select_key := false         # act_map (Tab / Select) returns select (Red: Select)
 	var sort_key := false           # with select_key: Select returns "sort" instead; L / R (Q / E) still mark
@@ -416,6 +432,10 @@ class RedMenu extends PanelContainer:
 				else:
 					var btn := TeamScreens._arrow(str(f[0]), func(): _finish({"act": act}))
 					fb.add_child(btn)
+		if sel == 0 and remember and not TeamScreens.auto_on():
+			var r := ListMenu.recall(title, _texts())
+			if r >= 0 and not rows[r].get("disabled", false):
+				sel = r
 		sel = clampi(sel, 0, maxi(0, rows.size() - 1))
 		if rows.size() > 0 and rows[sel].get("skip", false):
 			sel = _step(sel, 1)
@@ -423,6 +443,9 @@ class RedMenu extends PanelContainer:
 		_refresh()
 		if TeamScreens.auto_on():
 			_auto_pick.call_deferred()
+
+	func _texts() -> Array:
+		return rows.map(func(o): return str(o.get("text", "")))
 
 	func _auto_pick() -> void:
 		var pick := -1
@@ -477,6 +500,14 @@ class RedMenu extends PanelContainer:
 	## window's right edge, 10 px tall (kecleon_bros4.c sub_801A9E0 / Kangaskhan Storage multi-select).
 	func _draw_mark(k: int) -> void:
 		var i: int = top + k
+		if i < rows.size() and bool(rows[i].get("sep", false)):
+			# Red (PrintMoveNamesOnWindow): a double line over each move that starts a new chain, so the moves
+			# linked to it (indented) sit under it with no line between them
+			var hb0: HBoxContainer = _rows[k]
+			var xs: float = hb0.get_child(2).position.x if hb0.get_child(2).visible else hb0.get_child(3).position.x
+			var w0 := minf(120.0 * P, hb0.size.x - xs)
+			hb0.draw_rect(Rect2(xs, 0, w0, P), UITheme.WIN_EDGE)
+			hb0.draw_rect(Rect2(xs, P, w0, P), UITheme.SHADOW)
 		if i >= rows.size() or not bool(rows[i].get("marked", false)):
 			return
 		var hb: HBoxContainer = _rows[k]
@@ -555,6 +586,8 @@ class RedMenu extends PanelContainer:
 		result = r
 		if not r.has("i"):
 			r.i = sel
+		if remember and not TeamScreens.auto_on() and str(r.get("act", "")) in ["pick", "cancel"]:
+			ListMenu.memorize(title, _texts(), sel)
 		match str(r.get("act", "")):
 			"pick", "select":
 				Audio.sfx("confirm")
@@ -910,6 +943,7 @@ static func submenu(root: Control, beside: Control, opts: Array, row := 0) -> St
 	for o in opts:
 		rows.append(o if o is Dictionary else {"text": str(o)})
 	var m := menu("", rows)
+	m.remember = false
 	var at := Vector2(WIN_X + 200, WIN_Y)
 	if beside and is_instance_valid(beside):
 		at = Vector2(beside.position.x + beside.size.x + 2 * P, beside.position.y + UITheme.LINE * (row + 1))
@@ -1256,7 +1290,7 @@ static func _move_rows(x, leader: bool) -> Array:
 		if MoveGrowth.enabled() and MoveGrowth.grows(nm):
 			shown += " [color=#8fd8ff]Lv.%d[/color]" % int(MoveGrowth.info(nm).level)
 		var row := {"text": shown, "right": "%2d/%2d" % [pp, int(d.get("max_pp", pp))],
-			"indent": linked, "skip": linked}
+			"indent": linked, "skip": linked, "sep": i > 0 and not linked}
 		if leader:
 			row.icon = icon("set") if bool(d.get("set", false)) else icon("blank")
 		else:

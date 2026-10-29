@@ -67,6 +67,13 @@ var view: TextureRect = null
 var _scene := "?"                 # "dungeon" | "town" | "" (title, menus)
 var _scene_obj: Object = null
 var _town_mons: Array = []
+var _town_sig := ""
+
+func _team_sig() -> String:
+	var a := PackedStringArray()
+	for e in Game.team:
+		a.append("%s:%s:%d:%s" % [str(e.get("sp", "")), str(e.get("name", "")), int(e.get("level", 0)), str(e.get("shiny", false))])
+	return ",".join(a)
 var _push_t := 0.0
 var _redraw_t := 0.0
 var _last_hash := 0
@@ -82,6 +89,16 @@ var taps := 0
 
 # ------------------------------------------------------------------ public API
 ## Menus call this as the cursor moves ("" = no item under the cursor / menu closed).
+## Bulletin Board / Job List: the job under the cursor ({} = none).
+static var _job: Dictionary = {}
+static func hover_job(j: Dictionary) -> void:
+	_job = j
+	if j.is_empty():
+		if hover.begins_with("job:"):
+			hover_item("")
+		return
+	hover_item("job:%d" % hash([j.get("title", ""), j.get("client", ""), j.get("place", ""), j.get("state", ""), j.get("dungeon", ""), j.get("floor", 0)]))
+
 static func hover_item(id: String) -> void:
 	if id == hover:
 		return
@@ -285,7 +302,7 @@ func inject(pos: Vector2, pressed: bool) -> void:
 func inject_drag(pos: Vector2) -> void:
 	if sub == null:
 		return
-	if hover.begins_with("dungeon:") and _drag_y >= 0.0:
+	if hover != "" and _drag_y >= 0.0:
 		_dh_drag_acc += _drag_y - pos.y                  # drag up = scroll down
 		_drag_y = pos.y
 		var step := 30.0 * P
@@ -360,7 +377,7 @@ func test_tap(key: String) -> bool:
 func _process(dt: float) -> void:
 	if mode == "" or sub == null:
 		return
-	if hover.begins_with("dungeon:"):                    # right stick up / down scrolls a long dungeon list
+	if hover != "":   # right stick up / down scrolls a long dungeon list / item text
 		var ay := 0.0
 		for dev in Input.get_connected_joypads():
 			var v := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y)
@@ -409,7 +426,10 @@ func _state_key() -> String:
 		return "|".join(parts)
 	var t := _town() if _scene == "town" else null
 	if t:
-		return "town|%s|%d|%s|%s%d" % [str(Vector2i(t.pos)), Game.money, str(map_zoom), hover, dh_row]
+		return "town|%s|%d|%s|%s%d|%d|%d" % [str(Vector2i(t.pos)), Game.money, str(map_zoom), hover, dh_row, Game.jobs.size(), _play_min()] + "|" + _team_sig()
+	if _scene == "town":
+		var place := str(main.call("place_name")) if main and main.has_method("place_name") else ""
+		return "ground|%s|%d|%s%d|%d|%d|%s" % [place, Game.money, hover, dh_row, Game.jobs.size(), _play_min(), _team_sig()]
 	return _scene + "|" + hover + str(dh_row)
 
 func _push_frame() -> void:
@@ -438,11 +458,22 @@ func _town() -> Town:
 		return t
 	return null
 
+## Red's story ground (base, Pokémon Square, Friend Areas, cutscenes) outside the title demo.
+func _play_min() -> int:
+	return int(float(Game.flags.get("play_secs", 0.0))) / 60
+
+func _ground() -> Ground:
+	var g = main.get("ground") if main else null
+	if is_instance_valid(g) and g is Ground and not g.is_queued_for_deletion() and not g._done and not g.demo:
+		return g
+	return null
+
 func _track_scene() -> void:
 	var d := _dungeon()
 	var t: Town = _town() if d == null else null
-	var kind := "dungeon" if d else ("town" if t else "")
-	var obj: Object = d if d else t
+	var gr: Ground = _ground() if d == null and t == null else null
+	var kind := "dungeon" if d else ("town" if t or gr else "")
+	var obj: Object = d if d else (t if t else gr)
 	if kind == _scene and obj == _scene_obj:
 		return
 	_scene = kind
@@ -500,9 +531,10 @@ func _build_scene() -> void:
 		"town":
 			var bh := 40.0
 			_button_rows([[["Menu", "menu"], ["Job List", "jobs"]]], H - bh - g, bh, g)
-			R.info = Rect2(g, H - bh - 2 * g - 34, W - 2 * g, 34)
+			R.info = Rect2(g, H - bh - 2 * g - 34 - UITheme.LINE, W - 2 * g, 34 + UITheme.LINE)
 			R.team = Rect2(g, R.header.end.y + g, W - 2 * g, R.info.position.y - g - R.header.end.y - g)
 			_town_mons.clear()
+			_town_sig = _team_sig()
 			for e in Game.team:
 				_town_mons.append(Game.mon_from_entry(e))
 		_:
@@ -524,6 +556,8 @@ func _hover_rect() -> Rect2:
 	if R.has("map") and R.has("team"):
 		return Rect2(R.map.position, Vector2(R.team.end.x - R.map.position.x, R.team.end.y - R.map.position.y))
 	if R.has("team"):
+		if R.has("info"):                     # town: over the team and the info panel (down to the buttons)
+			return Rect2(R.team.position, Vector2(R.team.size.x, R.info.end.y - R.team.position.y))
 		return R.team
 	return Rect2(6, 6, W - 12, H - 12)
 
@@ -624,6 +658,21 @@ func _on_button(key: String) -> void:
 							d._update_hud()
 				else:
 					d.on_hud_button("menu")
+	elif _scene == "town" and _town() == null:
+		var gr := _ground()
+		if gr == null or _busy_btn or gr.text.is_open() or gr.text._menu != null or not TeamScreens._stack.is_empty() \
+				or gr.lives[0].kind_id == -1 or gr.lives[0].ctrl_mode() != 1:
+			return                                       # only while the player walks freely
+		match key:
+			"menu":
+				gr._touch_menu = true                    # the ground's own menu, as the on-screen Menu button
+			"jobs":
+				_busy_btn = true
+				gr.set_process(false)
+				await Board.open_job_list(main.root)
+				_busy_btn = false
+				if is_instance_valid(gr):
+					gr.set_process(true)
 	elif _scene == "town":
 		var t := _town()
 		if t == null or _busy_btn or not t.has_method("_can_act") or not t._can_act():
@@ -742,6 +791,12 @@ func _draw_hover() -> void:
 	if hover.begins_with("dungeon:"):
 		_draw_dungeon_hover(hover.substr(8))
 		return
+	if hover.begins_with("fa:"):
+		_draw_area_hover(hover.substr(3))
+		return
+	if hover.begins_with("job:"):
+		_draw_job_hover(_job)
+		return
 	var I: Dictionary = DB.items.get(hover, {}) if hover != "" else {}
 	if I.is_empty():
 		hover_label.visible = false
@@ -761,8 +816,82 @@ func _draw_hover() -> void:
 		_text(ui, Vector2(r.end.x - 6 * P - _text_w(ps), y), ps, DIM)
 	hover_label.visible = true
 	hover_label.position = Vector2(r.position.x + 6 * P, y + UITheme.LINE + 2 * P)
-	hover_label.size = Vector2(r.size.x - 12 * P, r.end.y - hover_label.position.y - 4 * P)
+	hover_label.size = Vector2(r.size.x - 20 * P, r.end.y - hover_label.position.y - 4 * P)
 	hover_label.text = TeamScreens.item_desc(hover)
+	# a long description scrolls (drag, right stick, mouse wheel) one line at a time, like the dungeon lists
+	hover_label.scroll_active = true
+	var vb := hover_label.get_v_scroll_bar()
+	vb.modulate.a = 0.0
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_item_scroll.call_deferred(hover)
+	if _dh_rows_max > 0:
+		var mx := r.end.x - 8 * P
+		var ty := hover_label.position.y
+		if dh_row > 0:
+			ui.draw_colored_polygon(PackedVector2Array([Vector2(mx - 4 * P, ty + 4 * P), Vector2(mx + 4 * P, ty + 4 * P), Vector2(mx, ty - 1 * P)]), GOLD)
+		if dh_row < _dh_rows_max:
+			var by := r.end.y - 6 * P
+			ui.draw_colored_polygon(PackedVector2Array([Vector2(mx - 4 * P, by - 4 * P), Vector2(mx + 4 * P, by - 4 * P), Vector2(mx, by + 1 * P)]), GOLD)
+
+## A job under the cursor on the Bulletin Board / Job List: Red's Rescue Description (client portrait, title,
+## the request text, client / objective / place / difficulty / reward). Long text scrolls like item text.
+func _draw_job_hover(j: Dictionary) -> void:
+	if j.is_empty():
+		hover_label.visible = false
+		return
+	var r := _hover_rect()
+	_panel(r, true)
+	var x := r.position.x + 6 * P
+	var y := r.position.y + 4 * P
+	var ps := 2 * UITheme.LINE
+	var tex: Texture2D = Dialog.portrait_tex(str(j.get("client", "")))
+	if tex:
+		var pr := Rect2(r.end.x - 6 * P - ps, y, ps, ps)
+		ui.draw_rect(pr.grow(P), OUTLINE)
+		ui.draw_texture_rect(tex, pr, false)
+	var st := Board.status_text(j)
+	var head := "[color=#ffdc4a]%s[/color]" % str(j.get("title", ""))
+	if st != "":
+		head += "  [color=#%s]%s[/color]" % [Board.status_color(j).to_html(false), st]
+	var rw := (TeamScreens.item_icon_bb(str(j.get("reward", {}).get("item", ""))) if str(j.get("reward", {}).get("type", "")).begins_with("item") else "") + Missions.reward_text(j)
+	var lines := [head, str(j.get("text", "")), ""]
+	for row in [[Missions.txt("client"), "[color=%s]%s[/color]" % [Missions.HL, Missions.sp_name(str(j.get("client", "")))]],
+			[Missions.txt("objective"), str(j.get("objective", ""))], [Missions.txt("place"), str(j.get("place", ""))],
+			[Missions.txt("difficulty_label"), Missions.difficulty_bb(str(j.get("difficulty", "E")))], [Missions.txt("reward"), rw]]:
+		if str(row[1]).strip_edges() != "":
+			lines.append("[color=#a0a8c8]%s[/color]  %s" % [str(row[0]), str(row[1])])
+	hover_label.visible = true
+	hover_label.position = Vector2(x, y)
+	hover_label.size = Vector2(r.size.x - 20 * P - (ps + 4 * P if tex else 0), r.end.y - y - 4 * P)
+	hover_label.text = "\n".join(lines)
+	hover_label.scroll_active = true
+	var vb := hover_label.get_v_scroll_bar()
+	vb.modulate.a = 0.0
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_item_scroll.call_deferred(hover)
+	if _dh_rows_max > 0:
+		var mx := r.end.x - 8 * P
+		if dh_row > 0:
+			ui.draw_colored_polygon(PackedVector2Array([Vector2(mx - 4 * P, y + ps + 8 * P), Vector2(mx + 4 * P, y + ps + 8 * P), Vector2(mx, y + ps + 3 * P)]), GOLD)
+		if dh_row < _dh_rows_max:
+			var by := r.end.y - 6 * P
+			ui.draw_colored_polygon(PackedVector2Array([Vector2(mx - 4 * P, by - 4 * P), Vector2(mx + 4 * P, by - 4 * P), Vector2(mx, by + 1 * P)]), GOLD)
+
+## Item text: how many lines are below the window, and scroll to dh_row (after the label has laid out).
+func _item_scroll(for_hover: String) -> void:
+	if hover != for_hover or hover_label == null or not hover_label.visible:
+		return
+	var step := float(UITheme.LINE)
+	var over := hover_label.get_content_height() - hover_label.size.y
+	var mx := maxi(0, ceili(over / step)) if over > 1.0 else 0
+	var changed := mx != _dh_rows_max
+	_dh_rows_max = mx
+	dh_row = clampi(dh_row, 0, _dh_rows_max)
+	hover_label.get_v_scroll_bar().value = dh_row * step
+	if changed:
+		_refresh()
+	else:
+		_needs_render = true
 
 ## The dungeon under the cursor in a dungeon list: its wild Pokémon as portraits with their names in the
 ## Pokédex colours (white = no Friend Area yet, green = Friend Area owned, cyan = recruited); a Pokémon not seen
@@ -786,31 +915,81 @@ func _draw_dungeon_hover(dk: String) -> void:
 	if sps.is_empty():
 		_text(ui, Vector2(x0, y), "No wild Pokémon.", DIM)
 		return
+	var cells := []
+	for sp in sps:
+		var seen := Pokedex.is_seen(sp)
+		cells.append({"sp": sp, "dark": not seen, "col": PokedexUI.list_color(sp) if seen else DIM,
+			"name": str(DB.species.get(sp, {}).get("name", sp)) if seen else "???"})
+	_draw_portrait_grid(r, y, cells)
+
+## A Friend Area under the cursor (the Friend Areas lists: world map, Pelipper / Kangaskhan visits): the Pokémon
+## living there, portrait + name + level ("" = the team base: the team).
+func _draw_area_hover(k: String) -> void:
+	hover_label.visible = false
+	var r := _hover_rect()
+	_panel(r, true)
+	var x0 := r.position.x + 6 * P
+	var y := r.position.y + 4 * P
+	var mons: Array = []
+	var title := ""
+	var info := ""
+	if k == "":
+		title = "%s Team Base" % Game.team_name if Game.team_name != "" else "Team Base"
+		mons = Game.team
+		info = "Team %d" % mons.size()
+	else:
+		title = Services.area_name(k)
+		for f in Game.friends:
+			if str(f.get("area", "")) == k:
+				mons.append(f)
+		var cap := int(Services.fa().get("areas", {}).get(k, {}).get("cap", 0))
+		info = "%d/%d" % [mons.size(), cap] if cap > 0 else str(mons.size())
+	_text(ui, Vector2(x0, y), _fit(title, r.end.x - x0 - 50 * P), GOLD)
+	_text(ui, Vector2(r.end.x - 6 * P - _text_w(info), y), info, DIM)
+	y += UITheme.LINE + 2 * P
+	if mons.is_empty():
+		_text(ui, Vector2(x0, y), "Nobody lives here yet.", DIM)
+		return
+	var cells := []
+	for e in mons:
+		var sp := str(e.get("sp", ""))
+		var nm := str(e.get("name", "")).strip_edges()
+		if nm == "":
+			nm = str(DB.species.get(sp, {}).get("name", sp))
+		cells.append({"sp": sp + ("*" if bool(e.get("shiny", false)) else ""), "dark": false, "col": INK,
+			"name": nm, "sub": "Lv %d" % int(e.get("level", 1))})
+	_draw_portrait_grid(r, y, cells)
+
+## Portrait cells under a header (dungeon hover / Friend Area hover), scrolled by dh_row.
+## cell = {sp, name, col, dark (silhouette), sub (optional second line)}
+func _draw_portrait_grid(r: Rect2, y: float, cells: Array) -> void:
+	var x0 := r.position.x + 6 * P
+	var two := cells.any(func(c): return c.has("sub"))
 	var avail := r.size.x - 12 * P
 	var cols := maxi(1, int(avail / (30 * P)))
 	var cw := avail / cols
 	var ps := mini(int(cw) - 4 * P, 24 * P)           # portrait size
-	var ch := ps + FS_SMALL + 4 * P
+	var ch := ps + FS_SMALL + 4 * P + (FS_SMALL + P if two else 0)
 	var rows := maxi(1, int((r.end.y - 4 * P - y) / ch))
-	var total_rows := ceili(sps.size() / float(cols))
+	var total_rows := ceili(cells.size() / float(cols))
 	_dh_rows_max = maxi(0, total_rows - rows)
 	dh_row = clampi(dh_row, 0, _dh_rows_max)
 	var first := dh_row * cols
-	var shown := mini(sps.size() - first, cols * rows)
+	var shown := mini(cells.size() - first, cols * rows)
 	for j in shown:
-		var i := first + j
-		var sp: String = sps[i]
+		var c: Dictionary = cells[first + j]
 		var cx := x0 + (j % cols) * cw
 		var cy := y + (j / cols) * ch
-		var seen := Pokedex.is_seen(sp)
-		var tex: Texture2D = Dialog.portrait_tex(sp)
+		var tex: Texture2D = Dialog.portrait_tex(str(c.sp))
 		var pr := Rect2(cx + (cw - ps) / 2.0, cy, ps, ps)
 		ui.draw_rect(pr.grow(P), OUTLINE)
 		if tex:
-			ui.draw_texture_rect(tex, pr, false, Color.WHITE if seen else Color(0.05, 0.05, 0.12))
-		var col: Color = PokedexUI.list_color(sp) if seen else DIM
-		var nm := _fit(str(DB.species.get(sp, {}).get("name", sp)) if seen else "???", cw - 2 * P, FS_SMALL)
-		_text(ui, Vector2(cx + (cw - _text_w(nm, FS_SMALL)) / 2.0, cy + ps + 2 * P), nm, col, FS_SMALL)
+			ui.draw_texture_rect(tex, pr, false, Color(0.05, 0.05, 0.12) if c.get("dark", false) else Color.WHITE)
+		var nm := _fit(str(c.name), cw - 2 * P, FS_SMALL)
+		_text(ui, Vector2(cx + (cw - _text_w(nm, FS_SMALL)) / 2.0, cy + ps + 2 * P), nm, c.col, FS_SMALL)
+		if c.has("sub"):
+			var sb := str(c.sub)
+			_text(ui, Vector2(cx + (cw - _text_w(sb, FS_SMALL)) / 2.0, cy + ps + 3 * P + FS_SMALL), sb, DIM, FS_SMALL)
 	if _dh_rows_max > 0:                                # scroll marks: more above / below
 		var mx := r.end.x - 8 * P
 		if dh_row > 0:
@@ -1051,6 +1230,12 @@ func _draw_town() -> void:
 	var rk := Missions.rank_title(Game.rank_points)
 	_text(ui, Vector2(h.end.x - 6 * P - _text_w(rk), ty), rk, GOLD)
 	_panel(R.team)
+	var sig := _team_sig()
+	if sig != _town_sig:                                 # the team changed (formation, a new member)
+		_town_sig = sig
+		_town_mons.clear()
+		for e in Game.team:
+			_town_mons.append(Game.mon_from_entry(e))
 	# entries carry no HP in town: everyone is rested
 	_draw_team_rows(R.team, _town_mons, false)
 	_draw_town_jobs(R.team)
@@ -1058,6 +1243,13 @@ func _draw_town() -> void:
 	_panel(ir)
 	var y := ir.position.y + 4
 	var x := ir.position.x + 6 * P
+	# EoS: where you are and the play time
+	var secs := int(float(Game.flags.get("play_secs", 0.0)))
+	var pt := "%d:%02d" % [secs / 3600, (secs / 60) % 60]
+	var place := str(main.call("place_name")) if main and main.has_method("place_name") else ""
+	_text(ui, Vector2(x, y), _fit(place if place != "" else "-", ir.size.x - 18 * P - _text_w(pt)), INK)
+	_text(ui, Vector2(ir.end.x - 6 * P - _text_w(pt), y), pt, DIM)
+	y += UITheme.LINE
 	_text(ui, Vector2(x, y), "%d P" % Game.money, GOLD)
 	var mid := "Day %d" % (Game.day + 1)
 	_text(ui, Vector2(ir.position.x, y), mid, INK, FS, ir.size.x, HORIZONTAL_ALIGNMENT_CENTER)

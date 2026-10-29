@@ -369,7 +369,7 @@ static func absorbs(d, def: Mon, t: String, dmg: int) -> bool:
 		def.stages.atk = mini(20, int(def.stages.get("atk", 10)) + 1)
 		what = "%s's Sap Sipper absorbed it and raised its Attack!"
 	elif t == "Water" and has(def, "dry skin"):
-		def.hp = mini(def.max_hp, def.hp + maxi(1, def.max_hp / 4))
+		d.heal_hp(def, maxi(1, def.max_hp / 4))
 		what = "%s's Dry Skin absorbed it and restored HP!"
 	if what == "":
 		return false
@@ -477,19 +477,19 @@ static func end_of_turn_gen4(d) -> void:
 		if m.hp <= 0:
 			continue
 		if has(m, "ice body") and fs.weather == "hail":
-			m.hp = mini(m.max_hp, m.hp + maxi(1, m.max_hp / 16))
+			d.heal_hp(m, maxi(1, m.max_hp / 16))
 		if has(m, "regenerator") and fs.turn % 5 == 0:
-			m.hp = mini(m.max_hp, m.hp + maxi(1, m.max_hp / 12))
+			d.heal_hp(m, maxi(1, m.max_hp / 12))
 		if has(m, "dry skin"):
 			if fs.weather == "rain":
-				m.hp = mini(m.max_hp, m.hp + maxi(1, m.max_hp / 8))
+				d.heal_hp(m, maxi(1, m.max_hp / 8))
 			elif fs.weather == "sunny":
 				d._hurt(m, maxi(1, m.max_hp / 8), null, false)
 		if has(m, "hydration") and fs.weather == "rain":
 			for k in ["poison", "badpoison", "burn", "para", "sleep", "frozen"]:
 				m.status[k] = 0
 		if has(m, "poison heal") and (int(m.status.get("poison", 0)) > 0 or int(m.status.get("badpoison", 0)) > 0):
-			m.hp = mini(m.max_hp, m.hp + maxi(1, m.max_hp / 8))
+			d.heal_hp(m, maxi(1, m.max_hp / 8))
 		if has(m, "bad dreams"):
 			for o in fs.mons:
 				if o.hp > 0 and fs.is_foe(m, o) and int(o.status.get("sleep", 0)) > 0 and fs.can_see(m, o.pos):

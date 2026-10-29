@@ -245,7 +245,10 @@ func build_floor() -> void:
 		var n := 1
 		var I: Dictionary = DB.items.get(id, {})
 		if id == "poke":
-			n = rng.randi_range(1, maxi(1, int(props.get("moneyUpperBound", 1)) * 40))
+			# Red: moneyUpperBound x 40 (dungeon_items.c); Explorers of Sky stores the cap divided by 5 instead
+			# (FloorProperties max_money_amount_div_5), so its floors use x 5 (x 40 made them pay 8 times too much)
+			var mult := 5 if bool(ddata.get("eos", false)) else 40
+			n = rng.randi_range(1, maxi(1, int(props.get("moneyUpperBound", 1)) * mult))
 		elif I.has("amt"):
 			n = rng.randi_range(int(I.amt[0]), int(I.amt[1]))
 		var price := KecleonShop.buy_price(id, n) if kind == "shop" and KecleonShop.shoppable(id) else 0
@@ -1679,7 +1682,14 @@ func _after_leader_step_i() -> void:
 		_msg("It's a [color=#ff8070]Monster House[/color]!")
 		Audio.play_music("128")
 	# items (the Auto-pickup option can leave some on the ground: Ground menu picks them up)
-	if fs.items.has(L.pos) and qol and not qol.auto_pickup(fs.items[L.pos]):
+	if fs.items.has(L.pos) and int(fs.items[L.pos].get("price", 0)) > 0 and fs.items[L.pos].id != "poke":
+		# a Kecleon ware is never picked up by walking onto it: its name and price show, and the Ground menu
+		# picks it up (still unpaid; Kecleon asks for the money when the leader walks out of the shop)
+		var w: Dictionary = fs.items[L.pos]
+		var wn := int(w.get("n", 1))
+		_msg("The [color=#ffdc4a]%s[/color]%s is for sale:
+[color=#7fe0ff]%d Poké[/color]." % [DB.item_name(w.id), (" (%d)" % wn) if wn > 1 else "", int(w.price)])
+	elif fs.items.has(L.pos) and qol and not qol.auto_pickup(fs.items[L.pos]):
 		_msg("There's the [color=#ffdc4a]%s[/color] underfoot." % DB.item_name(fs.items[L.pos].id))
 	elif fs.items.has(L.pos):
 		var it: Dictionary = fs.items[L.pos]
@@ -1689,16 +1699,6 @@ func _after_leader_step_i() -> void:
 			fs.items.erase(L.pos)
 			Audio.sfx("coin")
 			_msg("Picked up %d Poké." % int(it.n))
-		elif int(it.get("price", 0)) > 0:
-			# Red (dungeon_items.c): a Kecleon ware is picked up like any item, still unpaid (IN_SHOP); its price
-			# shows in the Toolbox and Kecleon asks for the money when the leader walks out of the shop
-			if Game.bag.size() < Game.BAG_MAX:
-				Game.bag.append({"id": it.id, "n": int(it.get("n", 1)), "price": int(it.price)})
-				fs.items.erase(L.pos)
-				Audio.sfx("pickup")
-				_msg("Picked up the [color=#ffdc4a]%s[/color] and\nput it in the Toolbox." % DB.item_name(it.id))
-			else:
-				_msg("%s stepped on\nthe [color=#ffdc4a]%s[/color]." % [_nm(L), DB.item_name(it.id)])
 		elif test_want != "" and str(it.id) == test_want and Game.bag.size() >= Game.BAG_MAX and Game.bag.pop_back() == null:
 			pass
 		elif Game.bag_add(it.id, int(it.n)):
@@ -1809,6 +1809,9 @@ func _random_floor_tile() -> Vector2i:
 	return fs.leader.pos
 
 # ================================================================= attacks
+const SELF_RANGE_FIX := {"Baneful Bunker": "user", "King’s Shield": "user", "Spiky Shield": "user", "Silk Trap": "user",
+	"Obstruct": "user", "Burning Bulwark": "user", "Laser Focus": "user", "Aurora Veil": "team_room"}
+
 func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 	m.facing = d
 	var mv: Dictionary
@@ -1816,9 +1819,17 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 	if move_name == "":
 		mv = DB.moves.get("Regular Attack", {"name": "Attack", "t": "None", "p": 1, "a1": 125, "a2": 125, "c": "P", "r": "front", "hits": 1, "crit": 12})
 	else:
+		# Encore (EncoreStatusTarget): the encored Pokémon repeats the move it used last
+		if announce and m.has_status("encore") and str(m.get_meta("encore_move", "")) != "" and move_name != str(m.get_meta("encore_move", "")) \
+				and not m.move_by_name(str(m.get_meta("encore_move", ""))).is_empty():
+			move_name = str(m.get_meta("encore_move", ""))
 		mv = DB.moves.get(move_name, {})
 		slot = m.move_by_name(move_name)
 		if mv.is_empty():
+			return
+		# Taunt (dungeon_move_util.c): no status moves while taunted
+		if announce and m.has_status("taunt") and str(mv.get("c", "")) == "X":
+			_msg("%s can't use %s after the taunt!" % [_nm(m), move_name])
 			return
 		if not slot.is_empty():
 			if int(slot.get("disabled", 0)) > 0:
@@ -1867,6 +1878,9 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			tw.tween_property(m.visual, "bob", dv, 0.07)
 			tw.tween_property(m.visual, "bob", Vector2.ZERO, 0.1)
 	await _pause(0.18)
+	if str(mv.get("name", "")) in SELF_RANGE_FIX:          # data: these shield the user, not the foe in front
+		mv = mv.duplicate()
+		mv.r = SELF_RANGE_FIX[str(mv.name)]
 	var targets := targets_for(m, mv, d)
 	if m.is_leader:                  # the foe the leader is fighting (the smarter partner AI helps with it)
 		for t_l in targets:
@@ -1880,6 +1894,18 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 		if AbilityFx.soundproof(t_sp, move_name):
 			_msg("%s's Soundproof suppressed the sound move!" % _nm(t_sp))
 			targets.erase(t_sp)
+	# Mirror Move (MirrorMoveStatusTarget): attacks aimed at it go back to the user (not Regular Attack)
+	if move_name != "" and str(mv.get("c", "")) != "X":
+		for t_mm in targets.duplicate():
+			if t_mm != m and t_mm.has_status("mirror_move") and fs.is_foe(m, t_mm):
+				_msg("%s's Mirror Move returned it!" % _nm(t_mm))
+				targets[targets.find(t_mm)] = m
+	# Protect / Detect (dungeon_move.c): a protected Pokémon is untouched by moves aimed at others (front,
+	# around, room, line ...; not its own or its team's support moves)
+	for t_pr in targets.duplicate():
+		if t_pr != m and t_pr.has_status("protect") and not str(mv.get("r", "front")) in ["user", "team_room", "team_floor"]:
+			_msg("%s protected itself!" % _nm(t_pr))
+			targets.erase(t_pr)
 	if not slot.is_empty() and announce and not is_temp(m):
 		slot.pp = maxi(0, int(slot.pp) - AbilityFx.pressure_extra(m, targets, fs))    # Pressure
 	if move_name != "" and announce and m.is_team() and not is_temp(m) and not slot.is_empty():
@@ -1948,7 +1974,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 				if str(s) != "":
 					_msg(str(s))
 			if int(res.get("heal", 0)) > 0:
-				t.hp = mini(t.max_hp, t.hp + int(res.heal))
+				heal_hp(t, int(res.heal))
 				_msg("%s recovered %d HP!" % [_nm(t), int(res.heal)])
 				continue
 			var dmg := int(res.get("dmg", 0))
@@ -1956,7 +1982,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 				continue
 			var guard := EosItems.type_guard(t, str(mt[0])) if fixed < 0 else ""
 			if guard == "absorb" and dmg > 0:
-				t.hp = mini(t.max_hp, t.hp + dmg)
+				heal_hp(t, dmg)
 				_msg("%s's item absorbed the attack and restored %d HP!" % [_nm(t), dmg])
 				continue
 			elif guard == "immune":
@@ -1977,12 +2003,13 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 				pass
 			_hurt(t, dmg, m, true, bool(res.get("crit", false)), int(res.get("eff", 2)))
 			_msg("%s took [color=#ffdc4a]%d[/color] damage!" % [_nm(t), dmg])
+			await _status_reactions(m, t, dmg, bool(res.get("physical", true)))
 			if t.hp > 0:
 				await IQSky.after_hit(self, m, t, dmg, bool(res.get("physical", true)))
 			# drain / recoil
 			if mv.has("drain") and m.hp > 0:
 				var heal := maxi(1, int(dmg * float(mv.drain) * (1.5 if EosItems.has(m, "drain_boost") else 1.0)))
-				m.hp = mini(m.max_hp, m.hp + heal)
+				heal_hp(m, heal)
 				_msg("%s absorbed %d HP!" % [_nm(m), heal])
 			if mv.has("recoil") and m.hp > 0 and not AbilityFx.no_recoil(m):
 				_hurt(m, maxi(1, int(dmg * float(mv.recoil))), null, false)
@@ -2079,6 +2106,39 @@ func _same_area(a: Mon, b: Mon) -> bool:
 		return true
 	return FloorState.cheb(a.pos, b.pos) <= 2
 
+## Reactions to a hit (dungeon_damage.c): Rage (Attack up), Counter / Mirror Coat (the damage back to an adjacent
+## attacker), Vital Throw (throws it), Destiny Bond (the bonded Pokémon takes the same damage).
+func _status_reactions(m: Mon, t: Mon, dmg: int, physical: bool) -> void:
+	if m == null or t == null or m == t:
+		return
+	if t.hp > 0 and t.has_status("enraged"):
+		_apply_eff(t, t, {"self": "atk", "st": 1}, true)
+	var adjacent := FloorState.cheb(m.pos, t.pos) <= 1
+	if t.hp > 0 and adjacent and m.hp > 0:
+		var back := 0
+		if physical and t.has_status("counter"):
+			back += 4
+		if not physical and t.has_status("mirror_coat"):
+			back += 4
+		if back > 0:
+			var rd := maxi(1, dmg * back / 4)
+			_msg("%s returned the damage!" % _nm(t))
+			_hurt(m, rd, t, true)
+			_msg("%s took [color=#ffdc4a]%d[/color] damage!" % [_nm(m), rd])
+		if physical and t.has_status("vital_throw") and m.hp > 0:
+			_msg("%s threw %s!" % [_nm(t), _nm(m)])
+			await SpecialMoves.blow_away(self, t, m, AI.dir_toward(t.pos, m.pos))
+	if t.has_status("destiny_bond"):
+		var b: Mon = AI._mon_by_uid(fs, int(t.get_meta("bond_uid", -1)))
+		if b == null or b.hp <= 0:
+			t.status.destiny_bond = 0
+		else:
+			_msg("%s is bound by Destiny Bond!" % _nm(b))
+			_hurt(b, dmg, t, true)
+			_msg("%s took [color=#ffdc4a]%d[/color] damage!" % [_nm(b), dmg])
+			if b.hp <= 0:
+				await faint(b, t)
+
 func _status_move(m: Mon, mv: Dictionary, targets: Array) -> void:
 	if str(mv.get("name", "")) == "Bide":
 		m.status.bide = 3
@@ -2101,6 +2161,9 @@ func _status_move(m: Mon, mv: Dictionary, targets: Array) -> void:
 		elif AbilityFx.bounce(t0, m):
 			_msg("%s's Magic Bounce reflected the move!" % _nm(t0))
 			targets[targets.find(t0)] = m
+		elif t0 != m and t0.has_status("magic_coat") and fs.is_foe(m, t0):
+			_msg("%s's Magic Coat bounced it back!" % _nm(t0))      # IsReflectedByMagicCoat
+			targets[targets.find(t0)] = m
 	for t in targets:
 		if t == m or Combat.accuracy_hits(m, t, mv, fs.rng, {"weather": fs.weather}):
 			hit_targets.append(t)
@@ -2122,13 +2185,15 @@ func _status_move(m: Mon, mv: Dictionary, targets: Array) -> void:
 		if mv.has("heal"):
 			var amt := maxi(1, int(t.max_hp * float(mv.heal)))
 			amt = IQSky.heal_amount(m, amt)
-			t.hp = mini(t.max_hp, t.hp + amt)
+			heal_hp(t, amt)
 			_msg("%s recovered %d HP!" % [_nm(t), amt])
 			Audio.sfx("heal")
 			did = true
 			if mv.name == "Rest":
 				t.status.sleep = 3
-		if mv.has("eff"):
+		if StatusMoves.handles(mvn):
+			did = await StatusMoves.run(self, m, t, mv) or did
+		elif mv.has("eff"):
 			did = _apply_effs(m, t, mv.eff, true) or did
 			if AbilityFx.has(m, "prankster"):           # Remixed: status moves work twice
 				_apply_effs(m, t, mv.eff, true)
@@ -2149,7 +2214,9 @@ func _secondary(m: Mon, t: Mon, mv: Dictionary) -> void:
 	if fs.rng.randf() < ch:
 		_apply_effs(m, t, e, false)
 
-const STATUS_NAMES := {"sleep": "fell asleep", "para": "is paralyzed", "burn": "was burned", "poison": "was poisoned", "badpoison": "was badly poisoned",
+const STATUS_NAMES := {"protect": "is protecting itself", "reflect": "is protected by Reflect", "light_screen": "is protected by Light Screen",
+	"focus_energy": "is getting pumped", "leech_seed": "was seeded", "enduring": "braced itself",
+	"sleep": "fell asleep", "para": "is paralyzed", "burn": "was burned", "poison": "was poisoned", "badpoison": "was badly poisoned",
 	"confused": "became confused", "frozen": "was frozen solid", "slow": "slowed down", "cringe": "cringed", "infatuated": "fell in love", "petrified": "was petrified"}
 
 ## Some moves list several effects (Array of effect dicts).
@@ -2167,7 +2234,17 @@ func _apply_effs(m: Mon, t: Mon, e, guaranteed: bool) -> bool:
 func _apply_eff(m: Mon, t: Mon, e: Dictionary, guaranteed: bool) -> bool:
 	if e.has("status"):
 		var s: String = e.status
-		var key: String = {"confuse": "confused", "infatuate": "infatuated", "petrify": "petrified", "freeze": "frozen", "toxic": "badpoison"}.get(s, s)
+		var key: String = {"confuse": "confused", "infatuate": "infatuated", "petrify": "petrified", "freeze": "frozen", "toxic": "badpoison",
+			"lightscreen": "light_screen", "focus": "focus_energy", "leech": "leech_seed"}.get(s, s)
+		var bad := key in ["sleep", "para", "burn", "poison", "badpoison", "confused", "frozen", "slow", "infatuated", "leech_seed", "petrified"]
+		if bad and t != m and t.has_status("safeguard"):
+			if guaranteed:
+				_msg("%s is protected by Safeguard!" % _nm(t))      # SafeguardIsActive
+			return false
+		if key == "sleep" and t.has_status("sleepless"):
+			if guaranteed:
+				_msg("%s can't fall asleep!" % _nm(t))
+			return false
 		var why := HeldItems.blocks_status(t, key)
 		if why == "":
 			why = AbilityFx.blocks_status_gen4(self, t, key)
@@ -2187,6 +2264,8 @@ func _apply_eff(m: Mon, t: Mon, e: Dictionary, guaranteed: bool) -> bool:
 		if key == "sleep":
 			turns = AbilityFx.sleep_turns(t, turns)
 		t.status[key] = turns
+		if key == "leech_seed":
+			t.set_meta("leech_seed_by", m.uid)
 		_msg("%s %s!" % [_nm(t), STATUS_NAMES.get(key, "was affected")])
 		AbilityFx.synchronize(self, t, key, turns)
 		if t.visual and key == "sleep":
@@ -2196,6 +2275,9 @@ func _apply_eff(m: Mon, t: Mon, e: Dictionary, guaranteed: bool) -> bool:
 		var who := t if e.has("tgt") else m
 		var k: String = e.get("tgt", e.get("self", "atk"))
 		var stv := AbilityFx.stat_change(who, int(e.get("st", -1)))      # Simple / Contrary
+		if stv < 0 and who != m and who.has_status("mist"):
+			_msg("%s is protected by mist!" % _nm(who))           # IsProtectedFromStatDrops
+			return false
 		if stv < 0 and who != m and AbilityFx.flower_veil(fs, who):
 			_msg("%s is protected by Flower Veil!" % _nm(who))
 			return false
@@ -2229,6 +2311,9 @@ func _stat_name(k: String) -> String:
 	return {"atk": "Attack", "def": "Defense", "spa": "Sp. Atk", "spd": "Sp. Def", "acc": "accuracy", "eva": "evasion"}.get(k, k)
 
 func _hurt(t: Mon, dmg: int, by: Mon, anim := true, crit := false, eff := 2) -> void:
+	if dmg >= t.hp and t.has_status("enduring"):
+		dmg = maxi(0, t.hp - 1)
+		_msg("%s endured the hit!" % _nm(t))               # STATUS_ENDURING (dungeon_damage.c)
 	if dmg >= t.hp and t.hp > 1 and by != null and by != t and EosItems.endure(t, fs.rng):
 		dmg = t.hp - 1
 		_msg("%s held on thanks to its item!" % _nm(t))
@@ -2569,10 +2654,14 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 	var cyan := "[color=#7fe0ff]%s[/color]" % t.name       # CopyCyanMonsterNametoBuffer
 	var c := 0
 	if not auto_answer:
-		if dx:
-			c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nTake %s along on this adventure?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
-		else:
-			c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nAccept %s as a team member?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
+		c = 2
+		while c == 2:                                    # remake: Summary looks at it before deciding
+			if dx:
+				c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nTake %s along on this adventure?" % [cyan, cyan], ["Yes", "No", "Summary"], "", "Normal", false)
+			else:
+				c = await Dialog.ask(ui_root, "Yes! %s wants to join the team!\nAccept %s as a team member?" % [cyan, cyan], ["Yes", "No", "Summary"], "", "Normal", false)
+			if c == 2:
+				await TeamScreens.summary(ui_root, t)
 	menu_open = false
 	if c != 0:
 		if t.sp.substr(0, 4) != "0385":                  # Jirachi leaves without the line
@@ -2671,6 +2760,8 @@ func learn_move(m: Mon, mvn: String) -> void:
 # ================================================================= stairs / end
 func stairs_prompt() -> void:
 	if autoplay:
+		if not _auto_want_stairs:
+			return                       # Autoplay only walked over the stairs while exploring
 		Audio.sfx("stairs")
 		await next_floor()
 		return
@@ -2751,8 +2842,12 @@ func _dx_farewells() -> void:
 		if legend_owned(m):
 			keep = -1
 		elif Services.has_area_for(m.sp):
-			keep = 0 if auto_answer or Dialog.auto else await Dialog.ask(ui_root,
-					"%s had fun on the adventure!\nAsk %s to join the team for good?" % [cyan, cyan], ["Yes", "No"], "", "Normal", false)
+			keep = 0 if auto_answer or Dialog.auto else 2
+			while keep == 2:                             # remake: Summary looks at it before deciding
+				keep = await Dialog.ask(ui_root, "%s had fun on the adventure!\nAsk %s to join the team for good?" % [cyan, cyan],
+						["Yes", "No", "Summary"], "", "Normal", false)
+				if keep == 2:
+					await TeamScreens.summary(ui_root, m)
 		else:
 			await _dx_say("%s would like to stay, but it has no Friend Area to live in..." % cyan)
 		if keep == 0:
@@ -3428,7 +3523,7 @@ func _item_effect(user: Mon, m: Mon, id: String, thrown: bool) -> void:
 			_msg(str(s))
 		return
 	if not thrown and EosItems.has(m, "berry_heal") and (str(I.get("name", "")).ends_with("Berry") or str(I.get("name", "")).ends_with("Apple")):
-		m.hp = mini(m.max_hp, m.hp + maxi(1, m.max_hp / 8))
+		heal_hp(m, maxi(1, m.max_hp / 8))
 		_msg("%s recovered some HP!" % _nm(m))
 	match kind:
 		"inviting":
@@ -3557,7 +3652,7 @@ func _item_effect(user: Mon, m: Mon, id: String, thrown: bool) -> void:
 			var full := m.hp >= m.max_hp
 			var v2 := 100
 			v2 = IQSky.heal_amount(m, v2)
-			m.hp = mini(m.max_hp, m.hp + v2)
+			heal_hp(m, v2)
 			if kind == "sitrus" and full:
 				_raise_max_hp(m, 2)                     # gSitrusBerryMaxHpRiseValue
 			elif kind == "sitrus":
@@ -3674,7 +3769,7 @@ func _raise_max_hp(m: Mon, n: int) -> void:
 	if not e.is_empty():
 		e.bonus = bonus
 	DB.recalc(m)
-	m.hp = mini(m.max_hp, m.hp + n)
+	heal_hp(m, n)
 	_msg("%s's max HP rose by %d!" % [_nm(m), n])
 	Audio.sfx("heal")
 
@@ -4224,12 +4319,38 @@ var _auto_still := 0
 var _auto_ignore := {}          # positions Autoplay gave up on this floor (unreachable / blocked)
 var _auto_floor := -1
 
+## Autoplay explores the floor (fights what it sees, picks up items) for this many turns before it heads for
+## known stairs with nothing left to do; the wind (or a job) still decides earlier.
+const AUTO_FLOOR_TURNS := 400
+
+func _auto_floor_turns() -> int:
+	return int(fs.turn) - int(get_meta("auto_floor_t0", fs.turn)) if has_meta("auto_floor_t0") else 0
+
+var _auto_patrol := Vector2i(-1, -1)
+
+## A room tile away from the leader for Autoplay to walk to when the floor is explored (meets new foes).
+func _auto_patrol_point(L: Mon) -> Vector2i:
+	var pts: Array = []
+	for y in fs.h:
+		for x in fs.w:
+			var q := Vector2i(x, y)
+			if fs.terrain_at(q) != 0 and fs.room_at(q) != 255 and FloorState.cheb(q, L.pos) > 8 and fs.explored[fs.idx(q)] != 0:
+				pts.append(q)
+	if pts.is_empty():
+		return Vector2i(-1, -1)
+	return pts[fs.rng.randi() % pts.size()]
+
+var _auto_want_stairs := false          # Autoplay chose to head down (stepping on the stairs otherwise doesn't descend)
+
 func autoplay_step() -> void:
 	var L := fs.leader
+	_auto_want_stairs = false
 	# standing still: an unreachable goal or a blocked step (a peaceful Pokémon, a shopkeeper, water...)
 	if _auto_floor != floor_i:
 		_auto_floor = floor_i
 		_auto_ignore.clear()
+		_auto_patrol = Vector2i(-1, -1)
+		set_meta("auto_floor_t0", int(fs.turn))
 	if L.pos == _auto_last:
 		_auto_still += 1
 	else:
@@ -4281,7 +4402,8 @@ func autoplay_step() -> void:
 		adj.sort_custom(func(a, b): return a.hp < b.hp)
 		var t: Mon = adj[0]
 		var d := DB.dir_index(t.pos - L.pos)
-		leader_action({"type": "attack", "move": _auto_best_move(L, t), "dir": d})
+		var pick := _auto_best_attack(L, t)
+		leader_action({"type": "attack", "move": str(pick.move), "dir": d, "chain": pick.chain})
 		return
 	# a visible foe in line for a ranged move
 	for o in fs.foes_of(L):
@@ -4293,7 +4415,8 @@ func autoplay_step() -> void:
 			for mv in L.moves:
 				var md: Dictionary = DB.moves.get(mv.name, {})
 				if int(mv.pp) > 0 and md.get("r", "") == "line" and int(md.get("p", 0)) > 0 and _clear_line(L.pos, dd, o.pos):
-					leader_action({"type": "attack", "move": mv.name, "dir": dd})
+					var ch := _auto_chain_of(L, L.moves.find(mv))            # a linked move fires its whole chain
+					leader_action({"type": "attack", "move": str(ch[0]), "dir": dd, "chain": ch})
 					return
 	# a visible foe not next to us: throw a throwing item from the Toolbox (straight ones need a clear line,
 	# Gravelerock / Geo Pebble arc over everything within 10 tiles)
@@ -4321,15 +4444,29 @@ func autoplay_step() -> void:
 				if dw >= 0:
 					leader_action({"type": "move", "dir": dw})
 					return
-	var no_task: bool = Missions.jobs_for_floor(dkey, floor_i + 1).is_empty() and not _floor_has_want()
+	# a find-item job on this floor (Missions.jobs_for_floor leaves those out): fetch the item once it's seen
+	var want_items: Array = []
+	for j in Game.jobs:
+		if str(j.get("state", "")) == "taken" and str(j.get("kind", "")) == "find" and str(j.get("dungeon", "")) == dkey \
+				and int(j.get("floor", -1)) == floor_i + 1 and not Missions.bag_has(str(j.get("item", ""))):
+			want_items.append(str(j.get("item", "")))
+	if not want_items.is_empty() and int(wind_state.get("phase", 0)) < 2:
+		for p in fs.items:
+			if str(fs.items[p].get("id", "")) in want_items and int(fs.items[p].get("price", 0)) == 0 and fs.explored[fs.idx(p)] == 1 and p != L.pos:
+				var dj := fs.path_dir(L, p, 2500, true)
+				if dj >= 0:
+					leader_action({"type": "move", "dir": dj})
+					return
+	var no_task: bool = Missions.jobs_for_floor(dkey, floor_i + 1).is_empty() and not _floor_has_want() and want_items.is_empty()
 	var hurry: bool = int(wind_state.get("phase", 0)) >= 1 or (test_invincible and no_task)
 	var stairs_known: bool = fs.stairs.x >= 0 and fs.explored[fs.idx(fs.stairs)] == 1 and fs.path_dir(L, fs.stairs, 2500, true) >= 0
 	if hurry and stairs_known:
+		_auto_want_stairs = true
 		leader_action({"type": "move", "dir": fs.path_dir(L, fs.stairs, 2500, true)})
 		return
 	# the stairs are known and nothing on this floor needs doing: grab what's close by, then go down
 	# (exploring every corner first looked like aimless wandering)
-	if stairs_known and no_task:
+	if stairs_known and no_task and (test_invincible or _auto_floor_turns() >= AUTO_FLOOR_TURNS):
 		var near := Vector2i(-1, -1)
 		var nd := 6
 		for p in fs.items:
@@ -4345,6 +4482,8 @@ func autoplay_step() -> void:
 		if ds >= 0:
 			if near.x >= 0:
 				_auto_target = near
+			else:
+				_auto_want_stairs = true
 			leader_action({"type": "move", "dir": ds})
 			return
 	for o in fs.foes_of(L):
@@ -4370,10 +4509,18 @@ func autoplay_step() -> void:
 		goal = fs.stairs
 	if goal.x < 0:
 		goal = fs.stairs
+	# the floor is explored: patrol the rooms for foes (Exp.) until the floor's time is up, then go down
+	if goal == fs.stairs and not hurry and not test_invincible and _auto_floor_turns() < AUTO_FLOOR_TURNS:
+		if _auto_patrol.x < 0 or _auto_patrol == L.pos or fs.path_dir(L, _auto_patrol, 2500, true) < 0:
+			_auto_patrol = _auto_patrol_point(L)
+		if _auto_patrol.x >= 0:
+			goal = _auto_patrol
+	_auto_want_stairs = goal == fs.stairs
 	var d2 := fs.path_dir(L, goal, 2500, true)
 	if d2 < 0:
 		_auto_target = Vector2i(-1, -1)
 		d2 = fs.path_dir(L, fs.stairs, 2500, true)
+		_auto_want_stairs = true
 	if d2 < 0:
 		leader_action({"type": "wait"})
 		return
@@ -4410,6 +4557,41 @@ func _auto_throw(L: Mon) -> Dictionary:
 			if _clear_line(L.pos, dd, o.pos):
 				return {"type": "throw", "bag": best_i, "dir": dd}
 	return {}
+
+## Autoplay's attack: the best single move or linked chain (a linked move always fires with its chain, scored
+## by the whole chain), against the regular attack. {move, chain}
+func _auto_best_attack(L: Mon, t: Mon) -> Dictionary:
+	var best := {"move": "", "chain": []}
+	var best_score := 1.0
+	var i := 0
+	while i < L.moves.size():
+		var idx: Array = TeamScreens.chain_from(L.moves, i)
+		var names: Array = idx.map(func(j): return str(L.moves[j].name))
+		var head: Dictionary = L.moves[i]
+		var score := 0.0
+		var ok := int(head.get("pp", 0)) > 0 and bool(head.get("on", true)) and not bool(head.get("sealed", false))
+		for j in idx:
+			var mvj: Dictionary = L.moves[j]
+			var md: Dictionary = DB.moves.get(str(mvj.name), {})
+			if int(mvj.get("pp", 0)) <= 0 or int(md.get("p", 0)) <= 0:
+				continue
+			if not md.get("r", "front") in ["front", "front_corners", "line", "two_tiles", "room", "adjacent", "front_spread"]:
+				continue
+			var eff := Combat.type_eff(str(md.get("t", "Normal")), t.types)
+			score += float(md.get("p", 0)) * Combat.eff_multiplier(eff) * (1.5 if md.get("t", "") in L.types else 1.0) / 3.0
+		if ok and score > best_score:
+			best_score = score
+			best = {"move": names[0], "chain": names if names.size() > 1 else []}
+		i = int(idx[idx.size() - 1]) + 1
+	return best
+
+func _auto_chain_of(L: Mon, i: int) -> Array:
+	while i > 0 and bool(L.moves[i].get("linked", false)):
+		i -= 1
+	var out: Array = []
+	for j in TeamScreens.chain_from(L.moves, i):
+		out.append(str(L.moves[j].name))
+	return out
 
 func _auto_best_move(L: Mon, t: Mon) -> String:
 	var best := ""
@@ -4491,7 +4673,10 @@ func _give_ko_exp(team: Array, t: Mon) -> void:
 	var gain := maxi(1, y + (y * (t.level - 1)) / 10)
 	for tm in team:
 		if tm.hp > 0 and fs.mons.has(tm) and not is_temp(tm):      # DX: temporary members gain no Exp.
-			await gain_exp(tm, IQSky.exp_gain(tm, gain))
+			var g := IQSky.exp_gain(tm, gain)
+			if tm.held == Game.EXP_SHARE:
+				g = int(ceil(g * 1.5))                 # remake: Exp. Share, +50% Exp. from KOs for its holder
+			await gain_exp(tm, g)
 
 ## Exit reason when the leader (or a story Pokémon) faints (GetDungeonExitReasonFromMoveOrItemID etc.).
 func _faint_summary(t: Mon, killer: Mon) -> Dictionary:
@@ -4606,7 +4791,7 @@ func _join_sequence(t: Mon) -> void:
 		_msg("%s joined the team for this adventure!" % _nm(t))
 		return
 	if not (auto_answer or Dialog.auto):
-		await get_tree().create_timer(160.0 / 60.0).timeout
+		await get_tree().create_timer(40.0 / 60.0).timeout     # Red pauses 160 frames for the fanfare; shortened
 	menu_open = true
 	var nick := 1
 	if not auto_answer and not Dialog.auto:
@@ -4669,6 +4854,18 @@ func _test_story_floor() -> bool:
 ## sprite above the Pokémon: "-N" in palette 3 (yellow) for damage, "+N" in palette 10 (green) for gains,
 ## "MISS" (value 9999, palette 10), below -999 palette 6. Each glyph advances 6 px; the sprite is centred by
 ## 3 px per glyph and rises 46/256 px a frame for 60 frames.
+## Restores HP and shows the gain in green over the Pokémon (Red: healing from moves, items and abilities).
+## Returns the HP actually gained.
+func heal_hp(t: Mon, amt: int) -> int:
+	if t == null or amt <= 0:
+		return 0
+	var before := t.hp
+	t.hp = mini(t.max_hp, t.hp + amt)
+	var got := t.hp - before
+	if got > 0:
+		red_number(t, got)
+	return got
+
 func red_number(t: Mon, value: int) -> void:
 	if t == null or t.visual == null or value == 0:
 		return

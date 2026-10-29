@@ -110,6 +110,45 @@ func bag_add(id: String, n := 1) -> bool:
 ## Every automatic save in the game goes through here. Game Options -> Auto save: Off keeps the save file as
 ## it was at the last real save (Save at the bed / the save points, Quicksave) and only updates the settings.
 ## force = an explicit save by the player.
+
+# ------------------------------------------------------------------ Auto bank (remake option)
+## Game Options -> Others -> Auto bank: money is put in the Felicity Bank when a dungeon ends, and in town
+## shops / services take payment from the money on hand first, then from the bank. Dungeons still need the
+## money carried (Kecleon shops there only see what the team has on it).
+const MAX_SAVINGS := 9999999
+
+func autobank() -> bool:
+	return bool(settings.get("qol_autobank", true))
+
+## What the team can spend in town: money on hand (+ the bank with Auto bank).
+func spendable() -> int:
+	return money + (bank if autobank() else 0)
+
+## Pays n Poké in town: money on hand first, then the bank. False (nothing taken) when there isn't enough.
+func pay(n: int) -> bool:
+	if n <= 0:
+		return true
+	if spendable() < n:
+		return false
+	var a := mini(money, n)
+	money -= a
+	bank -= n - a
+	return true
+
+## Puts the money on hand in the bank (up to the bank's limit). Returns the amount moved.
+func deposit_all() -> int:
+	var a := mini(money, MAX_SAVINGS - bank)
+	if a <= 0:
+		return 0
+	money -= a
+	bank += a
+	return a
+
+
+# ------------------------------------------------------------------ Exp. Share (remake item)
+## Held by a team member in a dungeon: it gains 50% more Exp. from each KO (dungeon.gd _give_ko_exp).
+const EXP_SHARE := "expshare"
+
 func save_game(force := false) -> void:
 	if not force and not bool(settings.get("qol_autosave", true)) and FileAccess.file_exists(SAVE_PATH):
 		_save_settings_only()

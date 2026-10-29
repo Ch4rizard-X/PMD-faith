@@ -23,6 +23,7 @@ PMD-faith stands on the work of many people. Thank you all.
 
 - **The *Explorers Remixed* team**: move data, abilities, items and the dungeon spawn and item lists used for the content added on top of *Red Rescue Team*.
 - **[PokeAPI](https://github.com/PokeAPI/pokeapi)** and its contributors: species, stats, types, abilities and names for Pokémon outside the original game.
+- **[PokeAPI/sprites](https://github.com/PokeAPI/sprites)**: the Exp. Share item icon (optional, placed by hand in `game/assets/ui/item_extra/expshare.png`; not included here, the game falls back to Red's ribbon icon).
 
 ## Tools and libraries
 

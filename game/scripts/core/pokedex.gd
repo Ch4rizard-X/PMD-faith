@@ -86,6 +86,14 @@ static func is_listed(dk: String) -> bool:
 	var r := RegEx.create_from_string("^(boss\\d+|d\\d+|autopilot)$")
 	return r.search(dk) == null
 
+## A floor where wild Pokémon actually appear: not an Explorers of Sky boss arena or one of Red's floor-wide
+## boss rooms (their spawn lists are never used: Labyrinth Cave's B10F lists Lv 35 dragons that never come).
+static func wild_floor(f: Dictionary) -> bool:
+	if int(f.get("eos_fixed", 0)) > 0:
+		return false
+	var pr: Array = f.get("props", [])
+	return not (pr.size() > 18 and BossScene.is_floorwide(int(pr[18])))
+
 static func _build() -> void:
 	if not _loc.is_empty():
 		return
@@ -95,6 +103,8 @@ static func _build() -> void:
 			continue
 		var floors: Array = dd[dk].get("floors", [])
 		for fi in floors.size():
+			if not wild_floor(floors[fi]):
+				continue
 			for e in floors[fi].get("pk", []):
 				if int(e[2]) <= 0:
 					continue
@@ -209,6 +219,8 @@ static func level_range(dk: String) -> Array:
 	var lo := 999
 	var hi := 0
 	for f in DB.dungeons.get("dungeons", {}).get(dk, {}).get("floors", []):
+		if not wild_floor(f):
+			continue
 		for e in f.get("pk", []):
 			if int(e[2]) > 0 and int(e[1]) > 0:
 				lo = mini(lo, int(e[1]))
@@ -223,6 +235,8 @@ static func recommended_level(dk: String) -> int:
 	var tot := 0.0
 	var w := 0.0
 	for f in DB.dungeons.get("dungeons", {}).get(dk, {}).get("floors", []):
+		if not wild_floor(f):
+			continue
 		for e in f.get("pk", []):
 			if int(e[2]) > 0 and int(e[1]) > 0:
 				tot += float(e[1]) * float(e[2])

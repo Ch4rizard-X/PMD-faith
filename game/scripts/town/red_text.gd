@@ -194,6 +194,7 @@ static func ask(root: Control, key_or_text: String, speaker_name: String, sp: St
 	for o in opts:
 		rows.append(o if o is Dictionary else {"text": str(o)})
 	var m := TeamScreens.menu("", rows)
+	m.remember = false
 	m.sel = default_i
 	await root.get_tree().process_frame
 	var vs := root.get_viewport_rect().size

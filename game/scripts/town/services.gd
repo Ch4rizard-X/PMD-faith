@@ -89,8 +89,10 @@ static func pick_friend_area(root: Control) -> String:
 				n += 1
 		opts.append("%s (%d)" % [area_name(k), n])
 	var lm := ListMenu.make("Friend Areas", opts)
+	lm.on_select = func(j: int): BottomScreen.hover_item("fa:" + str(Game.friend_areas[j]) if j >= 0 and j < Game.friend_areas.size() else "")
 	_place(root, lm)
 	var i := await lm.choose()
+	BottomScreen.hover_item("")
 	return "" if i < 0 else str(Game.friend_areas[i])
 
 ## Visit a Friend Area: see residents, bring them into the team or send team members home.

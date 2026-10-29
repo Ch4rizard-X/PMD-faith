@@ -290,11 +290,10 @@ class JobView extends PanelContainer:
 	func _ready() -> void:
 		theme = UITheme.theme()
 		mouse_filter = Control.MOUSE_FILTER_STOP
-		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		offset_left = 3 * UITheme.PX
-		offset_right = -3 * UITheme.PX
-		offset_top = 3 * UITheme.PX
-		offset_bottom = -3 * UITheme.PX
+		# a window sized to its 4 jobs (not the whole screen); the job under the cursor shows on the second screen
+		_fit()
+		get_viewport().size_changed.connect(_fit)
+		tree_exiting.connect(func(): BottomScreen.hover_job({}))
 		var vb := VBoxContainer.new()
 		vb.add_theme_constant_override("separation", 0)
 		add_child(vb)
@@ -317,6 +316,22 @@ class JobView extends PanelContainer:
 		vb.add_child(_body)
 		refresh()
 
+	## With a second screen the job details are shown there, so the list is a small window in the top-left
+	## corner (title, status, rank) and the map stays in view; without one it is Red's full board.
+	func _compact() -> bool:
+		return BottomScreen.instance != null and BottomScreen.instance.is_active()
+
+	func _fit() -> void:
+		var vs := get_viewport_rect().size
+		if _compact():
+			var cw := minf(vs.x - 6 * UITheme.PX, 168 * UITheme.PX)
+			size = Vector2(cw, 0)
+			position = Vector2(3 * UITheme.PX, 3 * UITheme.PX)
+			return
+		var w := minf(vs.x - 6 * UITheme.PX, 232 * UITheme.PX)
+		size = Vector2(w, 0)
+		position = Vector2(floorf((vs.x - w) / 2.0), 3 * UITheme.PX)
+
 	func page() -> int:
 		return sel / Board.PER_PAGE
 
@@ -333,7 +348,9 @@ class JobView extends PanelContainer:
 		_page_lbl.text = ("%d/%d" % [page() + 1, pages()]) if pages() > 1 else ""
 		if mode == "list":
 			_title_lbl.text = "%s  %d/%d" % [title, jobs.size(), Missions.MAX_JOBS]
+		_fit.call_deferred()                      # shrink to the rows of this page
 		if jobs.is_empty():
+			BottomScreen.hover_job({})
 			_body.add_child(Board.label("There are no jobs." if mode == "board" else "No jobs have been accepted.", UITheme.INK_DIM))
 			return
 		var start := page() * Board.PER_PAGE
@@ -375,22 +392,31 @@ class JobView extends PanelContainer:
 		var d := Board.rich("" if j.has("news") else "[right]%s[/right]" % Missions.difficulty_bb(str(j.get("difficulty", "E"))))
 		d.custom_minimum_size = Vector2(14 * UITheme.PX, UITheme.LINE)
 		l1.add_child(d)
+		var compact := BottomScreen.instance != null and BottomScreen.instance.is_active()
 		var l2 := HBoxContainer.new()
 		l2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(l2)
-		var pad := Control.new()
-		pad.custom_minimum_size = Vector2(8 * UITheme.PX, 0)
-		l2.add_child(pad)
-		var pl := Board.label(str(j.get("place", "")), UITheme.INK_DIM if dim else UITheme.INK)
-		pl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		pl.clip_text = true
-		l2.add_child(pl)
+		if compact:
+			# with a second screen the details (place, client, reward) are shown there: one short line per job
+			t.custom_minimum_size.x = 0
+			l1.remove_child(d)
+			l1.add_child(l2)
+			l1.add_child(d)
+		else:
+			col.add_child(l2)
+			var pad := Control.new()
+			pad.custom_minimum_size = Vector2(8 * UITheme.PX, 0)
+			l2.add_child(pad)
+		if not compact:
+			var pl := Board.label(str(j.get("place", "")), UITheme.INK_DIM if dim else UITheme.INK)
+			pl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pl.clip_text = true
+			l2.add_child(pl)
 		var st := ""
 		var sc := UITheme.INK_DIM
 		if mode == "list":
 			st = Board.status_text(j)
 			sc = Board.status_color(j)
-		elif dim:
+		elif dim and not compact:
 			st = "Accepted"
 		if st != "":
 			l2.add_child(Board.label(st, sc))
@@ -400,6 +426,7 @@ class JobView extends PanelContainer:
 		for r in _rows:
 			var c: TextureRect = r.get_node("Cursor")
 			c.modulate.a = 1.0 if _rows.find(r) == sel % Board.PER_PAGE else 0.0
+		BottomScreen.hover_job(jobs[sel] if sel >= 0 and sel < jobs.size() else {})
 
 	func cursor_y() -> float:
 		var i := sel % Board.PER_PAGE

@@ -7,8 +7,8 @@ extends RefCounted
 ##   - Story dungeons: CURVE gives the wild level on the first and last floor (in between it rises evenly)
 ##     and the boss level; the story ends with Rayquaza at Lv 70. Red's spread between the species of a
 ##     floor is kept (a floor at 30 has Pokémon at 28 and 32 where Red had 18 and 22 around 20).
-##   - Side dungeons that open during the story (and EoS dungeons that open by team level): Red's level
-##     mapped onto the story curve (RED_TO_HARD).
+##   - Side dungeons that open during the story, Makuhita Dojo's mazes (and EoS dungeons that open by team
+##     level): Red's level mapped onto the story curve (RED_TO_HARD).
 ##   - Post-game dungeons (and EoS post-game ones): Lv 70 on the first floor, +1 every 3 floors, up to 100;
 ##     bosses there at least Lv 75 (or the floor + 5).
 ##   - Backstop: a team 10+ levels above a floor's level raises its Pokémon by half of the difference past 10.
@@ -84,7 +84,7 @@ static func _post_game(dg) -> bool:
 	return post_game_key(str(dg.dkey), dg.ddata)
 
 static func post_game_key(k: String, dd: Dictionary) -> bool:
-	if CURVE.has(k) or k in STORY_SIDE:
+	if CURVE.has(k) or k in STORY_SIDE or k.begins_with("maze_"):      # Makuhita's mazes follow the story curve
 		return false
 	if bool(dd.get("eos", false)):
 		return k in Story.EOS_POSTGAME
@@ -119,6 +119,8 @@ static func dungeon_levels(k: String) -> Array:
 	var w := 0.0
 	var fls: Array = dd.get("floors", [])
 	for fi in fls.size():
+		if not Pokedex.wild_floor(fls[fi]):
+			continue                                # boss arenas: their lists never spawn
 		var target := floor_target_of(k, dd, fi)
 		var fl := floor_level_of(dd, fi)
 		for e in fls[fi].get("pk", []):
@@ -170,6 +172,8 @@ static func species_levels(k: String, sp: String) -> Array:
 	var hi := 0
 	var fls: Array = dd.get("floors", [])
 	for fi in fls.size():
+		if not Pokedex.wild_floor(fls[fi]):
+			continue
 		var target := -1
 		var fl := 0
 		for e in fls[fi].get("pk", []):

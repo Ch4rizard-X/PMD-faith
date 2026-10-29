@@ -46,6 +46,7 @@ static func ask(root: Control, msg: String, options: Array, speaker := "", emoti
 	d._show(msg, speaker, emotion, "")
 	d._finish_typing()
 	var lm := ListMenu.make("", options, cancel)
+	lm.remember = false
 	root.add_child(lm)
 	await root.get_tree().process_frame
 	var vs := root.get_viewport_rect().size

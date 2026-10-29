@@ -72,17 +72,27 @@ def merge_dungeons(db, R):
 def apply_abilities(species):
     R = common.load_json(os.path.join(T_RX, 'remix_data.json'))
     A = R['abilities']
-    first = {}
+    # A dex number can appear more than once in Remixed's monster.md (the first entry is the one the game
+    # uses for that species), and a few entries carry the wrong dex number (Alolan Ninetales under Sneasler's):
+    # take the first entry named like the species, else the first. FIX covers old slots Remixed reused.
+    by_dex = {}
     for m in R['mons']:
-        first.setdefault(m[1], m)
+        by_dex.setdefault(m[1], []).append(m)
+    norm = lambda t: re.sub(r'[^a-z0-9]', '', str(t).lower())
+    FIX = {'0657': ['torrent', 'protean'], '0658': ['torrent', 'protean'],
+           '0483': ['pressure', 'anticipation'], '0484': ['pressure', 'anticipation']}
+
+    def pick(dex, name):
+        ms = by_dex.get(dex, [])
+        return ([m for m in ms if len(m) > 4 and norm(m[4]) == norm(name)] or ms or [None])[0]
     n = 0
     for k, v in species.items():
         if v.get('red') or v.get('megaBase') or len(k) != 4:
             continue
-        m = first.get(int(k))
-        if not m:
+        m = pick(int(k), v.get('name', ''))
+        if not m and k not in FIX:
             continue
-        ab = [slug(A[str(x)][0]) for x in (m[2], m[3]) if x and str(x) in A]
+        ab = FIX.get(k) or [slug(A[str(x)][0]) for x in (m[2], m[3]) if x and str(x) in A]
         if ab:
             if v.get('ab') != ab:
                 n += 1

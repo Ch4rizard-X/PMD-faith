@@ -954,6 +954,11 @@ static func _dungeon_list(root: Control, G = null) -> int:
 		if j < 0 or G == null:
 			return -1
 		eos_pick = str(eos[j])
+		# as REQ_WORLD_MAP: DUNGEON_RESULT 5 makes the base station put the team back at the south exit when the
+		# trip / Prepare screen is cancelled (without it the station's fallback is the Friend Areas side)
+		GVars.set_val(null, GVars.START_MODE, 5)
+		GVars.set_val(null, GVars.DUNGEON_RESULT, 5)
+		GVars.set_val(null, GVars.DUNGEON_ENTER, -1)
 		G._end(16)                     # main.gd: Prepare screen, then the EoS dungeon
 		return -1
 	GVars.set_val(null, GVars.DUNGEON_SELECT, GData.rescue_to_script(ids[i]))

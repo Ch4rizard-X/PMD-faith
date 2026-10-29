@@ -185,7 +185,7 @@ static func open(root: Control) -> void:
 				return
 
 static func _swap(root: Control) -> void:
-	if Game.money < fee():
+	if Game.spendable() < fee():
 		await _say(root, "Meh-heh-heh... Hey, hold it!\nNo money, no swap. Got that?")
 		return
 	var offers := stock()
@@ -284,7 +284,7 @@ static func _do_swap(root: Control, want: String, give: Array) -> void:
 	for i in bag_idx:
 		if i >= 0 and i < Game.bag.size():
 			Game.bag.remove_at(i)
-	Game.money -= fee()
+	Game.pay(fee())
 	Audio.sfx("332")
 	await Dialog.say(root, "%s put the Exclusive Items\nin the Swap Cauldron." % _hero())
 	if stars(want) >= 3:

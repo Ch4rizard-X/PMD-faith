@@ -444,6 +444,7 @@ func ask_yes_no(_flag: bool, _a1: int, speaker: int, text) -> void:
 
 func _open_menu(opts: Array, cancel_val: int, can_cancel: bool) -> void:
 	_menu = ListMenu.make("", opts, can_cancel)
+	_menu.remember = false
 	add_child(_menu)
 	await get_tree().process_frame
 	if _menu == null or not is_instance_valid(_menu):

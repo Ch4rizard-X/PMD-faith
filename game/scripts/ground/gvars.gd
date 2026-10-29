@@ -138,7 +138,7 @@ static func _special(id: int) -> int:
 		UNIT_SUM:
 			return Story.unit_sum()
 		GOLD:
-			return int(Game.money)
+			return int(Game.spendable())          # remake: Auto bank lets town payments use the bank
 		BANK_GOLD:
 			return int(Game.bank)
 	return 0
@@ -187,7 +187,11 @@ static func set_val(local, id: int, v: int) -> void:
 		b[r[2]] = (b[r[2]] | m) if v != 0 else (b[r[2]] & ~m & 0xFF)
 	elif t == T_SPECIAL:
 		if id == GOLD:
-			Game.money = v
+			var d := v - Game.spendable()
+			if d >= 0:
+				Game.money += d
+			else:
+				Game.pay(mini(-d, Game.spendable()))
 		elif id == BANK_GOLD:
 			Game.bank = v
 	else:

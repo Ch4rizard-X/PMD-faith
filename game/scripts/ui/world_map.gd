@@ -800,10 +800,12 @@ func _choose_area(L: FLoc):
 			opts.append("%s(%d/%d)" % [str(A.get("name", k)), n, int(A.get("cap", 0))])
 	var lm := ListMenu.make("Where would you like to go?", opts)
 	lm.z_index = 7
+	lm.on_select = func(i: int): BottomScreen.hover_item("fa:" + keys[i] if i >= 0 and i < keys.size() else "")
 	add_child(lm)
 	var v := get_viewport_rect().size
 	lm.position = Vector2((v.x - 240 * PX) / 2.0 + 7 * 8 * PX, 2 * 8 * PX)
 	var pick := await lm.choose()
+	BottomScreen.hover_item("")
 	_clear_presses()
 	return keys[pick] if pick >= 0 else null
 

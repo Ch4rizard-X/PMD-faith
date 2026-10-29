@@ -3,6 +3,47 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.9 (29 Oct 2026)
+
+- **Status moves fixed (checked against Red's move code):** Light Screen, Focus Energy and Leech Seed set a status nothing read, so they did nothing. Many status moves only said "Nothing happened"; these now work: Counter and Mirror Coat (an adjacent attacker takes the damage back), Endure, Magic Coat, Mirror Move, Mist, Safeguard, Destiny Bond, Rage, Vital Throw, Encore, Taunt (no status moves), Torment (seals a move), Nightmare, Uproar, Wrap, Ingrain, Lock-On / Mind Reader, Pain Split, Haze, Psych Up, Spite, Heal Bell / Aromatherapy / Refresh, Roar / Whirlwind, Teleport, Knock Off, Trick, Foresight / Odor Sleuth, Helping Hand, Perish Song, Spikes, Substitute, Conversion / Conversion 2 / Camouflage, Mimic / Sketch, Role Play, Skill Swap, Metronome and Sleep Talk. As in Red, Disable paralyzes and Assist fails; Flash lowers accuracy, Grasswhistle puts to sleep, Spider Web slows.
+- **Protect / Detect** now block attacks (the status was set but never checked). Baneful Bunker, King's Shield, Spiky Shield, Silk Trap, Obstruct, Burning Bulwark and Laser Focus affect the user (they hit the foe in front); Aurora Veil covers the team. Proper messages ("is protecting itself!" instead of "was affected!").
+- **Autoplay:** fetches the item of a find-item job on its floor; explores the floor and fights what it sees, then patrols the rooms for foes until about 400 turns have passed before going down (walking over the stairs no longer takes it down early; the wind still sends it to the stairs); linked moves fire as their whole chain, scored by the chain's power.
+- **Linked moves in the Moves menu:** Red's double line over each move that starts a chain, so linked moves read as one group.
+- **Healing shows the HP gained in green** over the Pokémon (moves, items, drain, abilities), like Red.
+
+## v0.8.8 (29 Oct 2026)
+
+- **Counter / Mirror Coat and several beam effects** no longer hang for 4 seconds: a flag in one frame's duration was read as 257 frames.
+- **Recruiting:** the pause between the join fanfare and the nickname question is about 0.7 s (Red's 2.7 s).
+- **Paralysis, Petrified and Shadow Hold** make the Pokémon shake, like Red (x += frame counter & 2).
+- **Level ranges ignore boss arenas:** an Explorers of Sky arena floor (and Red's floor-wide boss rooms) never spawns its list, so it no longer counts in the level range, the Pokédex locations, the second-screen spawn list or Hard mode's spread (Labyrinth Cave: Lv 9-12 on Hard, was 9-70).
+
+## v0.8.7 (28 Oct 2026)
+
+- **Exp. Share** (new held item): the Pokémon holding it gains 50% more Exp. from KOs in dungeons. Town Kecleon stocks one on about 1 day in 50 (4000 Poké).
+- **Explorers of Sky money:** EoS floors store the Poké cap divided by 5 (FloorProperties max_money_amount_div_5); they used Red's x40 and paid about 8 times too much.
+- **Bulletin Board / Job List:** with a second screen the list is a small window in the corner (title, status, rank) so the map stays in view; the job details are on the second screen, which now uses the whole panel above the buttons.
+- **Hard mode:** Makuhita Dojo's mazes follow the story level curve (they were treated as post-game, Lv 70+).
+
+## v0.8.6 (28 Oct 2026)
+
+- **Auto bank** (Game Options -> Others, on by default): the money carried goes into the Felicity Bank when a dungeon ends; in town, shops and services (Kecleon, Wigglytuff, Xatu, Croagunk, Gulpin, story NPCs) take the money on hand first, then the bank. Dungeons still need the money carried.
+- **Kecleon wares** are no longer picked up by walking onto them: their name and price show in the log; the Ground menu picks one up (unpaid, as before).
+- **Item descriptions on the second screen scroll** (drag, right stick, mouse wheel) when they don't fit.
+
+## v0.8.5 (28 Oct 2026)
+
+- **Second screen in town (story mode):** team, rank, location, play time, money, day and job count, with Menu / Job List buttons (only while walking freely).
+- **Friend Area hover:** in the Friend Areas lists the second screen shows the Pokémon living there (portrait, name, level).
+- **Back to the base's south exit** when the trip or the Prepare screen for an Explorers of Sky dungeon is cancelled (it went to the Friend Areas side).
+
+## v0.8.4 (28 Oct 2026)
+
+- **Menus remember the cursor** (each menu returns to the row used last; Yes/No prompts always start fresh).
+- **Long lists scroll** with the cursor.
+- **Recruiting:** "Summary" in the join prompts at the end of a dungeon.
+- **Abilities:** a Pokémon listed more than once in Remixed's data takes the entry named after it; fixes Greninja / Frogadier (Torrent + Protean), Dialga / Palkia (Pressure + Anticipation), Rotom, Sneasler.
+
 ## v0.8.3 (28 Oct 2026)
 
 - **Dungeon info on the second screen:** highlighting a dungeon in a dungeon list shows its wild Pokémon as portraits with names in the Pokédex colours (white = no Friend Area yet, green = Friend Area owned, cyan = recruited; unseen ones are silhouettes named ???), the level range and "No recruiting here" where it applies. Long lists scroll (drag on the second screen, right stick, or the mouse wheel in the PC window).

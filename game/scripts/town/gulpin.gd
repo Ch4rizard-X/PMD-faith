@@ -58,7 +58,7 @@ static func _show_money(root: Control) -> void:
 	_money_box = PanelContainer.new()
 	_money_box.theme = UITheme.theme()
 	var l := Label.new()
-	l.text = "Money: %d Poké" % Game.money
+	l.text = "Money: %d Poké" % Game.spendable()
 	_money_box.add_child(l)
 	root.add_child(_money_box)
 	await root.get_tree().process_frame
@@ -103,7 +103,7 @@ static func shop(root: Control) -> void:
 		break
 	await _say(root, 7)
 	if st.paid_link:
-		Game.money = maxi(0, Game.money - int(IQ.data().get("link_fee", 150)))
+		Game.pay(mini(Game.spendable(), int(IQ.data().get("link_fee", 150))))
 		Audio.sfx("coin")
 	Game.save_game()
 
@@ -213,7 +213,7 @@ static func moves_editor(root: Control, e: Dictionary, st: Dictionary) -> void:
 					IQ.toggle_on(moves, i)
 				Audio.sfx("confirm")
 			1:
-				if Game.money < fee and not st.paid_link:
+				if Game.spendable() < fee and not st.paid_link:
 					Audio.sfx("error")
 					await _say(root, 2)
 				elif not IQ.link(moves, i):

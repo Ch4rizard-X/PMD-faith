@@ -174,6 +174,9 @@ func _draw() -> void:
 		var cols := maxi(1, int(A.cols))
 		src.position = Vector2(int(A.get("x", 0)) + (f % cols) * w, int(A.y) + (f / cols) * int(A.rows) * h + row * h)
 	var dst := Rect2((Vector2(-w / 2.0, -h / 2.0 - 2.0) + bob).round(), Vector2(w, h))
+	if mon and (mon.has_status("para") or mon.has_status("petrified") or mon.has_status("shadow_hold")):
+		# Red (dungeon_mon_sprite_render.c): a paralysed / petrified Pokémon shakes, x += frame counter & 2
+		dst.position.x += float(int(Time.get_ticks_msec() * 0.06) & 2)
 	draw_texture_rect_region(tex, dst, src, mod)
 	if sparkle > 0.0:                # four twinkling stars around the shiny
 		var k := 1.6 - sparkle

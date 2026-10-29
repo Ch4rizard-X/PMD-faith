@@ -14,6 +14,9 @@ var _title := ""
 var allow_cancel := true
 var _done := false
 var on_select: Callable          # optional: called with index when the cursor moves
+var _scroll: ScrollContainer
+var _list: VBoxContainer
+var remember := true             # come back to the row picked last time this menu was open (Yes/No prompts never do)
 
 static var auto := false          # automated tests: menus pick their first enabled option
 static var _auto_last := ""
@@ -22,6 +25,40 @@ static var _auto_burst := 0
 static var _auto_t := 0
 static var _cur_img: ImageTexture
 static var _blank_img: ImageTexture
+static var _mem := {}            # menu key -> last row (this run of the game)
+
+## Menu memory, shared with TeamScreens.RedMenu. A menu is known by its title and rows with the numbers taken
+## out (so "Job List (2/8)" is the same row as "Job List (3/8)"); when the rows changed (an item list after
+## using an item) the title alone is used.
+static func _mem_keys(title: String, texts: Array) -> Array:
+	var rx := RegEx.create_from_string("[0-9]+|\\[[^\\]]*\\]")
+	var t := rx.sub(title, "", true)
+	var rows := []
+	for x in texts:
+		rows.append(rx.sub(str(x), "", true))
+	var out := [t + "|" + "|".join(rows)]
+	if t.strip_edges() != "":
+		out.append(t + "|#")
+	return out
+
+static func _mem_ok(texts: Array) -> bool:
+	return not texts.is_empty() and not ("Yes" in texts and "No" in texts)
+
+static func recall(title: String, texts: Array) -> int:
+	if not _mem_ok(texts):
+		return -1
+	for k in _mem_keys(title, texts):
+		if _mem.has(k):
+			return clampi(int(_mem[k]), 0, texts.size() - 1)
+	return -1
+
+static func memorize(title: String, texts: Array, i: int) -> void:
+	if _mem_ok(texts) and i >= 0:
+		for k in _mem_keys(title, texts):
+			_mem[k] = i
+
+func _texts() -> Array:
+	return options.map(func(o): return str(o.get("text", "")))
 
 ## Red's green arrow, drawn at the UI pixel scale.
 static func _cursor_icon() -> Texture2D:
@@ -59,6 +96,16 @@ func _ready() -> void:
 		t.text = _title
 		t.modulate = UITheme.GOLD
 		_vbox.add_child(t)
+	# long lists scroll: the rows sit in a ScrollContainer that is fitted to the screen and follows the cursor
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	_vbox.add_child(_scroll)
+	_list = VBoxContainer.new()
+	_list.add_theme_constant_override("separation", 0)
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_list)
 	for i in options.size():
 		var b := Button.new()
 		b.text = str(options[i].text)
@@ -76,9 +123,17 @@ func _ready() -> void:
 		b.custom_minimum_size = Vector2(0, UITheme.LINE)
 		b.pressed.connect(_click.bind(i))
 		b.mouse_entered.connect(func(): _set_sel(i))
-		_vbox.add_child(b)
+		_list.add_child(b)
 		_rows.append(b)
-	_set_sel(0)
+	_scroll.custom_minimum_size.y = options.size() * UITheme.LINE
+	var start := sel
+	if start == 0 and remember and not auto:
+		var r := recall(_title, _texts())
+		if r >= 0 and not options[r].get("disabled", false):
+			start = r
+	_set_sel(start)
+	_fit_to_screen.call_deferred()
+	get_viewport().size_changed.connect(_fit_to_screen)
 	if allow_cancel:
 		_add_backdrop.call_deferred()
 	if auto:
@@ -125,12 +180,35 @@ func _add_backdrop() -> void:
 		if is_instance_valid(_backdrop):
 			_backdrop.queue_free())
 
+## Taller than the screen: the row area shrinks to fit (from the menu's top to the screen's bottom edge) and scrolls.
+func _fit_to_screen() -> void:
+	if _scroll == null or not is_inside_tree():
+		return
+	var vh := get_viewport_rect().size.y
+	var full := options.size() * UITheme.LINE
+	var title_h := UITheme.LINE if _title != "" else 0
+	var margin := 8.0 * UITheme.PX
+	if global_position.y + title_h + full + margin > vh:
+		if global_position.y + title_h + full + margin > vh and full + title_h + 2 * margin > vh:
+			position.y = margin - (global_position.y - position.y)       # as high as it goes
+		var avail := vh - global_position.y - title_h - margin * 2
+		_scroll.custom_minimum_size.y = maxf(UITheme.LINE * 3, minf(full, avail))
+		size.y = 0
+	else:
+		_scroll.custom_minimum_size.y = full
+	_follow()
+
+func _follow() -> void:
+	if _scroll and sel >= 0 and sel < _rows.size():
+		_scroll.ensure_control_visible(_rows[sel])
+
 func _set_sel(i: int) -> void:
 	if _rows.is_empty():
 		return
 	sel = clampi(i, 0, _rows.size() - 1)
 	for j in _rows.size():
 		_rows[j].icon = _cursor_icon() if j == sel else _blank_icon()
+	_follow.call_deferred()
 	if on_select.is_valid():
 		on_select.call(sel)
 
@@ -152,6 +230,8 @@ func _finish(i: int) -> void:
 	if is_instance_valid(_backdrop):
 		_backdrop.queue_free()
 	_result = i
+	if remember and not auto:
+		memorize(_title, _texts(), sel)
 	Audio.sfx("confirm" if i >= 0 else "cancel")
 	picked.emit(i)
 

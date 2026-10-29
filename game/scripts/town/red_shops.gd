@@ -12,6 +12,7 @@ extends RefCounted
 const P := UITheme.PX
 const MAX_MONEY := 99999           # MAX_TEAM_MONEY
 const MAX_SAVINGS := 9999999       # MAX_TEAM_SAVINGS
+const EXP_SHARE_ODDS := 50         # remake: Kecleon stocks an Exp. Share on 1 day in this many
 const STORAGE_MAX := 999           # per item (kangaskhan: teamStorage > 998)
 
 static var force_asleep := false     # tests
@@ -35,7 +36,7 @@ static func _money_box(root: Control, at := Vector2(-1, -1)) -> PanelContainer:
 	vb.add_theme_constant_override("separation", 0)
 	w.add_child(vb)
 	vb.add_child(TeamScreens._rtl(RedText.get_text("felicity_bank:sMoney")))
-	vb.add_child(TeamScreens._rtl("[right]%d[/right]" % Game.money))
+	vb.add_child(TeamScreens._rtl("[right]%d[/right]" % Game.spendable()))       # remake: + the bank with Auto bank
 	w.custom_minimum_size = Vector2(9 * 8 * P, 0)
 	root.add_child(w)
 	var vs := root.get_viewport_rect().size
@@ -126,6 +127,8 @@ static func stock(wares: bool) -> Array:
 				ware.append(_bulk(id2, rng))
 		items.sort_custom(func(a, b): return int(DB.items[a.id].get("red_id", 999)) < int(DB.items[b.id].get("red_id", 999)))
 		ware.sort_custom(func(a, b): return int(DB.items[a.id].get("red_id", 999)) < int(DB.items[b.id].get("red_id", 999)))
+		if DB.items.has(Game.EXP_SHARE) and rng.randi_range(1, EXP_SHARE_ODDS) == 1:
+			items.append({"id": Game.EXP_SHARE, "n": 0})     # remake: an Exp. Share, very rarely (1 day in 50)
 		st = {"day": Game.day, "items": items, "wares": ware}
 		Game.flags["kecleon"] = st
 	return st["wares" if wares else "items"]
@@ -226,12 +229,12 @@ static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 			continue
 		if c != "Open":
 			continue
-		if Game.money < fee:
+		if Game.spendable() < fee:
 			await RedText.say(root, " Oh... You don't have enough money\nfor that.", nm, sp)
 			return
 		if await RedText.ask(root, " Shall I open the {COLOR GREEN}{MOVE_ITEM_0}{RESET}\nfor {COLOR CYAN}{VALUE_0}{RESET} {POKE}?", nm, sp, _yn(), {"item0": DB.item_name(box), "value0": fee}) != 0:
 			continue
-		Game.money -= fee
+		Game.pay(fee)
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		var got := EosItems.open_box(rng)
@@ -241,7 +244,7 @@ static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 		Game.save_game()
 		if not Game.bag.any(func(b): return EosItems.is_box(str(b.id))):
 			return
-		if Game.money < fee:
+		if Game.spendable() < fee:
 			return
 		if await RedText.ask(root, " Shall I open another box?", nm, sp, _yn()) != 0:
 			return
@@ -270,15 +273,15 @@ static func _kec_buy(root: Control, wares: bool, K: String, nm: String, sp: Stri
 		if c != "Buy":
 			continue
 		var price := buy_value(b)
-		if Game.money < price:
-			await RedText.say(root, K + ("13" if Game.money == 0 else "19"), nm, sp, v)
+		if Game.spendable() < price:
+			await RedText.say(root, K + ("13" if Game.spendable() == 0 else "19"), nm, sp, v)
 			continue
 		if await RedText.ask(root, K + "05", nm, sp, _yn(), v.merged({"item0": "[color=#7fff7f]%s[/color]" % DB.item_name(str(b.id)), "value0": price})) != 0:
 			continue
 		if not Game.bag_add(str(b.id), maxi(1, int(b.n))):
 			await RedText.say(root, K + "17", nm, sp, v)
 			return
-		Game.money -= price
+		Game.pay(price)
 		list.erase(b)
 		Audio.sfx("332")
 		await RedText.say(root, K + "06", nm, sp, v, "Happy")
@@ -834,7 +837,7 @@ static func wigglytuff(root: Control) -> void:
 					await RedText.say(root, W + "08", nm, sp, v)
 				elif shop_areas().is_empty():
 					await RedText.say(root, W + "10", nm, sp, v)
-				elif Game.money <= 0:
+				elif Game.spendable() <= 0:
 					await RedText.say(root, W + "09", nm, sp, v)
 				else:
 					await RedText.say(root, W + "03", nm, sp, v)
@@ -876,10 +879,10 @@ static func _wiggly_buy(root: Control, W: String, nm: String, sp: String, v: Dic
 		var fv := v.merged({"friend_area": "[color=#7fff7f]%s[/color]" % Services.area_name(k), "value0": price})
 		if await RedText.ask(root, W + "05", nm, sp, _yn(), fv) != 0:
 			continue
-		if Game.money < price:
+		if Game.spendable() < price:
 			await RedText.say(root, W + "11", nm, sp, v)
 			continue
-		Game.money -= price
+		Game.pay(price)
 		Game.friend_areas.append(k)
 		Audio.sfx("332")
 		await RedText.say(root, W + "06", nm, sp, fv, "Happy")

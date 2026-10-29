@@ -24,6 +24,14 @@ EMPOWER_SEED = {'price': 350, 'desc': 'Eating it makes a Pokémon Awakened for t
                 'action': 'food'}
 
 
+# The remake's own Exp. Share (scripts/dungeon/dungeon.gd _give_ko_exp): its holder gains 50% more Exp. from KOs.
+# Kecleon in town stocks one very rarely (scripts/town/red_shops.gd EXP_SHARE_ODDS).
+EXP_SHARE = {'id': 'expshare', 'name': 'Exp. Share', 'cat': 'Held', 'price': 4000, 'kind': 'held', 'v': 0,
+             'desc': 'A hold item that makes the Pokémon holding it gain 50% more {color YELLOW}Exp. Points{reset} when the '
+                     'team defeats a Pokémon.', 'stack': False, 'throwable': False, 'red': 0, 'sell': 1500, 'red_cat': 'held_items',
+             'action': 'ribbons', 'sprite': 4, 'pal': 4, 'remake': 1}
+
+
 def rarity_of(raw_desc):
     """Exclusive-item rarity = the stars ([M:S3]) on the first line of its description; 3 when it shows none."""
     return raw_desc.split('\n')[0].count('[M:S3]') or 3
@@ -260,6 +268,7 @@ def apply(items, species, moves, E, raw_desc=None):
             it['rarity'] = rarity_of(raw_desc[it['eos_id']])
     if 'empowerseed' in items:              # Rescue Team DX's Empowerment Seed (see gen_megas_dx.py)
         items['empowerseed'].update(EMPOWER_SEED)
+    items['expshare'] = dict(EXP_SHARE)
     return items, added, excl
 
 

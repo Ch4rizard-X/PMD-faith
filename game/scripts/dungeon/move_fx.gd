@@ -196,9 +196,14 @@ class FxNode extends Node2D:
 	var _total := 0
 	var _fin := false
 
+	## A frame's length in frames. A few effects (313, 318-321: beams, Counter's) carry a flag in the high byte
+	## (0x101): only the low byte is the duration, else that frame held for 257 frames (4 s).
+	static func _dur(f: Array) -> int:
+		return maxi(1, int(f[6]) & 0xFF)
+
 	func _ready() -> void:
 		for f in frames:
-			_total += maxi(1, int(f[6]))
+			_total += _dur(f)
 		if _total <= 0:
 			_total = 1
 
@@ -218,7 +223,7 @@ class FxNode extends Node2D:
 		var ft := int(t) % _total if loop else mini(int(t), _total - 1)
 		var acc := 0
 		for f in frames:
-			acc += maxi(1, int(f[6]))
+			acc += _dur(f)
 			if ft < acc:
 				if int(f[2]) > 0 and int(f[3]) > 0:
 					var a := float(f[7]) if f.size() > 7 else 1.0
