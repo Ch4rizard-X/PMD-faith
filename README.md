@@ -19,14 +19,19 @@ The game logic is ported from the community decompilation of the original game, 
 | Items | 240 | 1,428 (909 exclusive items) |
 | Dungeons | 64 | 221 (157 from *Explorers of Sky*) |
 
-Added or changed (54 in total), among them:
+Added or changed, among them:
 
-- **Content from *Explorers of Sky* / *Explorers Remixed*:** dungeons, items, exclusive items, treasure boxes, abilities, IQ skills, move animations, music, an extra world map.
-- **From *Rescue Team DX*:** Empowerment Seed (Awakened state with Mega Evolution) and shiny Pokémon, including shiny hunting for legendaries.
-- **Quality of life (each can be switched off):** run mode, tap to walk, damage preview, info on long-press, map markers and corner minimap, auto-pickup filter, low-HP warning, team item prompts, burn/poison wear-off, hunger off, prepare screen, menu size.
+- **Content from *Explorers of Sky* / *Explorers Remixed*:** dungeons, items, exclusive items, treasure boxes, abilities, IQ skills, move animations, music, an extra world map. Dungeons in several parts are played in one trip as in *Explorers of Sky* (Steam Cave, Upper Steam Cave, Steam Cave Peak ...). Recruiting works in the *Explorers of Sky* dungeons too (boss floors once the dungeon is cleared).
+- **Move Growth** from *Explorers Remixed*: damaging moves level up with use (up to Lv 25: more power, PP and accuracy). Optional.
+- **Hard mode:** a planned level curve through the story (ending with Rayquaza at Lv 70), a post-game from Lv 70 to 100, more wild Pokémon per floor. Normal or Hard, switchable any time.
+- **From *Rescue Team DX*:** Empowerment Seed (Awakened state with Mega Evolution), shiny Pokémon (including shiny hunting for legendaries), temporary recruits.
+- **New items:** Exp. Share (its holder gains 50% more Exp.; very rare in Kecleon's shop).
+- **Quality of life (each can be switched off):** run mode, tap to walk, damage preview, info on long-press, map markers and corner minimap, auto-pickup filter, low-HP warning, team item prompts, burn/poison wear-off, hunger off, prepare screen, menu size, Auto bank (money goes to the bank after a dungeon and town shops pay from it). Menus remember the cursor.
 - **Town:** store/take all, sell all, bulk job accept, a Pokédex and recruit tracker.
+- **Autoplay:** explores each floor, fights to level up, fetches job items, uses linked moves, eats and heals; stops when HP is low.
 - **Wonder Mail:** byte-compatible with the original codes, plus an in-game code maker.
-- **Platforms:** Android and Windows, touch controls, controller support with rebinding, autoplay, and AYN Thor dual-screen support with an *Explorers of Sky*-style second screen.
+- **Second screen** (AYN Thor and other dual-screen devices, or a second window on PC), *Explorers of Sky*-style: the dungeon map, team and log; in town the team, location and jobs; item, job and dungeon info (what lives in a dungeon, in the Pokédex colours) and Friend Area residents while you browse.
+- **Platforms:** Android and Windows, touch controls, controller support with rebinding.
 
 ## Layout
 

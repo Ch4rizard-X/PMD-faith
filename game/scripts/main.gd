@@ -1674,6 +1674,26 @@ func _ready() -> void:
 			print("HEALSHOT hp=", L.hp)
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--chaintest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.team[0].level = 60
+			var L0 := Story.eos_unlocked()
+			print("CHAINTEST heads listed: steam=%s upper=%s peak=%s n=%d" % ["eos_steam_cave" in L0, "eos_upper_steam_cave" in L0, "eos_steam_cave_peak" in L0, L0.size()])
+			Dungeon.test_invincible = true
+			await start_dungeon("eos_beach_cave")
+			await get_tree().create_timer(2.0).timeout
+			var d := dungeon
+			d.auto_answer = true
+			Dialog.auto = true
+			d.fs.leader.hp = 7
+			d.floor_i = d.ddata.floors.size() - 1
+			await d.next_floor()
+			await get_tree().create_timer(1.0).timeout
+			print("CHAINTEST now dkey=%s floor=%d leader hp=%d log=%s" % [d.dkey, d.floor_i, d.fs.leader.hp, str(d.hud.log_all.slice(-2))])
+			print("CHAINTEST cleared beach=%s" % ["eos_beach_cave" in Game.cleared])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--groundpad"):
 		(func():
 			Game.load_game()
@@ -3092,12 +3112,16 @@ func _on_dungeon_finished(res: String) -> void:
 	if res == "boss_next":
 		res = "cleared"
 	var ok := res != "defeated"
+	var chain_done: Array = dungeon.get_meta("chain_done", []) if is_instance_valid(dungeon) else []
+	var chain_head := last_dungeon
+	if is_instance_valid(dungeon) and str(dungeon.dkey) != last_dungeon:
+		last_dungeon = str(dungeon.dkey)          # an EoS dungeon in parts: the trip ended in a later part
 	Audio.play_music("052" if ok else "051")
 	if dungeon and dungeon.has_method("show_last_outing"):
 		await dungeon.show_last_outing(root, res)      # Red's "The Last Outing" window
 	var lines: Array = []
 	if res == "cleared":
-		lines.append("[color=#ffdc4a]You cleared %s![/color]" % Services.dname(last_dungeon))
+		lines.append("[color=#ffdc4a]You cleared %s![/color]" % Services.dname(chain_head))
 		for k in Services.on_cleared(last_dungeon):
 			lines.append("A new place opened up: [color=#7fe0ff]%s[/color]!" % Services.dname(k))
 	elif res == "rescued":
@@ -3128,6 +3152,8 @@ func _on_dungeon_finished(res: String) -> void:
 			lines.append("[color=#7fe0ff]%d Poké[/color] went into the bank (savings %d Poké)." % [dep, Game.bank])
 	if not ok:
 		FriendRescue.on_defeated(last_dungeon, dungeon.floor_i if dungeon else 0)    # an SOS Mail can be sent
+	for pk in chain_done:
+		Missions.on_dungeon_end(str(pk), res)          # find-item jobs of the earlier parts
 	Missions.on_dungeon_end(last_dungeon, res)
 	Game.save_game()
 	await Dialog.talk(root, ["\n".join(lines)])

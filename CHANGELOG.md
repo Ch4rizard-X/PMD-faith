@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.10 (29 Oct 2026)
+
+- **Explorers of Sky dungeons in several parts are one trip,** as in Explorers of Sky: the dungeon list shows only the first part, clearing a part goes straight on into the next (HP, Belly, items and status carried over), and the last part (usually the boss) ends the trip. The parts follow EoS's own dungeon table (the parts that share a mappa group): Beach Cave, Mt. Bristle, Steam Cave, Amp Plains, Quicksand Cave, Crystal Crossing, Sealed Ruin, Brine Cave, Hidden Land, Temporal Tower, Mystifying Forest, Crevice Cave, Miracle Sea, Aegis Cave, Spacial Rift, Dark Crater, Concealed Ruins, Bottomless Sea, Shimmer Desert, Mt. Avalanche, Giant Volcano, World Abyss, Sky Stairway, Mystery Jungle, Sky Peak, Star Cave, Fortune Ravine, Barren Valley, Dark Ice Mountain, Vast Ice Mountain, Boulder Quarry, Limestone Cavern and Spring Cave. Each part counts as cleared as it is passed; a chain opens when the team is ready for its longest parts.
+- **README** lists Move Growth, Hard mode, the Exp. Share, Auto bank, Autoplay and the second screen.
+
 ## v0.8.9 (29 Oct 2026)
 
 - **Status moves fixed (checked against Red's move code):** Light Screen, Focus Energy and Leech Seed set a status nothing read, so they did nothing. Many status moves only said "Nothing happened"; these now work: Counter and Mirror Coat (an adjacent attacker takes the damage back), Endure, Magic Coat, Mirror Move, Mist, Safeguard, Destiny Bond, Rage, Vital Throw, Encore, Taunt (no status moves), Torment (seals a move), Nightmare, Uproar, Wrap, Ingrain, Lock-On / Mind Reader, Pain Split, Haze, Psych Up, Spite, Heal Bell / Aromatherapy / Refresh, Roar / Whirlwind, Teleport, Knock Off, Trick, Foresight / Odor Sleuth, Helping Hand, Perish Song, Spikes, Substitute, Conversion / Conversion 2 / Camouflage, Mimic / Sketch, Role Play, Skill Swap, Metronome and Sleep Talk. As in Red, Disable paralyzes and Assist fails; Flash lowers accuracy, Grasswhistle puts to sleep, Spider Web slows.

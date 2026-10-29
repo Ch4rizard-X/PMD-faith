@@ -362,6 +362,62 @@ static var eos_pick := ""
 const EOS_POSTGAME := ["eos_zero_isle_north", "eos_zero_isle_east", "eos_zero_isle_west", "eos_zero_isle_south",
 	"eos_zero_isle_center", "eos_destiny_tower"]
 
+## Explorers of Sky dungeons made of several parts played in one trip (EoS DUNGEON_DATA_LIST: the parts that share
+## a mappa group, in floor order; Sky Peak's side clearing left out). The list shows only the first part; clearing a
+## part goes straight on to the next (Dungeon.next_floor), and the last one ends the trip.
+const EOS_CHAINS := [
+	["eos_beach_cave", "eos_beach_cave_pit"],
+	["eos_mt_bristle", "eos_mt_bristle_peak"],
+	["eos_steam_cave", "eos_upper_steam_cave", "eos_steam_cave_peak"],
+	["eos_amp_plains", "eos_far_amp_plains", "eos_amp_clearing"],
+	["eos_quicksand_cave", "eos_quicksand_pit", "eos_underground_lake"],
+	["eos_crystal_crossing", "eos_crystal_lake"],
+	["eos_sealed_ruin", "eos_deep_sealed_ruin", "eos_sealed_ruin_pit"],
+	["eos_brine_cave", "eos_lower_brine_cave", "eos_brine_cave_pit"],
+	["eos_hidden_land", "eos_hidden_highland", "eos_old_ruins"],
+	["eos_temporal_tower", "eos_temporal_spire", "eos_temporal_pinnacle"],
+	["eos_mystifying_forest", "eos_mystifying_forest_clearing"],
+	["eos_crevice_cave", "eos_lower_crevice_cave", "eos_crevice_cave_pit"],
+	["eos_miracle_sea", "eos_deep_miracle_sea", "eos_miracle_seabed"],
+	["eos_ice_aegis_cave", "eos_regice_chamber", "eos_rock_aegis_cave", "eos_regirock_chamber", "eos_steel_aegis_cave", "eos_registeel_chamber", "eos_aegis_cave_pit", "eos_regigigas_chamber"],
+	["eos_spacial_rift", "eos_deep_spacial_rift", "eos_spacial_rift_bottom"],
+	["eos_dark_crater", "eos_deep_dark_crater", "eos_dark_crater_pit"],
+	["eos_concealed_ruins", "eos_deep_concealed_ruins"],
+	["eos_bottomless_sea", "eos_bottomless_sea_depths"],
+	["eos_shimmer_desert", "eos_shimmer_desert_pit"],
+	["eos_mt_avalanche", "eos_mt_avalanche_peak"],
+	["eos_giant_volcano", "eos_giant_volcano_peak"],
+	["eos_world_abyss", "eos_world_abyss_pit"],
+	["eos_sky_stairway", "eos_sky_stairway_apex"],
+	["eos_mystery_jungle", "eos_deep_mystery_jungle"],
+	["eos_1st_station_pass", "eos_2nd_station_pass", "eos_3rd_station_pass", "eos_4th_station_pass", "eos_5th_station_pass", "eos_6th_station_pass", "eos_7th_station_pass", "eos_8th_station_pass", "eos_9th_station_pass", "eos_sky_peak_summit_pass", "eos_sky_peak_summit"],
+	["eos_star_cave", "eos_deep_star_cave", "eos_star_cave_depths", "eos_star_cave_pit"],
+	["eos_fortune_ravine", "eos_fortune_ravine_depths", "eos_fortune_ravine_pit"],
+	["eos_barren_valley", "eos_deep_barren_valley", "eos_barren_valley_clearing"],
+	["eos_dark_ice_mountain", "eos_dark_ice_mountain_peak", "eos_dark_ice_mountain_pinnacle"],
+	["eos_vast_ice_mountain", "eos_vast_ice_mountain_peak", "eos_vast_ice_mountain_pinnacle"],
+	["eos_boulder_quarry", "eos_deep_boulder_quarry", "eos_boulder_quarry_clearing"],
+	["eos_limestone_cavern", "eos_deep_limestone_cavern", "eos_limestone_cavern_depths"],
+	["eos_spring_cave", "eos_upper_spring_cave", "eos_middle_spring_cave", "eos_lower_spring_cave", "eos_spring_cave_depths", "eos_spring_cave_pit"],
+]
+
+## The chain a dungeon belongs to ([] when it stands alone).
+static func eos_chain_of(k: String) -> Array:
+	for c in EOS_CHAINS:
+		if k in c:
+			return c
+	return []
+
+## The part after k in its chain ("" at the end or when it stands alone).
+static func eos_chain_next(k: String) -> String:
+	var c := eos_chain_of(k)
+	var i := c.find(k)
+	return str(c[i + 1]) if i >= 0 and i + 1 < c.size() else ""
+
+static func eos_chain_head(k: String) -> String:
+	var c := eos_chain_of(k)
+	return str(c[0]) if not c.is_empty() else k
+
 ## The Explorers of Sky dungeons on the dungeon list: those at or below the level of the team you're taking
 ## (not Friend Area residents: a Lv. 90 recruit, such as a Kecleon from a shop, used to open everything), and
 ## the level-reset and post-game ones after the story.
@@ -378,10 +434,18 @@ static func eos_unlocked() -> Array:
 		var d: Dictionary = DB.dungeons.dungeons[k]
 		if not d.get("eos", false):
 			continue
+		var chain := eos_chain_of(str(k))
+		if not chain.is_empty() and str(chain[0]) != str(k):
+			continue                                # later parts come with their chain's first part
+		var need := int(d.get("eos_level", 1))
+		for ck in chain:                            # a chain opens when the team is ready for its longest parts
+			var cd: Dictionary = DB.dungeons.dungeons.get(ck, {})
+			if (cd.get("floors", []) as Array).size() > 1:
+				need = maxi(need, int(cd.get("eos_level", 1)))
 		if d.get("level_reset", false) or k in EOS_POSTGAME:
 			if post:
 				out.append(k)
-		elif top >= int(d.get("eos_level", 1)):
+		elif top >= need:
 			out.append(k)
 	out.sort_custom(func(a, b): return int(DB.dungeons.dungeons[a].get("eos_level", 1)) < int(DB.dungeons.dungeons[b].get("eos_level", 1)))
 	return out

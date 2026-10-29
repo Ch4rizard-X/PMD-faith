@@ -2800,8 +2800,20 @@ func next_floor() -> void:
 		_end("boss_next")           # Red: the floors before the boss arena end straight into the ground cutscene
 		return
 	if floor_i >= ddata.floors.size():
-		_end("cleared")
-		return
+		var nxt := Story.eos_chain_next(dkey)
+		if nxt == "" or not DB.dungeons.get("dungeons", {}).has(nxt):
+			_end("cleared")
+			return
+		# an Explorers of Sky dungeon in several parts: this part is cleared, the trip goes on into the next
+		var done: Array = get_meta("chain_done", [])
+		done.append(dkey)
+		set_meta("chain_done", done)
+		Services.on_cleared(dkey)
+		dkey = nxt
+		ddata = DB.dungeons.dungeons[nxt]
+		dname = str(ddata.get("name", nxt))
+		floor_i = 0
+		_msg("Onward to [color=#ffdc4a]%s[/color]!" % dname)
 	AdventureLog.add("floors")             # IncrementAdventureFloorsExplored
 	await build_floor()
 	AbilityFx.update_weather(self)

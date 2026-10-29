@@ -133,7 +133,7 @@ static func _dorder(dk: String) -> int:
 
 ## A dungeon the player knows: opened, cleared, or an Explorers of Sky dungeon that's open now.
 static func dungeon_known(dk: String) -> bool:
-	return dk in Game.unlocked or dk in Game.cleared or dk in Story.eos_unlocked()
+	return dk in Game.unlocked or dk in Game.cleared or Story.eos_chain_head(dk) in Story.eos_unlocked()
 
 static func locations(sp: String) -> Array:
 	_build()
