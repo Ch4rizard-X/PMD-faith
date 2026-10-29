@@ -3,6 +3,12 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.14 (29 Oct 2026)
+
+- **Weather in the 3D view:** rain soaks the floor and walls (darker, shinier, with highlights), splashes on the ground and rings on water; snow settles in drifts on wall tops, floors and grass tips; hail leaves a light coating; fog drifts over the floor in banks; sandstorms blow sand across it; sunny weather brightens and warms the light, cloudy and rainy weather dim and cool it. Wetness and snow build up and fade over a few seconds.
+- **Shader packs:** Soft, Cinematic, Claymation and Dream no longer wash out on bright floors; distance fog now thickens toward the top of the screen (the far side of the view) instead of covering everything evenly.
+- **Main menu: Check for Updates** asks the Releases page right away (also with Auto update switched off) and offers to restart into a new version.
+
 ## v0.8.13 (29 Oct 2026)
 
 - **3D view (new, optional):** Game Options -> 3D View -> View: 3D plays the dungeons as voxel dioramas built from the floor's own tiles. Walls are stone faces in the tileset's cliff colours with rounded tops; the wall material is read from the tile colours (grass and flowers, rock, snow with icicles, puffy clouds, crystal clusters); water and lava sit below the floor, chasms drop deep; the map is extended with wall past its edges, so no black borders. Pokémon are rounded voxel figures made from their sprites, and animate with them. Items, traps, stairs, move animations, status icons, damage numbers and tapping the map work as in 2D. Works in Red and Explorers of Sky dungeons. Quick keys: V next shader pack, Shift+V 2D / 3D (controller: Select+R, Select+L).

@@ -24,18 +24,18 @@ const BASE := {
 const PACKS := [
 	["Off", {"outline": 0.0, "sway": 0.0, "glow": 0.0, "ao": 0.0, "shadows": 0, "weather": 0, "water_alpha": 0.95, "waves": 0.0}],
 	["Classic", {}],
-	["Soft", {"sun": 0.85, "ambient": 0.6, "shadows": 1, "ao": 0.6, "sat": 0.92, "contrast": 0.92, "sway": 0.4, "waves": 0.6, "glow": 0.3, "outline": 0.1, "haze": 0.12}],
+	["Soft", {"sun": 0.75, "ambient": 0.42, "shadows": 1, "ao": 0.6, "sat": 0.95, "contrast": 0.95, "bright": 0.96, "sun_col": Color(1.0, 0.95, 0.9), "sway": 0.4, "waves": 0.6, "glow": 0.25, "outline": 0.1}],
 	["Vibrant", {"sun": 1.15, "sat": 1.35, "contrast": 1.12, "glow": 0.9, "lava": 1.4, "water_alpha": 0.62, "waves": 1.3, "sway": 0.8, "outline": 0.18}],
-	["Cinematic", {"sun": 0.8, "ambient": 0.3, "shadows": 2, "contrast": 1.15, "sat": 0.9, "tint_amt": 0.12, "fog": 1, "fog_amt": 0.35, "vignette": 0.35, "torch": 2.2, "glow": 0.6, "grain": 0.08}],
+	["Cinematic", {"sun": 0.85, "ambient": 0.22, "shadows": 2, "contrast": 1.22, "sat": 0.85, "bright": 0.88, "tint": Color(0.8, 0.9, 1.0), "tint_amt": 0.12, "fog": 1, "fog_amt": 0.22, "fog_col": Color(0.25, 0.3, 0.4), "vignette": 0.5, "torch": 2.2, "glow": 0.45, "grain": 0.06}],
 	["Retro", {"res": 0.5, "palette": 16, "scan": 0.25, "outline": 0.2, "sway": 0.3, "glow": 0.0, "ao": 0.0, "shadows": 0}],
 	["Toon", {"toon": 3, "outline": 0.32, "outline_all": true, "sat": 1.2, "ao": 0.0, "shadows": 2, "glow": 0.2}],
-	["Claymation", {"wrap": 0.6, "sat": 0.88, "contrast": 0.95, "sun_col": Color(1.0, 0.92, 0.82), "ao": 0.7, "outline": 0.05, "sway": 0.25, "waves": 0.5}],
+	["Claymation", {"wrap": 0.4, "sun": 0.8, "ambient": 0.3, "sat": 1.05, "contrast": 1.02, "bright": 0.95, "sun_col": Color(1.0, 0.9, 0.78), "ao": 0.75, "outline": 0.05, "sway": 0.25, "waves": 0.5, "glow": 0.0}],
 	["Miniature", {"dof": 1, "dof_amt": 1.0, "sat": 1.25, "contrast": 1.08, "sun": 1.1, "ao": 0.5}],
 	["Storybook", {"paper": 0.6, "sat": 0.75, "contrast": 0.9, "outline": 0.22, "ink": Color(0.18, 0.12, 0.08), "vignette": 0.2, "glow": 0.0}],
 	["Neon Night", {"sun": 0.25, "ambient": 0.12, "neon": true, "edge_glow": 1.0, "outline": 0.2, "glow": 1.1, "lava": 1.6, "torch": 3.2, "torch_col": Color(0.7, 0.85, 1.0), "sat": 1.2}],
 	["Golden Hour", {"sun_pitch": 22.0, "sun_yaw": -60.0, "sun_col": Color(1.0, 0.72, 0.42), "sun": 1.2, "ambient": 0.35, "amb_col": Color(0.7, 0.55, 0.6), "shadows": 2, "tint": Color(1.0, 0.8, 0.6), "tint_amt": 0.15, "glow": 0.7}],
 	["Monochrome", {"mono": 1, "grain": 0.2, "vignette": 0.3, "contrast": 1.15}],
-	["Dream", {"sat": 0.8, "bright": 1.08, "haze": 0.45, "glow": 1.0, "tint": Color(1.0, 0.85, 1.0), "tint_amt": 0.15, "outline": 0.08, "sway": 0.7}],
+	["Dream", {"sat": 0.85, "bright": 0.95, "contrast": 0.92, "haze": 0.22, "glow": 0.6, "tint": Color(1.0, 0.82, 1.0), "tint_amt": 0.12, "outline": 0.08, "sway": 0.7}],
 ]
 
 ## Game Options rows of the 3D View page: key -> [label, choices]. Index 0 of a tweak row means "Pack".

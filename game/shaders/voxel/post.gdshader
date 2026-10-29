@@ -18,6 +18,9 @@ uniform float grain = 0.0;
 uniform float vignette = 0.0;
 uniform float scan = 0.0;
 uniform float ca = 0.0;
+uniform int fog = 0;                 // 1 distance (the top of the screen is farther), 2 a low haze over everything
+uniform float fog_amt = 0.0;
+uniform vec3 fog_col = vec3(0.5);
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
@@ -52,7 +55,11 @@ void fragment() {
 	if (haze > 0.0) {
 		vec3 b = blur(uv, 4.0, SCREEN_PIXEL_SIZE);
 		c = mix(c, max(c, b), haze);
-		c += b * haze * 0.25;
+		c += b * haze * 0.08;
+	}
+	if (fog > 0 && fog_amt > 0.0) {
+		float f = fog == 1 ? smoothstep(0.75, 0.0, uv.y) : 0.6;
+		c = mix(c, fog_col, clamp(f * fog_amt * 1.6, 0.0, 0.85));
 	}
 	float l = dot(c, vec3(0.299, 0.587, 0.114));
 	c = mix(vec3(l), c, sat);

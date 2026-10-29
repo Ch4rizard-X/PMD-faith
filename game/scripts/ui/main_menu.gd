@@ -21,6 +21,7 @@ const DESCRIPTIONS := {
 	"Wonder Mail": ["Using passwords, you can", "receive Wonder Mail."],
 	"Awaiting Rescue": ["You are awaiting rescue by a friend.", "You can give up waiting for rescue."],
 	"Revive Team": ["Resume your adventure from where", "you last saved.  "],
+	"Check for Updates": ["Look for a newer version of the game", "and download it.  "],
 }
 
 var host                          # main.gd
@@ -90,9 +91,10 @@ func _fade(to_white: bool) -> void:
 
 ## SetMainMenuItems
 func entries() -> Array:
+	var upd: Array = ["Check for Updates"] if Patcher.exported() and Patcher.url() != "" else []
 	if not Game.has_save():
-		return ["New Game", "Adventure Log"]
-	return ["Continue", "Delete Save Data", "Adventure Log", "Friend Rescue", "Trade Items", "Wonder Mail"]
+		return ["New Game", "Adventure Log"] + upd
+	return ["Continue", "Delete Save Data", "Adventure Log", "Friend Rescue", "Trade Items", "Wonder Mail"] + upd
 
 func _main() -> void:
 	Audio.play_music("008")
@@ -135,6 +137,9 @@ func _main() -> void:
 			"Trade Items":
 				windows.visible = false
 				await TradeItems.open(host.root)
+			"Check for Updates":
+				windows.visible = false
+				await _check_updates()
 			"Wonder Mail":
 				windows.visible = false
 				var job: Dictionary = await WonderMailUI.enter_code(host.root)
@@ -158,6 +163,31 @@ func _offer_update() -> void:
 	Patcher.pending = ""                  # still applied the next time the game starts
 	await Dialog.say(host.root, "The update will be used the next\ntime you start the game.")
 	windows.visible = not _l_hidden
+
+## Remake: asks the Releases page now (works with Auto update switched off too) and offers to restart into
+## a downloaded version.
+func _check_updates() -> void:
+	var d := Dialog.get_box(host.root)
+	d._show("Checking for updates...", "", "Normal", "")
+	d._finish_typing()
+	var was = Game.settings.get("qol_autoupdate", true)
+	Game.settings["qol_autoupdate"] = true
+	while Patcher.get("_checking"):
+		await get_tree().process_frame               # the start-up check is still running
+	if Patcher.pending == "":
+		await Patcher.check()
+	Game.settings["qol_autoupdate"] = was
+	d.hide_box()
+	if Patcher.pending != "":
+		await _offer_update()
+		return
+	var msg := str(Patcher.status)
+	var dl: Dictionary = Patcher._read_json(Patcher.DIR + "patch.json")
+	if int(dl.get("code", 0)) > Patcher.version_code():
+		msg = "Version %s is downloaded. It will be used\nthe next time you start the game." % str(dl.get("name", "?"))
+	elif msg == "" or msg == "Up to date.":
+		msg = "You have the latest version (%s)." % Patcher.version_name()
+	await Dialog.say(host.root, msg)
 
 func _leave() -> void:
 	for c in windows.get_children():

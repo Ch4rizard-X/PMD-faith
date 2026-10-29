@@ -44,6 +44,13 @@ var _done: Array = []            # [floor_id, cx, cy, result]
 var _figs := {}                  # Mon -> MeshInstance3D
 var _weather: CPUParticles3D
 var _weather_now := ""
+var _splash: CPUParticles3D
+var _fog: MeshInstance3D
+var _fog_mat: ShaderMaterial
+var _wet := 0.0                  # 0..1, follows the weather over a few seconds
+var _snow := 0.0
+var _wtarget := {"wet": 0.0, "snow": 0.0}
+var _base_light := {}
 var _torch_now := -1.0
 var _tasks: Array = []
 
@@ -103,6 +110,40 @@ func setup(d) -> void:
 	_weather = CPUParticles3D.new()
 	_weather.emitting = false
 	_world.add_child(_weather)
+	# rain splashes on the floor
+	_splash = CPUParticles3D.new()
+	_splash.emitting = false
+	_splash.local_coords = false
+	_splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_splash.emission_box_extents = Vector3(230, 0.1, 170)
+	_splash.direction = Vector3(0, 1, 0)
+	_splash.spread = 60.0
+	_splash.initial_velocity_min = 8.0
+	_splash.initial_velocity_max = 18.0
+	_splash.gravity = Vector3(0, -120, 0)
+	_splash.lifetime = 0.25
+	_splash.scale_amount_min = 0.6
+	_splash.scale_amount_max = 1.2
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.6, 0.6, 0.6)
+	var smat := StandardMaterial3D.new()
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.albedo_color = Color(0.85, 0.92, 1.0, 0.75)
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.material = smat
+	_splash.mesh = sm
+	_world.add_child(_splash)
+	# drifting fog / blowing sand: a big plane a little above the floor
+	_fog = MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(1400, 1100)
+	_fog.mesh = pm
+	_fog_mat = ShaderMaterial.new()
+	_fog_mat.shader = load("res://shaders/voxel/weather_fog.gdshader")
+	_fog.material_override = _fog_mat
+	_fog.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_fog.visible = false
+	_world.add_child(_fog)
 	set_active(false)
 
 ## Turns the 3D view on or off (the 2D view comes back untouched).
@@ -134,6 +175,7 @@ func cam_squash() -> float:
 func apply_settings() -> void:
 	st = PACKS.resolve(dg)
 	pitch = [35.0, 45.0, 60.0][clampi(int(Game.settings.get("vox_cam", 1)), 0, 2)]
+	_base_light = {"sun": float(st.sun), "sun_col": st.sun_col, "amb": float(st.ambient), "amb_col": st.amb_col}
 	_sun.light_energy = float(st.sun)
 	_sun.light_color = st.sun_col
 	_sun.rotation_degrees = Vector3(-float(st.sun_pitch), float(st.sun_yaw), 0)
@@ -145,11 +187,7 @@ func apply_settings() -> void:
 	_env.glow_intensity = float(st.glow)
 	_env.glow_bloom = 0.05
 	_env.glow_hdr_threshold = 1.2
-	_env.fog_enabled = int(st.fog) > 0 and float(st.fog_amt) > 0.0
-	_env.fog_light_color = st.fog_col
-	_env.fog_density = 0.0012 * float(st.fog_amt)
-	_env.fog_height = 6.0
-	_env.fog_height_density = 0.12 * float(st.fog_amt) if int(st.fog) == 2 else 0.0
+	_env.fog_enabled = false
 	_mats.clear()
 	var torch := _torch()
 	_torch_now = torch
@@ -190,6 +228,9 @@ func apply_settings() -> void:
 	p.set_shader_parameter("vignette", float(st.vignette))
 	p.set_shader_parameter("scan", float(st.scan))
 	p.set_shader_parameter("ca", float(st.ca))
+	p.set_shader_parameter("fog", int(st.fog))
+	p.set_shader_parameter("fog_amt", float(st.fog_amt))
+	p.set_shader_parameter("fog_col", Vector3(st.fog_col.r, st.fog_col.g, st.fog_col.b))
 	_post.material = _post_mat
 	if str(st.get("post_shader", "")) != "":
 		var sh := Shader.new()
@@ -200,7 +241,8 @@ func apply_settings() -> void:
 	var neutral := is_equal_approx(float(st.sat), 1.0) and is_equal_approx(float(st.contrast), 1.0) \
 		and is_equal_approx(float(st.bright), 1.0) and float(st.tint_amt) <= 0.0 and int(st.palette) == 0 \
 		and int(st.mono) == 0 and float(st.dof_amt) <= 0.0 and float(st.haze) <= 0.0 and float(st.paper) <= 0.0 \
-		and float(st.grain) <= 0.0 and float(st.vignette) <= 0.0 and float(st.scan) <= 0.0 and float(st.ca) <= 0.0
+		and float(st.grain) <= 0.0 and float(st.vignette) <= 0.0 and float(st.scan) <= 0.0 and float(st.ca) <= 0.0 \
+		and (int(st.fog) == 0 or float(st.fog_amt) <= 0.0)
 	_post_layer.visible = active and (not neutral or str(st.get("post_shader", "")) != "")
 	_update_weather()
 	_resize()
@@ -391,6 +433,7 @@ func _sync_figures() -> void:
 		sm.set_shader_parameter("glow_col", glow)
 		sm.render_priority = 1 if mod.a < 0.99 else 0
 		sm.set_shader_parameter("lead_pos", _lead_pos())
+		sm.set_shader_parameter("wet", _wet)
 		mi.visible = mod.a > 0.02
 	for m in _figs.keys():
 		if not alive.has(m):
@@ -405,13 +448,73 @@ func _lead_pos() -> Vector3:
 	return Vector3.ZERO
 
 # ------------------------------------------------------------------ weather
+## Weather in the 3D view (dungeon weather, Red's names). Falling particles, splashes, drifting fog or sand,
+## the light of the sky, and targets for wet surfaces / settled snow (they follow over a few seconds).
 func _update_weather() -> void:
 	var w := str(dg.fs.weather) if dg and dg.fs else "clear"
 	var lvl := int(st.get("weather", 1))
 	_weather.emitting = false
-	if lvl == 0 or not w in ["rain", "hail", "snow", "sandstorm"]:
+	_splash.emitting = false
+	_fog.visible = false
+	_wtarget = {"wet": 0.0, "snow": 0.0}
+	# the sky's light
+	var L: Dictionary = _base_light if not _base_light.is_empty() else {"sun": 0.9, "sun_col": Color(1, 0.96, 0.88), "amb": 0.35, "amb_col": Color(0.6, 0.62, 0.72)}
+	var sun: float = L.sun
+	var sun_col: Color = L.sun_col
+	var amb: float = L.amb
+	var amb_col: Color = L.amb_col
+	if lvl > 0:
+		match w:
+			"sunny":
+				sun *= 1.3
+				sun_col = sun_col.lerp(Color(1.0, 0.86, 0.62), 0.45)
+				_sun.shadow_blur = 0.4
+			"cloudy":
+				sun *= 0.55
+				amb *= 1.2
+				amb_col = amb_col.lerp(Color(0.62, 0.64, 0.68), 0.6)
+			"rain", "hail":
+				sun *= 0.5
+				sun_col = sun_col.lerp(Color(0.75, 0.82, 0.95), 0.6)
+				amb_col = amb_col.lerp(Color(0.5, 0.55, 0.65), 0.6)
+			"snow":
+				sun *= 0.8
+				sun_col = sun_col.lerp(Color(0.85, 0.92, 1.0), 0.6)
+				amb *= 1.25
+			"sandstorm":
+				sun *= 0.7
+				sun_col = sun_col.lerp(Color(1.0, 0.82, 0.55), 0.6)
+				amb_col = amb_col.lerp(Color(0.75, 0.62, 0.45), 0.5)
+			"fog":
+				sun *= 0.6
+				amb *= 1.3
+	_sun.light_energy = sun
+	_sun.light_color = sun_col
+	_env.ambient_light_energy = amb
+	_env.ambient_light_color = amb_col
+	if lvl == 0 or not w in ["rain", "hail", "snow", "sandstorm", "fog"]:
 		return
 	var heavy := lvl == 2
+	match w:
+		"rain":
+			_wtarget.wet = 1.0
+		"hail":
+			_wtarget.wet = 0.4
+			_wtarget.snow = 0.25 if heavy else 0.15
+		"snow":
+			_wtarget.snow = 0.75 if heavy else 0.5
+		"sandstorm", "fog":
+			_fog.visible = true
+			if w == "fog":
+				_fog_mat.set_shader_parameter("col", Vector3(0.82, 0.85, 0.9))
+				_fog_mat.set_shader_parameter("amount", 0.75 if heavy else 0.55)
+				_fog_mat.set_shader_parameter("wind", Vector2(5, 1.5))
+				_fog_mat.set_shader_parameter("scale", 0.008)
+				return
+			_fog_mat.set_shader_parameter("col", Vector3(0.86, 0.7, 0.45))
+			_fog_mat.set_shader_parameter("amount", 0.7 if heavy else 0.5)
+			_fog_mat.set_shader_parameter("wind", Vector2(90, 12))
+			_fog_mat.set_shader_parameter("scale", 0.014)
 	var bm := BoxMesh.new()
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -420,6 +523,8 @@ func _update_weather() -> void:
 			bm.size = Vector3(0.4, 6, 0.4)
 			mat.albedo_color = Color(0.7, 0.8, 1.0, 0.6)
 			_weather.gravity = Vector3(-30, -900, 0)
+			_splash.amount = 400 if heavy else 180
+			_splash.emitting = true
 		"hail":
 			bm.size = Vector3(1.2, 1.2, 1.2)
 			mat.albedo_color = Color(0.9, 0.95, 1.0)
@@ -446,6 +551,19 @@ func _update_weather() -> void:
 	_weather.local_coords = false
 	_weather.emitting = true
 
+## Wet surfaces / settled snow follow the weather (about 6 s to soak, 12 s to dry or melt).
+func _weather_tick(dt: float) -> void:
+	var tw: float = _wtarget.wet
+	var ts: float = _wtarget.snow
+	_wet = move_toward(_wet, tw, dt / (6.0 if tw > _wet else 12.0))
+	_snow = move_toward(_snow, ts, dt / (10.0 if ts > _snow else 14.0))
+	for k in ["terrain", "blade"]:
+		if _mats.has(k):
+			_mats[k].set_shader_parameter("wet", _wet)
+			_mats[k].set_shader_parameter("snow", _snow)
+	if _mats.has("water"):
+		_mats.water.set_shader_parameter("rain", 0.8 if str(_weather_now) == "rain" else 0.0)
+
 # ------------------------------------------------------------------ per frame
 func _process(_dt: float) -> void:
 	if not active or dg == null or dg.fs == null or dg.cam == null:
@@ -463,6 +581,9 @@ func _process(_dt: float) -> void:
 	var fwd := Vector3(0, -sin(th), -cos(th))
 	_cam.transform = Transform3D(Basis.looking_at(fwd, Vector3.UP), tgt - fwd * 900.0)
 	_weather.position = tgt + Vector3(0, 220, 40)
+	_splash.position = tgt + Vector3(0, 1.2, 0)
+	_fog.position = tgt + Vector3(0, 7.0, 0)
+	_weather_tick(_dt)
 	if str(dg.fs.weather) != _weather_now:
 		_weather_now = str(dg.fs.weather)
 		_update_weather()

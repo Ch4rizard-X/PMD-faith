@@ -10,6 +10,9 @@ uniform float torch = 0.0;
 uniform vec3 torch_col = vec3(1.0);
 uniform int toon = 0;
 varying vec3 wpos;
+uniform float wet = 0.0;            // weather: rain soaks surfaces (darker, shinier)
+uniform float snow = 0.0;           // weather: snow / hail settles on top faces
+float whash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 vec3 to_lin(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 varying float t;
 varying float flower;
@@ -37,6 +40,10 @@ void fragment() {
 		float k = 1.0 - smoothstep(torch * 0.55, torch * 1.15, d);
 		c *= mix(vec3(0.07), torch_col, k);
 	}
+	if (snow > 0.0 && t > 0.8 && whash(floor(wpos.xz)) < snow) {
+		c = vec3(0.92, 0.95, 1.0);
+	}
+	c *= mix(1.0, 0.8, wet);
 	ALBEDO = c;
 	ROUGHNESS = 0.85;
 }

@@ -10,6 +10,7 @@ uniform vec3 torch_col = vec3(1.0);
 uniform int toon = 0;
 uniform float wrap = 0.0;
 varying vec3 wpos;
+uniform float wet = 0.0;
 vec3 to_lin(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -27,7 +28,7 @@ void fragment() {
 	if (mod_col.a < 0.99 && fract(sin(dot(floor(FRAGCOORD.xy), vec2(12.9898, 78.233))) * 43758.5453) > mod_col.a) {
 		discard;
 	}
-	ROUGHNESS = 0.8;
+	ROUGHNESS = mix(0.8, 0.45, wet);
 }
 void light() {
 	float nl = dot(NORMAL, LIGHT);

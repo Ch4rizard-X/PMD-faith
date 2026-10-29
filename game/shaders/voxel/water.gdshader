@@ -5,6 +5,7 @@ uniform sampler2D map : filter_nearest, source_color;
 uniform vec4 deep : source_color = vec4(0.05, 0.15, 0.35, 1.0);
 uniform float alpha = 0.72;
 uniform float waves = 1.0;
+uniform float rain = 0.0;           // rain drops make rings on the surface
 uniform vec3 lead_pos = vec3(0.0);
 uniform float torch = 0.0;
 uniform vec3 torch_col = vec3(1.0);
@@ -18,6 +19,18 @@ void fragment() {
 	float r2 = sin(TIME * 2.1 * waves + wpos.z * 0.23 - wpos.x * 0.05);
 	float ripple = 0.5 + 0.25 * (r1 + r2);
 	vec3 c = mix(texture(map, UV).rgb, deep.rgb, 0.25) + vec3(0.07) * ripple * waves;
+	if (rain > 0.0) {
+		vec2 cell = floor(wpos.xz / 7.0);
+		vec2 f = fract(wpos.xz / 7.0) - 0.5;
+		float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+		float tt = fract(TIME * 0.9 + h);
+		vec2 off = vec2(fract(h * 7.3), fract(h * 3.1)) * 0.5 - 0.25;
+		float d = length(f - off);
+		float ring = smoothstep(0.035, 0.0, abs(d - tt * 0.45)) * (1.0 - tt);
+		if (h < rain) {
+			c += vec3(0.35) * ring;
+		}
+	}
 	if (torch > 0.0) {
 		float d = length(wpos.xz - lead_pos.xz);
 		float k = 1.0 - smoothstep(torch * 0.55, torch * 1.15, d);

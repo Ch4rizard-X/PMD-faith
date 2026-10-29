@@ -2671,6 +2671,12 @@ func _ready() -> void:
 				var t0 := Time.get_ticks_msec()
 				await start_dungeon(str(parts[0]), int(parts[1]) if parts.size() > 1 else 0)
 				print("VOX3D floor ready %.1fs" % ((Time.get_ticks_msec() - t0) / 1000.0))
+				for b in OS.get_cmdline_user_args():
+					if b.begins_with("--weather="):
+						dungeon.fs.weather = b.substr(10)
+						for k in 300:
+							await get_tree().process_frame
+						await get_tree().create_timer(14.0).timeout
 				var t1 := Time.get_ticks_msec()
 				while dungeon.voxel.built() < 20 and Time.get_ticks_msec() - t1 < 60000:
 					await get_tree().process_frame
@@ -2695,6 +2701,18 @@ func _ready() -> void:
 				get_viewport().get_texture().get_image().save_png("user://vox3d_%s_b.png" % str(parts[0]))
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--updtest"):    # main menu "Check for Updates" (needs PMD_PATCH_TEST=1)
+		(func():
+			Dialog.auto = true
+			ListMenu.auto = true
+			var mm := MainMenu.new()
+			mm.host = self
+			root.add_child(mm)
+			print("UPDTEST entries ", mm.entries())
+			await mm._check_updates()
+			print("UPDTEST status '%s' pending '%s'" % [Patcher.status, Patcher.pending])
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--fixtest"):     # confusion, maze levels, Autoplay Stairs mode
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
