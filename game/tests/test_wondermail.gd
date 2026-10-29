@@ -28,7 +28,7 @@ const KNOWN := [
 	["??1Y4!F?01PCJF?9-4?0-J?W", 5, 2, 9, 32, 29, 182, 8, 45, 0, 16755156, 3, 9],        # Nidoran escort (lovers)
 ]
 
-## Vectors from /tmp/claude-0/pmd1/wm_ref.py (a literal Python port of code_803D0D8.c / data_serializer.c),
+## Vectors from a literal Python port of code_803D0D8.c / data_serializer.c),
 ## random field values (not necessarily valid missions): exact bit-level agreement.
 const REF := [
 # >>> VECTORS
