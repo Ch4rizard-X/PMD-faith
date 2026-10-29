@@ -271,10 +271,21 @@ static func partner_pick(root: Control, hero: String) -> String:
 	m.on_select = func(i): pw.set_species(str(list[clampi(i, 0, list.size() - 1)]))
 	if auto:
 		_auto_pick_menu.call_deferred(root, m)
-	var r := await TeamScreens.run_menu(root, m, Vector2(2 * 8 * P, 2 * 8 * P))
-	pw.queue_free()
-	Audio.sfx("join")
-	return str(list[int(r.get("i", 0))]) if str(r.get("act", "")) == "pick" else str(list[0])
+	while true:
+		var r := await TeamScreens.run_menu(root, m, Vector2(2 * 8 * P, 2 * 8 * P))
+		var sp := str(list[int(r.get("i", 0))]) if str(r.get("act", "")) == "pick" else str(list[0])
+		# not in Red: confirm the partner (No goes back to the list)
+		if auto or await Dialog.ask(root, "Is [color=#7fe0ff]%s[/color] OK?" % DB.species[sp].name, ["Yes", "No"], "", "Normal", false) == 0:
+			pw.queue_free()
+			Audio.sfx("join")
+			return sp
+		var keep := int(r.get("i", 0))
+		m = TeamScreens.menu("Pokémon", rows, 9 * 8 * P - 16 * P)
+		m.allow_cancel = false
+		m.max_rows = 10
+		m.sel = keep
+		m.on_select = func(i): pw.set_species(str(list[clampi(i, 0, list.size() - 1)]))
+	return str(list[0])
 
 static func _auto_pick_menu(root: Control, m) -> void:
 	await root.get_tree().create_timer(0.5).timeout

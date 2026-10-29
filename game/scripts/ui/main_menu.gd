@@ -50,6 +50,18 @@ func _ready() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg.modulate = Color.BLACK
 	add_child(bg)
+	var ver := Label.new()                     # remake: the running version (+ "patch" when a script patch is mounted)
+	ver.text = "v%s%s" % [Patcher.version_name(), " (patch)" if Patcher.is_patched() else ""]
+	ver.add_theme_font_size_override("font_size", 9 * UITheme.PX)
+	ver.add_theme_color_override("font_color", Color.WHITE)
+	ver.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	ver.add_theme_constant_override("shadow_offset_x", UITheme.PX)
+	ver.add_theme_constant_override("shadow_offset_y", UITheme.PX)
+	ver.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	ver.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	ver.position += Vector2(-3, 1) * UITheme.PX
+	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(ver)
 	windows = Control.new()
 	windows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	windows.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -85,7 +97,10 @@ func entries() -> Array:
 func _main() -> void:
 	Audio.play_music("008")
 	await _fade(true)
+	Patcher.boot_ok()
 	while true:
+		if Patcher.pending != "" and not ListMenu.auto:
+			await _offer_update()
 		var opts := entries()
 		var pick := await _choose(opts)
 		var what: String = opts[pick]
@@ -129,6 +144,20 @@ func _main() -> void:
 		windows.visible = not _l_hidden
 		if ListMenu.auto:
 			return
+
+## A script patch finished downloading (scripts/core/patcher.gd): restart into it now or on the next start.
+func _offer_update() -> void:
+	var v := Patcher.pending
+	windows.visible = false
+	var yes := await Dialog.ask(host.root, "Version %s has been downloaded.\nRestart now to update?" % v, ["Yes", "No"]) == 0
+	if yes:
+		if OS.get_name() == "Android":
+			await Dialog.say(host.root, "The game will close now.\nOpen it again to play version %s." % v)
+		Patcher.restart()
+		return
+	Patcher.pending = ""                  # still applied the next time the game starts
+	await Dialog.say(host.root, "The update will be used the next\ntime you start the game.")
+	windows.visible = not _l_hidden
 
 func _leave() -> void:
 	for c in windows.get_children():

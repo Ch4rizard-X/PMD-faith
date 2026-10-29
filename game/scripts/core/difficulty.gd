@@ -187,6 +187,18 @@ static func species_levels(k: String, sp: String) -> Array:
 			hi = maxi(hi, lv)
 	return [lo, hi] if hi > 0 else []
 
+## For the Pokédex / second screen: a boss's level on Hard without a team (boss_level before the backstop).
+static func boss_level_of(k: String, dd: Dictionary, fi: int, lv: int) -> int:
+	if not hard() or bool(dd.get("level_reset", false)) or lv >= 90:
+		return lv
+	var target := floor_target_of(k, dd, fi)
+	var want := target + BOSS_BONUS
+	if CURVE.has(k) and int(CURVE[k][2]) > 0 and fi >= (dd.get("floors", []) as Array).size() - 1:
+		want = int(CURVE[k][2])
+	elif post_game_key(k, dd):
+		want = maxi(POST_BOSS_MIN, target + 5)
+	return clampi(want, 1, MAX_LEVEL)
+
 ## A boss's fixed HP (Red's boss HP / EoS arena HP), grown in step with its level.
 static func boss_hp(hp: int, base_lv: int, new_lv: int) -> int:
 	if not hard() or hp <= 0 or base_lv <= 0 or new_lv <= base_lv:

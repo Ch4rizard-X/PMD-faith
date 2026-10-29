@@ -3,6 +3,18 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.12 (29 Oct 2026)
+
+- **Auto update (script patches):** the game checks this repository's Releases page when it starts and downloads a small patch (the open-source scripts, scenes and shaders, about 600 KB) when there is a newer one. Its size and SHA-256 are checked, and it is used from the next start; at the main menu the game offers to restart into it. Saves are not touched. A patch never holds game data, graphics or music: changes that need those (or a new engine, plugin or project setting) need a new build, and older builds skip the patch. A patch that fails to reach the main menu twice is dropped. Game Options -> Others -> Auto update turns it off; forks set `pmd/update_url` in project.godot. The main menu shows the running version.
+- **tools/release/make_patch.py** builds patch.zip and patch.json from the tracked files and refuses a patch that adds a `class_name` the build doesn't know.
+- **Intro fixed:** after the Pelipper scene the intro flashed to white and waited for the intro music to end, but the music looped, so the screen stayed white for up to 3 minutes. Red's songs without a loop (the intro, the title screen and the other one-shot tracks) play once again. The black borders stay black during the boot screens' white flash.
+- **Choose freely:** the character and partner list is a compact window with 8 rows that scrolls, with the Pokémon beside it, and asks "Is <name> OK?" before going on. The personality test's partner list asks too.
+
+## v0.8.11 (29 Oct 2026)
+
+- **Dungeons in several parts (second screen and Prepare screen):** the hover and the Prepare screen cover the whole trip: every Pokémon of every part, the level range, the floors and the recommended level.
+- **Bosses on the dungeon hover,** marked "Boss Lv X" in red (Explorers of Sky's boss arenas and Red's boss rooms).
+
 ## v0.8.10 (29 Oct 2026)
 
 - **Explorers of Sky dungeons in several parts are one trip,** as in Explorers of Sky: the dungeon list shows only the first part, clearing a part goes straight on into the next (HP, Belly, items and status carried over), and the last part (usually the boss) ends the trip. The parts follow EoS's own dungeon table (the parts that share a mappa group): Beach Cave, Mt. Bristle, Steam Cave, Amp Plains, Quicksand Cave, Crystal Crossing, Sealed Ruin, Brine Cave, Hidden Land, Temporal Tower, Mystifying Forest, Crevice Cave, Miracle Sea, Aegis Cave, Spacial Rift, Dark Crater, Concealed Ruins, Bottomless Sea, Shimmer Desert, Mt. Avalanche, Giant Volcano, World Abyss, Sky Stairway, Mystery Jungle, Sky Peak, Star Cave, Fortune Ravine, Barren Valley, Dark Ice Mountain, Vast Ice Mountain, Boulder Quarry, Limestone Cavern and Spring Cave. Each part counts as cleared as it is passed; a chain opens when the team is ready for its longest parts.

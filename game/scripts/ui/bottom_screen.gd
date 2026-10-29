@@ -903,7 +903,7 @@ func _draw_dungeon_hover(dk: String) -> void:
 	var x0 := r.position.x + 6 * P
 	var y := r.position.y + 4 * P
 	_text(ui, Vector2(x0, y), _fit(Services.dname(dk), r.end.x - x0 - 60 * P), GOLD)
-	var rng := Pokedex.level_range(dk)
+	var rng := Pokedex.trip_level_range(dk)          # a chained EoS dungeon: the whole trip
 	if int(rng[1]) > 0:
 		var info := "Lv %d-%d" % [int(rng[0]), int(rng[1])]
 		_text(ui, Vector2(r.end.x - 6 * P - _text_w(info), y), info, DIM)
@@ -911,8 +911,9 @@ func _draw_dungeon_hover(dk: String) -> void:
 	if not Dungeon.can_recruit_in(dk):
 		_text(ui, Vector2(x0, y), "No recruiting here", Color8(0xff, 0x80, 0x70), FS_SMALL)
 		y += FS_SMALL + 3 * P
-	var sps := Pokedex.species_in(dk)
-	if sps.is_empty():
+	var sps := Pokedex.trip_species(dk)
+	var bosses := Pokedex.trip_bosses(dk)
+	if sps.is_empty() and bosses.is_empty():
 		_text(ui, Vector2(x0, y), "No wild Pokémon.", DIM)
 		return
 	var cells := []
@@ -920,6 +921,13 @@ func _draw_dungeon_hover(dk: String) -> void:
 		var seen := Pokedex.is_seen(sp)
 		cells.append({"sp": sp, "dark": not seen, "col": PokedexUI.list_color(sp) if seen else DIM,
 			"name": str(DB.species.get(sp, {}).get("name", sp)) if seen else "???"})
+	# bosses after the wild ones: a red "Boss" line under the name with their level
+	for b in bosses:
+		var bsp := str(b[0])
+		var bseen := Pokedex.is_seen(bsp)
+		cells.append({"sp": bsp, "dark": not bseen, "col": PokedexUI.list_color(bsp) if bseen else DIM,
+			"name": str(DB.species.get(bsp, {}).get("name", bsp)) if bseen else "???",
+			"sub": "Boss Lv%d" % int(b[1]), "sub_col": Color8(0xff, 0x80, 0x70)})
 	_draw_portrait_grid(r, y, cells)
 
 ## A Friend Area under the cursor (the Friend Areas lists: world map, Pelipper / Kangaskhan visits): the Pokémon
@@ -989,7 +997,7 @@ func _draw_portrait_grid(r: Rect2, y: float, cells: Array) -> void:
 		_text(ui, Vector2(cx + (cw - _text_w(nm, FS_SMALL)) / 2.0, cy + ps + 2 * P), nm, c.col, FS_SMALL)
 		if c.has("sub"):
 			var sb := str(c.sub)
-			_text(ui, Vector2(cx + (cw - _text_w(sb, FS_SMALL)) / 2.0, cy + ps + 3 * P + FS_SMALL), sb, DIM, FS_SMALL)
+			_text(ui, Vector2(cx + (cw - _text_w(sb, FS_SMALL)) / 2.0, cy + ps + 3 * P + FS_SMALL), sb, c.get("sub_col", DIM), FS_SMALL)
 	if _dh_rows_max > 0:                                # scroll marks: more above / below
 		var mx := r.end.x - 8 * P
 		if dh_row > 0:

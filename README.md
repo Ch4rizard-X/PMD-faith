@@ -31,6 +31,7 @@ Added or changed, among them:
 - **Autoplay:** explores each floor, fights to level up, fetches job items, uses linked moves, eats and heals; stops when HP is low.
 - **Wonder Mail:** byte-compatible with the original codes, plus an in-game code maker.
 - **Second screen** (AYN Thor and other dual-screen devices, or a second window on PC), *Explorers of Sky*-style: the dungeon map, team and log; in town the team, location and jobs; item, job and dungeon info (what lives in a dungeon, in the Pokédex colours) and Friend Area residents while you browse.
+- **Auto update:** script patches (a few hundred KB) download from this repository's Releases page and apply on the next start; nothing built from the ROMs is ever in a patch. Can be switched off.
 - **Platforms:** Android and Windows, touch controls, controller support with rebinding.
 
 ## Layout
@@ -51,9 +52,11 @@ build_thor.bat, build_thor_debug.bat, set_godot_java.ps1   Windows build scripts
 
 The step-by-step guide, with what to expect at each step and fixes for common problems, is [SETUP.md](SETUP.md).
 
-## Patch notes
+## Patch notes and updates
 
 What changed in each version is in [CHANGELOG.md](CHANGELOG.md) and on the Releases page.
+
+Each release carries `patch.zip` and `patch.json`, built by `tools/release/make_patch.py` from the scripts, scenes and shaders in this repository. A game you built yourself downloads them automatically (Game Options -> Others -> Auto update) as long as it is new enough for them; when a change needs new game data or assets, rebuild with the latest code instead. To point your own fork at its own releases, change `pmd/update_url` in `game/project.godot`.
 
 ## Credits
 

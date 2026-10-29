@@ -29,6 +29,7 @@ textures/vram_compression/import_etc2_astc=true
 
 [autoload]
 
+Patcher="*res://scripts/core/patcher.gd"
 DB="*res://scripts/core/db.gd"
 Game="*res://scripts/core/game.gd"
 Audio="*res://scripts/core/audio.gd"
@@ -44,3 +45,7 @@ gdscript/warnings/inference_on_variant=1
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/thor_screen/plugin.cfg")
+
+[pmd]
+
+update_url="https://github.com/Ch4rizard-X/PMD-faith/releases/latest/download/patch.json"

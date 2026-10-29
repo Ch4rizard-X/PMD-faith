@@ -10,7 +10,7 @@ extends RefCounted
 ## changes asks Red's "Change settings?".
 
 const P := UITheme.PX
-const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true, "qol_debugnpc": false, "qol_clearmark": false, "qol_movegrowth": true, "qol_autobank": true}
+const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true, "qol_debugnpc": false, "qol_clearmark": false, "qol_movegrowth": true, "qol_autobank": true, "qol_autoupdate": true}
 const ROWS := {
 	"msg_speed": ["Speed", ["Slow", "Normal", "Fast"]],
 	"far_off_pals": ["Far-off pals", ["Self", "Look"]],
@@ -29,9 +29,10 @@ const ROWS := {
 	"difficulty": ["Difficulty", ["Normal", "Hard"]],
 	"qol_movegrowth": ["Move growth", ["Off", "On"]],      # remake: Explorers Remixed's Move Growth (moves level up with use)     # remake: Hard = enemy and boss levels scale with the team (Game.flags)
 	"qol_autobank": ["Auto bank", ["Off", "On"]],      # remake: money goes to the bank after a dungeon; town pays from it
+	"qol_autoupdate": ["Auto update", ["Off", "On"]],  # remake: download script patches (scripts/core/patcher.gd)
 	"qol_msgsize": ["Message size", ["Small", "Normal", "Large"]],    # remake: dungeon messages + log       # remake: smarter Let's go together!               # remake: Rescue Team DX's temporary recruits
 }
-const PAGES := {"Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_movegrowth", "difficulty"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale", "qol_msgsize", "qol_autosave", "qol_autobank", "qol_clearmark", "qol_debugnpc"]}
+const PAGES := {"Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_movegrowth", "difficulty"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale", "qol_msgsize", "qol_autosave", "qol_autobank", "qol_autoupdate", "qol_clearmark", "qol_debugnpc"]}
 
 static func value(k: String) -> int:
 	if k == "difficulty":

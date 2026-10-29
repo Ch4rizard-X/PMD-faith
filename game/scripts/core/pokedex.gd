@@ -173,6 +173,82 @@ static func species_in_area(area: String) -> Array:
 	return out
 
 ## Dungeons that have wild Pokémon, story order first.
+## An Explorers of Sky dungeon in several parts is one trip (Story.EOS_CHAINS): its parts, or just dk.
+static func trip_parts(dk: String) -> Array:
+	var c := Story.eos_chain_of(dk)
+	return c if not c.is_empty() else [dk]
+
+## Every species met on the whole trip (all parts of a chained EoS dungeon), first part first.
+static func trip_species(dk: String) -> Array:
+	var out: Array = []
+	for p in trip_parts(dk):
+		for sp in species_in(str(p)):
+			if not sp in out:
+				out.append(sp)
+	return out
+
+## [lowest, highest] wild level over the whole trip.
+static func trip_level_range(dk: String) -> Array:
+	var lo := 999
+	var hi := 0
+	for p in trip_parts(dk):
+		var r := level_range(str(p))
+		if int(r[1]) > 0:
+			lo = mini(lo, int(r[0]))
+			hi = maxi(hi, int(r[1]))
+	return [lo if hi > 0 else 0, hi]
+
+## Recommended level for the whole trip: the parts' levels weighted by their floors.
+static func trip_recommended_level(dk: String) -> int:
+	var tot := 0.0
+	var w := 0.0
+	for p in trip_parts(dk):
+		var n := float((DB.dungeons.get("dungeons", {}).get(str(p), {}).get("floors", []) as Array).size())
+		tot += recommended_level(str(p)) * n
+		w += n
+	return int(round(tot / w)) if w > 0.0 else recommended_level(dk)
+
+## The bosses of a trip: [[species, level], ...] from the Explorers of Sky arenas (eos_fixed.json) and Red's
+## floor-wide boss rooms (their Pokémon on the floor's spawn list, BossScene.level_for), in floor order. Levels
+## follow Hard mode when it's on. Story helpers and other non-hostile room Pokémon are left out.
+static func trip_bosses(dk: String) -> Array:
+	var out: Array = []
+	var seen := {}
+	var boss_sp := {}                      # species that appear in Red's rooms as a story boss (BEHAVIOR_SKARMORY ...)
+	for e in BossScene.load_data().get("entities", []):
+		var bh := str(e.get("behavior", ""))
+		if bh != "" and not bh in BossScene.NEUTRAL and not bh in ["BEHAVIOR_ALLY", "BEHAVIOR_MAZE_BOSS", "BEHAVIOR_FIXED_ENEMY"]:
+			boss_sp[str(e.get("sp", ""))] = true
+	for p in trip_parts(dk):
+		var dd: Dictionary = DB.dungeons.get("dungeons", {}).get(str(p), {})
+		var fls: Array = dd.get("floors", [])
+		for fi in fls.size():
+			var f: Dictionary = fls[fi]
+			var list: Array = []
+			if int(f.get("eos_fixed", 0)) > 0:
+				for m in Dungeon.eos_fixed_data().get(str(int(f.eos_fixed)), {}).get("mons", []):
+					list.append([str(m.sp), int(m.get("level", 1))])
+			else:
+				var pr: Array = f.get("props", [])
+				if pr.size() > 18 and BossScene.is_floorwide(int(pr[18])):
+					var lv: Dictionary = BossScene.load_data().get("levels", {}).get(str(p), {}).get(str(fi), {})
+					for sp in lv:
+						if boss_sp.has(str(sp)) and int(lv[sp]) < 90:
+							list.append([str(sp), int(lv[sp])])
+			for b in list:
+				if not DB.species.has(str(b[0])) or seen.has(str(b[0])):
+					continue
+				seen[str(b[0])] = true
+				out.append([str(b[0]), Difficulty.boss_level_of(str(p), dd, fi, int(b[1]))])
+	return out
+
+## Floors over the whole trip.
+static func trip_floors(dk: String) -> int:
+	var n := 0
+	for p in trip_parts(dk):
+		n += (DB.dungeons.get("dungeons", {}).get(str(p), {}).get("floors", []) as Array).size()
+	return n
+
 static func dungeon_keys() -> Array:
 	var out: Array = []
 	for dk in DB.dungeons.get("dungeons", {}):

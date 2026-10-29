@@ -1694,6 +1694,27 @@ func _ready() -> void:
 			print("CHAINTEST cleared beach=%s" % ["eos_beach_cave" in Game.cleared])
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--triptest"):
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for k in ["eos_steam_cave", "eos_upper_steam_cave", "eos_steam_cave_peak"]:
+				print("TRIPTEST %s species=%d range=%s" % [k, Pokedex.species_in(k).size(), str(Pokedex.level_range(k))])
+			for kk in ["eos_steam_cave", "mt_steel", "sky_tower_summit", "mt_thunder_peak", "eos_temporal_tower", "tiny_woods"]:
+				print("TRIPTEST bosses %s: %s" % [kk, str(Pokedex.trip_bosses(kk))])
+			print("TRIPTEST trip species=%d range=%s rec=%d floors=%d" % [Pokedex.trip_species("eos_steam_cave").size(), str(Pokedex.trip_level_range("eos_steam_cave")), Pokedex.trip_recommended_level("eos_steam_cave"), Pokedex.trip_floors("eos_steam_cave")])
+			Game.settings[BottomScreen.SETTING] = "window"
+			for sp in Pokedex.trip_species("eos_steam_cave"):
+				Pokedex.mark_seen(sp)
+			Pokedex.mark_seen("0383")
+			BottomScreen.setup(self)
+			await get_tree().create_timer(0.5).timeout
+			BottomScreen.instance.refresh_mode()
+			await get_tree().create_timer(0.5).timeout
+			BottomScreen.hover_item("dungeon:eos_steam_cave")
+			await get_tree().create_timer(1.0).timeout
+			BottomScreen.instance.sub.get_texture().get_image().save_png("user://triphover.png")
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--groundpad"):
 		(func():
 			Game.load_game()
@@ -2636,6 +2657,11 @@ func _ready() -> void:
 		if a.begins_with("--storyui"):          # story screens visual checks (tests/test_story_ui.gd)
 			add_child(load("res://tests/test_story_ui.gd").new())
 			return
+	if OS.get_cmdline_user_args().has("--pickshot"):
+		add_child(load("res://tests/test_pickshot.gd").new())
+		return
+	if OS.get_cmdline_user_args().has("--bootshots"):
+		add_child(load("res://tests/test_bootshots.gd").new())
 	if OS.get_cmdline_user_args().has("--fronttest"):     # boot / main menu / naming / save screens (agent "front")
 		add_child(load("res://tests/test_front.gd").new())
 		return
@@ -2660,6 +2686,8 @@ func boot() -> void:
 	if OS.get_cmdline_user_args().has("--noboot"):
 		title()
 		return
+	if OS.get_cmdline_user_args().is_empty():
+		Patcher.check()                        # background: a newer script patch is used from the next start
 	GData.load_all()
 	if not Game.story.has("vars"):
 		GVars.reset_all()                      # ThoroughlyResetScriptVars (no save)
@@ -3043,6 +3071,8 @@ func quiz() -> String:
 	set_meta("quiz_result", r)
 	return str(r.get("hero", ""))
 
+## "Choose freely": a compact Red-style list window (8 rows, scrolls) with the highlighted Pokémon's sprite and
+## types beside it, then "Is <name> OK?" (No goes back to the list).
 func pick_species(title_txt: String, keys: Array, exclude: String) -> String:
 	var list: Array = []
 	for k in keys:
@@ -3050,21 +3080,35 @@ func pick_species(title_txt: String, keys: Array, exclude: String) -> String:
 			if exclude != "" and DB.species[k].types[0] == DB.species[exclude].types[0]:
 				continue
 			list.append(k)
-	var opts: Array = []
-	for k in list:
-		opts.append(DB.species[k].name)
-	var lm := ListMenu.make(title_txt, opts, false)
-	var preview := MonPreview.new()
-	root.add_child(preview)
-	preview.position = Vector2(root.get_viewport_rect().size.x * 0.68, root.get_viewport_rect().size.y * 0.5)
-	lm.on_select = func(i): preview.show_species(list[i])
-	root.add_child(lm)
-	lm.position = Vector2(20, 10)
-	preview.show_species(list[0])
-	var i := await lm.choose()
-	preview.queue_free()
-	Audio.sfx("join")
-	return list[i]
+	var P := UITheme.PX
+	var pick := 0
+	while true:
+		var rows: Array = []
+		for k in list:
+			rows.append({"text": str(DB.species[k].name)})
+		var preview := MonPreview.new()
+		root.add_child(preview)
+		preview.position = Vector2(root.get_viewport_rect().size.x * 0.68, root.get_viewport_rect().size.y * 0.45)
+		var m := TeamScreens.menu(title_txt, rows, 96 * P)
+		m.allow_cancel = false
+		m.max_rows = 8
+		m.sel = pick
+		m.on_select = func(i): preview.show_species(str(list[clampi(i, 0, list.size() - 1)]))
+		preview.show_species(str(list[pick]))
+		if ListMenu.auto or Dialog.auto or Quiz.auto:
+			(func(): if is_instance_valid(m) and not m.finished: m._finish({"act": "pick", "i": 0})).call_deferred()
+		var r := await TeamScreens.run_menu(root, m, Vector2(8 * P, 8 * P))
+		pick = clampi(int(r.get("i", 0)), 0, list.size() - 1) if str(r.get("act", "")) == "pick" else pick
+		var sp: String = list[pick]
+		if ListMenu.auto or Dialog.auto or Quiz.auto:
+			preview.queue_free()
+			return sp
+		var ok := await Dialog.ask(root, "Is [color=#7fe0ff]%s[/color] OK?" % DB.species[sp].name, ["Yes", "No"], "", "Normal", false) == 0
+		preview.queue_free()
+		if ok:
+			Audio.sfx("join")
+			return sp
+	return str(list[0])
 
 func _center(c: Control, off := Vector2.ZERO) -> void:
 	root.add_child(c)

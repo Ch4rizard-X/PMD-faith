@@ -211,8 +211,7 @@ func _demo_mask_update(on: bool, vs: Vector2) -> void:
 			var r := ColorRect.new()
 			r.color = Color.BLACK
 			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			fade_rect.get_parent().add_child(r)
-			fade_rect.get_parent().move_child(r, 0)
+			fade_rect.get_parent().add_child(r)       # above the fade / flash: Red's white flash stays inside 240x160
 			_demo_mask.append(r)
 	var sz := Vector2(240, 160) * zoom
 	var tl := ((vs - sz) / 2.0).round()

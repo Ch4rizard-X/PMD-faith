@@ -134,10 +134,10 @@ class PrepView extends PanelContainer:
 		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cols.add_child(right)
-		var nf := int(D.get("floors", []).size())
+		var nf := Pokedex.trip_floors(key)              # a chained EoS dungeon: every part of the trip
 		var up: bool = D.get("up", false)
-		var rec := Pokedex.recommended_level(key)
-		var rng := Pokedex.level_range(key)
+		var rec := Pokedex.trip_recommended_level(key)
+		var rng := Pokedex.trip_level_range(key)
 		var rc := "#7fff7f" if avg >= rec else ("#ffdc4a" if avg >= rec - 3 else "#ff8070")
 		right.add_child(PokedexUI._rich("[color=#9ea8c7]Floors[/color] %s%dF  [color=#9ea8c7]Recruit[/color] %s" % ["" if up else "B", nf, "[color=#7fff7f]OK[/color]" if Dungeon.can_recruit_in(key) else "[color=#ff8070]No[/color]"]))
 		right.add_child(PokedexUI._rich("[color=#9ea8c7]Rec. Lv[/color] [color=%s]%d[/color] [color=#9ea8c7](foes %d-%d)[/color]%s" % [rc, rec, rng[0], rng[1],
