@@ -313,6 +313,7 @@ static func _apply(d, st: Dictionary) -> void:
 	if not DB.tilesets.has(ts_key) and not DungeonGfx.is_arena(ts_key):
 		ts_key = "t14"
 	d.terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain}, ts_key)
+	d.voxel_floor()
 	for m in fs.mons:
 		d._add_sprite(m)
 	IQSky.fs = fs
@@ -351,6 +352,7 @@ static func _setup_nodes(d) -> void:
 	d.cam.position_smoothing_enabled = false
 	d.add_child(d.cam)
 	d.cam.make_current()
+	d.voxel_init()
 
 # ------------------------------------------------------------------ helpers
 static func _read_raw() -> Dictionary:

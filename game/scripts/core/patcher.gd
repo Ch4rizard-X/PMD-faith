@@ -14,8 +14,8 @@ extends Node
 ## This file is never patched (it is already running when the patch is mounted): bump BASE_CODE with the
 ## version, and BASE_REV whenever a change can't ship as a patch.
 
-const BASE_CODE := 68                 # = export_presets version/code of the build this file ships in
-const BASE_NAME := "0.8.12"
+const BASE_CODE := 69                 # = export_presets version/code of the build this file ships in
+const BASE_NAME := "0.8.13"
 const BASE_REV := 1                   # APK compatibility revision (data / assets / engine / project settings)
 ## Forks: set "pmd/update_url" in project.godot to your own patch.json ("" turns updates off).
 const DEFAULT_URL := "https://github.com/Ch4rizard-X/PMD-faith/releases/latest/download/patch.json"

@@ -28,9 +28,10 @@ Added or changed, among them:
 - **New items:** Exp. Share (its holder gains 50% more Exp.; very rare in Kecleon's shop).
 - **Quality of life (each can be switched off):** run mode, tap to walk, damage preview, info on long-press, map markers and corner minimap, auto-pickup filter, low-HP warning, team item prompts, burn/poison wear-off, hunger off, prepare screen, menu size, Auto bank (money goes to the bank after a dungeon and town shops pay from it). Menus remember the cursor.
 - **Town:** store/take all, sell all, bulk job accept, a Pokédex and recruit tracker.
-- **Autoplay:** explores each floor, fights to level up, fetches job items, uses linked moves, eats and heals; stops when HP is low.
+- **Autoplay:** Fight mode explores each floor, fights to level up, fetches job items, uses linked moves, eats and heals; Stairs mode heads straight down. Stops when HP is low.
 - **Wonder Mail:** byte-compatible with the original codes, plus an in-game code maker.
 - **Second screen** (AYN Thor and other dual-screen devices, or a second window on PC), *Explorers of Sky*-style: the dungeon map, team and log; in town the team, location and jobs; item, job and dungeon info (what lives in a dungeon, in the Pokédex colours) and Friend Area residents while you browse.
+- **3D view (optional):** the dungeons as voxel dioramas built from their own tiles, with rounded voxel Pokémon, swaying grass, glowing lava, water and torch-lit dark floors; 14 shader packs and custom ones ([SHADERPACKS.md](SHADERPACKS.md)).
 - **Auto update:** script patches (a few hundred KB) download from this repository's Releases page and apply on the next start; nothing built from the ROMs is ever in a patch. Can be switched off.
 - **Platforms:** Android and Windows, touch controls, controller support with rebinding.
 

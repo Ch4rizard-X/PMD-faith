@@ -2657,6 +2657,121 @@ func _ready() -> void:
 		if a.begins_with("--storyui"):          # story screens visual checks (tests/test_story_ui.gd)
 			add_child(load("res://tests/test_story_ui.gd").new())
 			return
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--vox3d="):              # the real 3D view: --vox3d=dungeon[:floor] [--pack=N] [--cam=0..2]
+			var parts := a.substr(8).split(":")
+			(func():
+				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				Game.settings.vox_view = 1
+				for b in OS.get_cmdline_user_args():
+					if b.begins_with("--pack="): Game.settings.vox_pack = int(b.substr(7))
+					if b.begins_with("--cam="): Game.settings.vox_cam = int(b.substr(6))
+					if b.begins_with("--perf="): Game.settings.vox_perf = int(b.substr(7))
+				Dungeon.test_invincible = true
+				var t0 := Time.get_ticks_msec()
+				await start_dungeon(str(parts[0]), int(parts[1]) if parts.size() > 1 else 0)
+				print("VOX3D floor ready %.1fs" % ((Time.get_ticks_msec() - t0) / 1000.0))
+				var t1 := Time.get_ticks_msec()
+				while dungeon.voxel.built() < 20 and Time.get_ticks_msec() - t1 < 60000:
+					await get_tree().process_frame
+				print("VOX3D first 20 chunks in %.1fs" % ((Time.get_ticks_msec() - t1) / 1000.0))
+				while dungeon.voxel.pending() > 0 and Time.get_ticks_msec() - t1 < 120000:
+					await get_tree().process_frame
+				print("VOX3D chunks built in %.1fs  %s" % [(Time.get_ticks_msec() - t1) / 1000.0, dungeon.voxel.stats()])
+				var fr := 0
+				var t2 := Time.get_ticks_msec()
+				while Time.get_ticks_msec() - t2 < 3000:
+					await get_tree().process_frame
+					fr += 1
+				print("VOX3D fps ~%.1f" % (fr / 3.0))
+				get_viewport().get_texture().get_image().save_png("user://vox3d_%s.png" % str(parts[0]))
+				if OS.get_cmdline_user_args().has("--noshot2"):
+					get_tree().quit()
+					return
+				# walk a few steps and shoot again
+				for i in 4:
+					dungeon.leader_action({"type": "move", "dir": [2, 2, 6, 0][i]})
+					await get_tree().create_timer(0.4).timeout
+				get_viewport().get_texture().get_image().save_png("user://vox3d_%s_b.png" % str(parts[0]))
+				get_tree().quit()).call_deferred()
+			return
+	if OS.get_cmdline_user_args().has("--fixtest"):     # confusion, maze levels, Autoplay Stairs mode
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			Dungeon.test_invincible = true
+			await start_dungeon("tiny_woods")
+			await get_tree().create_timer(1.0).timeout
+			var d := dungeon
+			var L: Mon = d.fs.leader
+			var dirs := {}
+			for i in 30:
+				L.status["confused"] = 10
+				var a: Dictionary = d._confuse_leader(L, {"type": "move", "dir": 0})
+				var k := str(a.get("dir", "wait"))
+				dirs[k] = int(dirs.get(k, 0)) + 1
+			print("FIXTEST confused move dir 0 ->", dirs)
+			var at: Dictionary = d._confuse_leader(L, {"type": "attack", "move": "", "dir": 0})
+			print("FIXTEST confused attack dir ->", at.dir)
+			L.status["confused"] = 0
+			# Makuhita maze
+			Dojo.ensure_mazes()
+			for lv in [12, 40, 75]:
+				for m in Game.team:
+					m.level = lv
+				d.queue_free()
+				await get_tree().process_frame
+				await start_dungeon("maze_03")
+				await get_tree().create_timer(0.8).timeout
+				var lvs: Array = []
+				for m in dungeon.fs.mons:
+					if not m.is_team():
+						lvs.append(m.level)
+				print("FIXTEST maze_03 team Lv%d -> wild %s" % [lv, str(lvs)])
+				d = dungeon
+			# Autoplay Stairs mode: turns to clear 3 floors
+			Dungeon.test_invincible = false
+			for mode in [1, 0]:
+				Game.settings.auto_mode = mode
+				for m in Game.team:
+					m.level = 60
+					m.max_hp = 400
+					m.hp = 400
+				dungeon.queue_free()
+				await get_tree().process_frame
+				await start_dungeon("thunderwave_cave")
+				var t0 := Time.get_ticks_msec()
+				dungeon.set_autoplay(true)
+				var f0: int = dungeon.floor_i
+				var turns := 0
+				while is_instance_valid(dungeon) and dungeon.floor_i < f0 + 2 and Time.get_ticks_msec() - t0 < 240000 and not dungeon.result_sent:
+					await get_tree().create_timer(0.5).timeout
+				print("FIXTEST auto mode %s: 2 floors in %.1f s, turn counter %d" % [["Fight", "Stairs"][mode], (Time.get_ticks_msec() - t0) / 1000.0, int(dungeon.fs.turn) if is_instance_valid(dungeon) else -1])
+			get_tree().quit()).call_deferred()
+		return
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--arenashot="):          # an EoS boss arena: screenshot + who stands where
+			var ak := a.substr(12)
+			(func():
+				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				Game.team[0].level = 50
+				Game.team[1].level = 50
+				var dd: Dictionary = DB.dungeons.dungeons[ak]
+				var fi := 0
+				for i in dd.floors.size():
+					if dd.floors[i].get("eos_fixed") != null:
+						fi = i
+				Dungeon.test_invincible = true
+				start_dungeon(ak, fi)
+				await get_tree().create_timer(5.0).timeout
+				for m in dungeon.fs.mons:
+					print("ARENA %s %s Lv%d at %s team=%s" % [ak, m.name, m.level, m.pos, m.is_team()])
+				get_viewport().get_texture().get_image().save_png("user://arena_%s.png" % ak)
+				get_tree().quit()).call_deferred()
+			return
+	if OS.get_cmdline_user_args().has("--voxelshot"):
+		add_child(load("res://tests/test_voxelshot_fx.gd" if OS.get_cmdline_user_args().has("--fx") else "res://tests/test_voxelshot.gd").new())
+		return
 	if OS.get_cmdline_user_args().has("--pickshot"):
 		add_child(load("res://tests/test_pickshot.gd").new())
 		return

@@ -10,7 +10,7 @@ extends RefCounted
 ## changes asks Red's "Change settings?".
 
 const P := UITheme.PX
-const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true, "qol_debugnpc": false, "qol_clearmark": false, "qol_movegrowth": true, "qol_autobank": true, "qol_autoupdate": true}
+const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true, "qol_debugnpc": false, "qol_clearmark": false, "qol_movegrowth": true, "qol_autobank": true, "qol_autoupdate": true, "auto_mode": 0}
 const ROWS := {
 	"msg_speed": ["Speed", ["Slow", "Normal", "Fast"]],
 	"far_off_pals": ["Far-off pals", ["Self", "Look"]],
@@ -30,11 +30,23 @@ const ROWS := {
 	"qol_movegrowth": ["Move growth", ["Off", "On"]],      # remake: Explorers Remixed's Move Growth (moves level up with use)     # remake: Hard = enemy and boss levels scale with the team (Game.flags)
 	"qol_autobank": ["Auto bank", ["Off", "On"]],      # remake: money goes to the bank after a dungeon; town pays from it
 	"qol_autoupdate": ["Auto update", ["Off", "On"]],  # remake: download script patches (scripts/core/patcher.gd)
+	"auto_mode": ["Autoplay mode", ["Fight", "Stairs"]],  # remake: Fight explores and levels, Stairs goes straight down
 	"qol_msgsize": ["Message size", ["Small", "Normal", "Large"]],    # remake: dungeon messages + log       # remake: smarter Let's go together!               # remake: Rescue Team DX's temporary recruits
 }
-const PAGES := {"Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_movegrowth", "difficulty"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale", "qol_msgsize", "qol_autosave", "qol_autobank", "qol_autoupdate", "qol_clearmark", "qol_debugnpc"]}
+const VoxelPacks := preload("res://scripts/dungeon/voxel/shader_packs.gd")
+const PAGES := {"3D View": VoxelPacks.KEYS, "Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_movegrowth", "auto_mode", "difficulty"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale", "qol_msgsize", "qol_autosave", "qol_autobank", "qol_autoupdate", "qol_clearmark", "qol_debugnpc"]}
+
+## A row's [label, choices] (the 3D View rows come from shader_packs.gd; the pack list includes custom packs).
+static func _row(k: String) -> Array:
+	if k == "vox_pack":
+		return ["Shader pack", VoxelPacks.pack_names()]
+	if VoxelPacks.ROWS.has(k):
+		return VoxelPacks.ROWS[k]
+	return ROWS[k]
 
 static func value(k: String) -> int:
+	if k.begins_with("vox_"):
+		return int(Game.settings.get(k, VoxelPacks.DEFAULTS.get(k, 0)))
 	if k == "difficulty":
 		return 1 if Difficulty.hard() else 0
 	var v = Game.settings.get(k, DEFAULTS.get(k, 0))
@@ -47,6 +59,14 @@ static func value(k: String) -> int:
 	return int(v)
 
 static func _store(k: String, v: int) -> void:
+	if k == "vox_save":
+		if v == 1:
+			var nm := VoxelPacks.save_custom()
+			Game.settings.vox_pack = VoxelPacks.pack_index(nm)
+		return
+	if k.begins_with("vox_"):
+		Game.settings[k] = v
+		return
 	if k == "difficulty":
 		Difficulty.set_hard(v == 1)
 		return
@@ -59,6 +79,8 @@ static func _store(k: String, v: int) -> void:
 		Game.settings[k] = v
 
 static func _choice(opts: Array, cur: int) -> String:
+	if opts.size() > 5:              # long lists (shader packs, tints): just the current one between arrows
+		return "%s [color=#ffdc4a]%s[/color] %s" % [TeamScreens.ARROW_L, opts[clampi(cur, 0, opts.size() - 1)], TeamScreens.ARROW_R]
 	var out: Array = []
 	for k in opts.size():
 		out.append(("[color=#ffdc4a]%s[/color]" if k == cur else "[color=#8890b0]%s[/color]") % opts[k])
@@ -67,7 +89,7 @@ static func _choice(opts: Array, cur: int) -> String:
 static func open(root: Control) -> void:
 	var sel := 0
 	while true:
-		var m := TeamScreens.menu(RedText.get_text("options_menu2:sGameOptions"), ["Dungeon", "Others", "Controls", "Default"], 12 * 8 * P)
+		var m := TeamScreens.menu(RedText.get_text("options_menu2:sGameOptions"), ["Dungeon", "Others", "3D View", "Controls", "Default"], 12 * 8 * P)
 		m.sel = sel
 		var r := await TeamScreens.run_menu(root, m, Vector2(2 * 8 * P, 2 * 8 * P))
 		if r.act != "pick":
@@ -76,8 +98,9 @@ static func open(root: Control) -> void:
 		match sel:
 			0: await page(root, "Dungeon")
 			1: await page(root, "Others")
-			2: await Controls.menu(root)
-			3:
+			2: await page(root, "3D View")
+			3: await Controls.menu(root)
+			4:
 				if await RedText.ask(root, "Reset the options to their default setting?", "", "", ["Yes", "No"], {}, 1) == 0:
 					for k in DEFAULTS:
 						Game.settings[k] = DEFAULTS[k]
@@ -102,7 +125,7 @@ static func page(root: Control, title: String) -> void:
 			elif k == "ui_scale":
 				rows.append({"text": "Menu size", "right": UITheme.slider_text(int(vals[k]))})
 			else:
-				rows.append({"text": ROWS[k][0], "right": _choice(ROWS[k][1], int(vals[k]))})
+				rows.append({"text": _row(k)[0], "right": _choice(_row(k)[1], int(vals[k]))})
 		var m := TeamScreens.menu(title, rows, mini(24 * 8 * P, int(root.get_viewport_rect().size.x) - 4 * 8 * P))   # fits at any menu size
 		m.lr = true
 		m.sel = sel
@@ -116,7 +139,7 @@ static func page(root: Control, title: String) -> void:
 			elif k == "ui_scale":
 				vals[k] = clampi(int(vals[k]) + d, 0, UITheme.UI_SCALE_STEPS)     # a slider: no wrap
 			else:
-				var n: int = ROWS[k][1].size()
+				var n: int = _row(k)[1].size()
 				vals[k] = (int(vals[k]) + d + n) % n      # Red wraps (Blue <-> Green)
 			continue
 		break

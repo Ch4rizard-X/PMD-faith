@@ -140,12 +140,23 @@ static func _backstop(dg, target: int) -> int:
 	return target + (over / 2 if over > 0 else 0)
 
 static func wild_level(dg, lv: int) -> int:
+	if lv < 90 and str(dg.dkey).begins_with("maze_") and not bool(dg.ddata.get("level_reset", false)):
+		return maze_level(dg, lv)
 	if not _scaled(dg) or lv >= 90:
 		return lv
 	var target := floor_target(dg)
 	var fl := floor_level(dg)
 	var spread := lv - fl if fl > 0 else 0
 	return clampi(_backstop(dg, target) + spread, 1, MAX_LEVEL)
+
+## Remake: Makuhita Dojo's mazes match the team (Normal and Hard), so training there always pays: the floor's
+## average is set to the team's level + MAZE_BONUS, keeping Red's spread between the species of the floor.
+const MAZE_BONUS := 1
+
+static func maze_level(dg, lv: int) -> int:
+	var fl := floor_level(dg)
+	var spread := clampi(lv - fl, -3, 3) if fl > 0 else 0
+	return clampi(team_level(dg) + MAZE_BONUS + spread, 1, MAX_LEVEL)
 
 ## Story Pokémon and bosses (fixed rooms, EoS arenas).
 static func boss_level(dg, lv: int) -> int:

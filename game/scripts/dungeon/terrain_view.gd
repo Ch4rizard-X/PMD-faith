@@ -6,6 +6,7 @@ extends Node2D
 const T := 24
 var tex_sprite: Sprite2D
 var hd_k := 1
+var wall_block: Image                # one full wall block (1x), for the 3D view's border
 
 ## Palette animation state (Red bNNcanm): one entry per animated colour slot that has colours.
 var _anim: Array = []                # [{k, dur, cols: [Color], t, p}]
@@ -17,6 +18,7 @@ func build(fl: Dictionary, ts_key: String) -> void:
 	for c in get_children():
 		c.queue_free()
 	_anim = []
+	wall_block = null
 	if DungeonGfx.is_arena(ts_key):
 		_build_arena(fl, ts_key)
 		return
@@ -81,6 +83,9 @@ func build(fl: Dictionary, ts_key: String) -> void:
 	# past the map's edge: solid wall tiles instead of black (zoomed out / wide screens)
 	var wall_img := Image.create(B, B, false, Image.FORMAT_RGBA8)
 	_blit(wall_img, src, int(rules[0 + 255 * 3]), cols, B, Vector2i.ZERO, false)
+	wall_block = wall_img.duplicate()
+	if hd_k != 1:
+		wall_block.resize(T, T, Image.INTERPOLATE_NEAREST)
 	var fill := Sprite2D.new()
 	fill.texture = ImageTexture.create_from_image(wall_img)
 	fill.centered = false

@@ -126,6 +126,7 @@ func start(key: String, team_entries: Array) -> void:
 	cam.position_smoothing_enabled = false
 	add_child(cam)
 	cam.make_current()
+	voxel_init()
 	_ensure_qol()
 	floor_i = maxi(0, test_floor) if test_floor >= 0 else start_floor
 	Missions.on_dungeon_start(self)
@@ -192,12 +193,17 @@ func build_floor() -> void:
 		ts_key = "t%02d" % int(props.get("tileset", 14))
 	if fdata.has("eos_tileset") and DB.tilesets.has("s%03d" % int(fdata.eos_tileset)):
 		ts_key = "s%03d" % int(fdata.eos_tileset)     # Explorers of Sky dungeon graphics
+	elif fdata.has("eos_tileset"):
+		var fb := _eos_tileset_fallback()                 # boss rooms (EoS tilesets 170+) aren't converted yet
+		if fb != "":
+			ts_key = fb
 	if not DB.tilesets.has(ts_key):
 		ts_key = "t14"
 	if arena_key != "":
 		ts_key = arena_key
 	terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain}, ts_key)
 	_ts_key = ts_key
+	voxel_floor()
 	fs.set_meta("fixed_floor", fixed_no != 0)
 	# team
 	var start: Vector2i = gen.player
@@ -294,6 +300,12 @@ func build_floor() -> void:
 	DungeonSave.autosave(self)          # crash-safe resume point at each floor start
 	await _floor_banner()
 	_announce_jobs_here()
+	if not eos_arena.is_empty() and not eos_arena.get("_talked", false):
+		eos_arena["_talked"] = true
+		menu_open = true
+		await _eos_boss_talk()
+		menu_open = false
+		_update_hud()
 	if boss:
 		menu_open = true
 		await boss.run_prefight()
@@ -417,6 +429,87 @@ static func eos_fixed_data() -> Dictionary:
 	return _eos_fixed
 
 ## The arena from fixed.bin as a generator result: walled border, one lit room, no stairs (beat the boss).
+## Remake: what an Explorers of Sky boss says before the fight (EoS fixed room id -> [line, emotion, spare
+## line]). Original lines written for this remake, in each boss's spirit.
+const EOS_BOSS_TALK := {
+	1: ["Heh heh! The treasure's ours now. Scram, kids!", "Happy", "Talk? We'll talk with our fists!"],
+	2: ["Hee hee... You followed me all the way up here? Big mistake.", "Happy", "Talking's over. Time to sleep!"],
+	3: ["GRAAAOOOH!", "Angry", "GRRRAAAAH!!"],
+	4: ["You're on our plains now. The pack will see you off!", "Angry", "The pack doesn't talk. It hunts!"],
+	5: ["Halt! I guard the treasure of this lake. You won't take it!", "Determined", "Thieves always say that!"],
+	6: ["You again? Stand aside. I have no time for this.", "Determined", "Words won't stop me."],
+	7: ["Ooooh... At last... someone to play with...!", "Happy", "Play first... talk later..."],
+	8: ["Kchh... Intruders in our cave. Fossils, attack!", "Angry", "Kchh! No talking!"],
+	9: ["Did you really think you could escape? This ends here.", "Determined", "There is nothing left to say."],
+	10: ["Intruders... Time... must not... be disturbed...!", "Angry", "GRAAAOOOH!"],
+	11: ["Friendly friendly! Show me how strong you've become!", "Happy", "We can talk after! Yoom-TAH!"],
+	12: ["Such warm visitors... Stay with me forever, frozen in ice...", "Happy", "Shh... Just stay..."],
+	13: ["Who disturbs these waters? Leave, or be swept away!", "Angry", "Then be swept away!"],
+	14: ["...Intruders detected... Eliminate...", "Normal", "...Unable to comply..."],
+	15: ["...Intruders detected... Eliminate...", "Normal", "...Unable to comply..."],
+	16: ["...Intruders detected... Eliminate...", "Normal", "...Unable to comply..."],
+	17: ["...Awakening... Who... summoned... me...?", "Normal", "...Prove... your strength..."],
+	18: ["Space is twisting... I will crush all who come near!", "Angry", "RAAAAGH!"],
+	19: ["So you made it this far. Then sink into nightmares, all of you!", "Determined", "Your words mean nothing in a dream."],
+	20: ["Grrr... This crater is mine. Burn away!", "Angry", "Grrraaah!"],
+	21: ["GRAAAOOOH!", "Angry", "GRRRAAAAH!!"],
+	22: ["None may climb this peak. Turn back... or freeze!", "Determined", "Then freeze!"],
+	23: ["...The deep sea... belongs to me...!", "Angry", "...Leave... or sink..."],
+	24: ["You have reached the edge of the world. Fall!", "Angry", "There is no going back!"],
+	25: ["Mew! Mew mew! (It looks like it wants to play!)", "Happy", "Mew! (It giggles and gets ready!)"],
+	26: ["You dare climb into my sky? Prove your worth!", "Determined", "Your strength will speak for you."],
+	28: ["Fresh food! Fresh food is here!", "Happy", "Food doesn't talk! Chomp!"],
+	29: ["You stepped in our muck! Get 'em!", "Angry", "Blehhh! Too late!"],
+	31: ["Mmm... zzz... Huh? Who's there? ...Wanna play a game?", "Happy", "Okay! The game is... battle!"],
+	32: ["Treasure hunters? The riches of this ravine are ours!", "Angry", "Hand over your loot first!"],
+	33: ["Keeheehee! Shiny gems... and shiny prey!", "Happy", "Keehee! No!"],
+	34: ["Keeheehee! You walked right into our swamp!", "Happy", "Keehee! No!"],
+	35: ["This mountain is our home. Turn back!", "Angry", "Then we'll push you back!"],
+	36: ["Show me you are worthy of time's power!", "Determined", "Only strength will answer."],
+	37: ["Who's digging in my quarry? You'll pay for that!", "Angry", "Pay up in battle!"],
+	38: ["Look what we caught! Get them!", "Happy", "Ha! Talk to my claws!"],
+	39: ["Heh heh heh... Boo!", "Happy", "Heh heh... Boo again!"],
+	40: ["Heh heh heh... Boo!", "Happy", "Heh heh... Boo again!"],
+	41: ["Heh heh heh... We're all here! Boo!", "Happy", "Heh heh... Boo again!"],
+	80: ["This labyrinth is my territory! Get lost!", "Angry", "Get lost the hard way, then!"],
+}
+
+## Before an EoS arena fight: the boss (the strongest Pokémon there) says its line, then the battle starts.
+func _eos_boss_talk() -> void:
+	var lead: Mon = null
+	for m in fs.mons:
+		if m.get_meta("eos_boss", false) and (lead == null or m.level > lead.level):
+			lead = m
+	if lead == null:
+		return
+	var fid := int(ddata.floors[floor_i].get("eos_fixed", 0))
+	var t: Array = EOS_BOSS_TALK.get(fid, [])
+	if t.is_empty():
+		var many := fs.mons.filter(func(x): return x.get_meta("eos_boss", false)).size() > 1
+		t = ["You won't get past us!" if many else "You've come far... but this is where it ends!", "Determined", "Enough talk!"]
+	var sp := lead.sp + ("*" if Shiny.is_shiny(lead) else "")
+	if Dialog.auto:
+		print("  BOSS TALK %s: %s" % [lead.name, t[0]])
+		return
+	await Dialog.say(ui_root, "[color=#ffdc4a]%s[/color]: %s" % [lead.name, str(t[0])], sp, str(t[1]))
+
+## An EoS floor whose tileset isn't built (the boss rooms' own graphics, tilesets 170+): the nearest earlier
+## floor of this dungeon with graphics, else the parts before it in its chain, else Red's default.
+func _eos_tileset_fallback() -> String:
+	var keys: Array = [dkey]
+	var chain := Story.eos_chain_of(dkey)
+	var i := chain.find(dkey)
+	for j in range(i - 1, -1, -1):
+		keys.append(str(chain[j]))
+	for k in keys:
+		var fls: Array = DB.dungeons.dungeons.get(k, {}).get("floors", [])
+		var start := (floor_i - 1) if k == dkey else fls.size() - 1
+		for f in range(mini(start, fls.size() - 1), -1, -1):
+			var t := "s%03d" % int(fls[f].get("eos_tileset", -1))
+			if DB.tilesets.has(t):
+				return t
+	return ""
+
 func _eos_arena_gen(a: Dictionary, sec: String) -> Dictionary:
 	var w := int(a.w) + 2
 	var h := int(a.h) + 2
@@ -431,7 +524,12 @@ func _eos_arena_gen(a: Dictionary, sec: String) -> Dictionary:
 			if t != 0:
 				room[(y + 1) * w + x + 1] = 0
 	var ld: Array = a.leader if a.get("leader") != null else [int(a.w) / 2, int(a.h) - 2]
-	return {"w": w, "h": h, "terrain": terr, "room": room, "flags": flg, "stairs": Vector2i(-1, -1),
+	# the team's marked places (EoS fixed room "attendants"): leader on its spot, the others behind it
+	var slots := {0: Vector2i(int(ld[0]) + 1, int(ld[1]) + 1)}
+	var att: Array = a.get("attendants", []) if a.get("attendants") != null else []
+	for i in att.size():
+		slots[i + 1] = Vector2i(int(att[i][0]) + 1, int(att[i][1]) + 1)
+	return {"team_slots": slots, "w": w, "h": h, "terrain": terr, "room": room, "flags": flg, "stairs": Vector2i(-1, -1),
 		"player": Vector2i(int(ld[0]) + 1, int(ld[1]) + 1), "items": [], "traps": [], "enemies": [],
 		"monster_house_room": -1, "shop": Rect2i(), "kecleon": -1, "rooms": [Rect2i(1, 1, int(a.w), int(a.h))],
 		"secondary_kind": sec, "layout": -2, "fixed_room": 0, "fixed_floorwide": true,
@@ -472,6 +570,45 @@ func _boss_floor_over() -> void:
 		_end("rescued")             # the rescued Pokémon left: the mission is over and the team goes home
 		return
 	await next_floor()
+
+# ================================================================= 3D view (remake, scripts/dungeon/voxel)
+const VOXEL_VIEW := "res://scripts/dungeon/voxel/voxel_view.gd"
+const VoxelPacks := preload("res://scripts/dungeon/voxel/shader_packs.gd")
+var voxel = null
+
+func voxel_init() -> void:
+	if voxel == null or not is_instance_valid(voxel):
+		var sc = load(VOXEL_VIEW)
+		if sc == null or not (sc as GDScript).can_instantiate():
+			return                                   # a broken patch can't take the 2D view down with it
+		voxel = sc.new()
+		add_child(voxel)
+		voxel.setup(self)
+	voxel_sync()
+
+## Game Options -> 3D View changed (or a quick key): turn the view on / off or re-apply the shader pack.
+func voxel_sync() -> void:
+	if voxel == null or not is_instance_valid(voxel):
+		return
+	var on := VoxelPacks.on()
+	if voxel.active != on:
+		voxel.set_active(on)
+	elif on:
+		voxel.apply_settings()
+		apply_cam_zoom()
+
+func voxel_floor() -> void:
+	if voxel != null and is_instance_valid(voxel) and voxel.active:
+		voxel.rebuild()
+
+## The floor's zoom; in the 3D view the vertical zoom is squashed by sin(camera tilt) so the 2D floor plane
+## (items, traps, markers, effects) lines up with the 3D floor.
+func apply_cam_zoom() -> void:
+	if cam == null:
+		return
+	var z := float(Game.settings.get("zoom", 1.25))
+	var sq: float = voxel.cam_squash() if voxel != null and is_instance_valid(voxel) else 1.0
+	cam.zoom = Vector2(z, z * sq) / UITheme.ui_scale()
 
 ## gDungeonMusic: FloorProperties.bgMusic -> song id (run_dungeon.c DungeonStartNewBGM).
 const DUNGEON_MUSIC := [114, 125, 14, 120, 15, 113, 111, 20, 102, 25, 104, 115, 108, 22, 125, 125, 125, 125, 13, 21, 15, 126, 33, 39, 123, 124, 23, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 26, 110, 110, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 125, 26, 127, 35, 35, 35, 125, 125, 125, 125, 125, 125]
@@ -575,6 +712,7 @@ var _ts_key := "t14"
 ## Drought / One-Room / Fill-In Orbs changed the terrain: redraw it.
 func _redraw_terrain() -> void:
 	terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain}, _ts_key)
+	voxel_floor()
 
 ## Transfer Orb changed a Pokémon's species: new sprite.
 func _refresh_mon_visual(m: Mon) -> void:
@@ -896,7 +1034,7 @@ func _input_dir() -> int:
 func set_zoom(z: float) -> void:
 	z = clampf(z, 0.75, 3.0)
 	Game.settings.zoom = z
-	cam.zoom = Vector2.ONE * z / UITheme.ui_scale()      # menu size scales the canvas; the floor keeps its size
+	apply_cam_zoom()      # menu size scales the canvas; the floor keeps its size
 
 ## Controller: the right stick zooms the floor (up = in, down = out), smoothly; saved when the stick is let go.
 const STICK_DEAD := 0.3
@@ -1071,6 +1209,20 @@ func _draw_mode_arrows() -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if busy or menu_open or result_sent or fs == null:
 		return
+	# 3D view quick keys: V next shader pack, Shift+V 2D / 3D; controller Select+R / Select+L
+	if (e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_V) or (e is InputEventJoypadButton and e.pressed \
+			and Input.is_action_pressed("gp_select") and (e.is_action("gp_r") or e.is_action("gp_l"))):
+		if (e is InputEventKey and e.shift_pressed) or (e is InputEventJoypadButton and e.is_action("gp_l")):
+			Game.settings.vox_view = 0 if int(Game.settings.get("vox_view", 0)) == 1 else 1
+			voxel_sync()
+			_msg("View: %s." % ("3D" if int(Game.settings.vox_view) == 1 else "2D"))
+		elif voxel and voxel.active:
+			var names: Array = VoxelPacks.pack_names()
+			Game.settings.vox_pack = (int(Game.settings.get("vox_pack", 1)) + 1) % names.size()
+			voxel_sync()
+			_msg("Shader pack: [color=#ffdc4a]%s[/color]." % names[int(Game.settings.vox_pack)])
+		get_viewport().set_input_as_handled()
+		return
 	if e is InputEventJoypadButton:
 		_pad_event(e)
 		get_viewport().set_input_as_handled()
@@ -1166,6 +1318,7 @@ func leader_action(a: Dictionary) -> void:
 			_msg(blk)
 	busy = true
 	var L := fs.leader
+	a = _confuse_leader(L, a)
 	var used := await execute(L, a)
 	if used and not (boss and boss.floor_over):
 		await world_turn()
@@ -1179,6 +1332,29 @@ func leader_action(a: Dictionary) -> void:
 	busy = false
 	if not result_sent:
 		_update_hud()
+
+## sub_8075BA4 for the leader: while confused, every step and attack goes in a random direction. A step
+## that can't be taken there (wall, or a foe in the way) still uses the turn, facing that way.
+func _confuse_leader(L: Mon, a: Dictionary) -> Dictionary:
+	if int(L.status.get("confused", 0)) <= 0:
+		return a
+	match str(a.get("type", "")):
+		"move":
+			var rd := fs.rng.randi_range(0, 7)
+			var to: Vector2i = L.pos + DB.DIRS[rd]
+			var o := fs.mon_at(to)
+			if fs.can_step(L.pos, rd, L) and (o == null or o.is_team()):
+				a = a.duplicate()
+				a.dir = rd
+			else:
+				L.facing = rd
+				if L.visual:
+					L.visual.queue_redraw()
+				a = {"type": "wait"}
+		"attack":
+			a = a.duplicate()
+			a.dir = fs.rng.randi_range(0, 7)
+	return a
 
 const REVIVERS := ["reviver", "tinyreviver"]
 const HEAL_KINDS := ["heal", "sitrus"]
@@ -4120,13 +4296,17 @@ const ZOOMS := [0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
 func open_settings() -> void:
 	var sel := 0
 	while true:
-		var m := TeamScreens.menu("Game Options", ["Dungeon", "Others", "Controls", "Default"], 200)
+		var m := TeamScreens.menu("Game Options", ["Dungeon", "Others", "3D View", "Controls", "Default"], 200)
 		m.sel = sel
 		var r := await TeamScreens.run_menu(ui_root, m, Vector2(TeamScreens.WIN_X, TeamScreens.WIN_Y))
 		if r.act != "pick":
 			return
 		sel = r.i
-		match r.i:
+		if r.i == 2:
+			await GameOptions.page(ui_root, "3D View")
+			voxel_sync()
+			continue
+		match r.i if r.i < 2 else r.i - 1:
 			0: await _option_page("Dungeon", ["speed", "zoom", "map", "hunger", "autoplay"])
 			1: await _option_page("Others", ["ui_scale", "touch"] + QOL.KEYS)
 			2: await Controls.menu(ui_root)
@@ -4138,7 +4318,7 @@ func open_settings() -> void:
 
 func _option_values() -> Dictionary:
 	return {"speed": clampi(int(Game.settings.get("msg_speed", 1)), 0, 2), "zoom": float(Game.settings.get("zoom", 1.25)),
-		"hunger": bool(Game.settings.get("hunger", true)), "autoplay": autoplay, "map": RedMap.map_mode(), "ui_scale": UITheme.ui_scale_index(), "touch": hud.pad.visible}.merged(qol.option_values() if qol else {})
+		"hunger": bool(Game.settings.get("hunger", true)), "autoplay": autoplay, "auto_mode": auto_mode(), "map": RedMap.map_mode(), "ui_scale": UITheme.ui_scale_index(), "touch": hud.pad.visible}.merged(qol.option_values() if qol else {})
 
 func _choice(opts: Array, cur: int) -> String:
 	var out: Array = []
@@ -4153,7 +4333,7 @@ func _option_row(k: String, v: Dictionary) -> Dictionary:
 		"hunger": return {"text": "Hunger", "right": _choice(["Off", "On"], int(v.hunger))}
 		"map": return {"text": "Map", "right": _choice(["Off", "Clear", "Shade"], int(v.map))}
 		"ui_scale": return {"text": "Menu size", "right": UITheme.slider_text(int(v.ui_scale))}
-		"autoplay": return {"text": "Autoplay", "right": _choice(["Off", "On"], int(v.autoplay))}
+		"autoplay": return {"text": "Autoplay", "right": _choice(["Off", "Fight", "Stairs"], (int(v.get("auto_mode", 0)) + 1) if bool(v.autoplay) else 0)}
 		"touch": return {"text": "Touch controls", "right": _choice(["Off", "On"], int(v.touch))}
 	if qol:
 		return qol.option_row(k, v)
@@ -4179,6 +4359,12 @@ func _option_page(title: String, keys: Array) -> void:
 			var k: String = keys[sel]
 			match k:
 				"speed": v.speed = clampi(int(v.speed) + d, 0, 2)
+				"autoplay":
+					var cur := (int(v.get("auto_mode", 0)) + 1) if bool(v.autoplay) else 0
+					cur = posmod(cur + d, 3)
+					v.autoplay = cur > 0
+					if cur > 0:
+						v.auto_mode = cur - 1
 				"map": v.map = posmod(int(v.map) + d, 3)
 				"ui_scale": v.ui_scale = clampi(int(v.ui_scale) + d, 0, UITheme.UI_SCALE_STEPS)
 				"zoom":
@@ -4216,6 +4402,10 @@ func _apply_options(v: Dictionary) -> void:
 		_msg("Hunger is now %s." % ("on" if Game.settings.hunger else "off"))
 	if bool(v.touch) != hud.pad.visible:
 		hud.set_touch_visible(bool(v.touch))
+	if v.has("auto_mode") and int(v.auto_mode) != auto_mode():
+		Game.settings.auto_mode = int(v.auto_mode)
+		if autoplay and bool(v.autoplay):
+			_msg("Autoplay: %s." % AUTO_MODES[auto_mode()])
 	if bool(v.autoplay) != autoplay:
 		set_autoplay(bool(v.autoplay))
 	if qol:
@@ -4317,12 +4507,27 @@ func move_preview(who, move_name: String) -> String:
 # ================================================================= Autoplay
 ## Explores, fights, picks up items and takes the stairs by itself.
 ## Stops when you press any control, when HP is low with nothing to heal, or when a menu needs you.
+## Autoplay mode (Game Options / dungeon Options): 0 Fight (explore, fight, fetch items), 1 Stairs (go
+## straight to the stairs; fights only what blocks the way).
+static func auto_mode() -> int:
+	return clampi(int(Game.settings.get("auto_mode", 0)), 0, 1)
+
+const AUTO_MODES := ["Fight", "Stairs"]
+
+## A find-item job for this floor whose item isn't in the Toolbox yet.
+func _floor_find_job() -> bool:
+	for j in Game.jobs:
+		if str(j.get("state", "")) == "taken" and str(j.get("kind", "")) == "find" and str(j.get("dungeon", "")) == dkey \
+				and int(j.get("floor", -1)) == floor_i + 1 and not Missions.bag_has(str(j.get("item", ""))):
+			return true
+	return false
+
 func set_autoplay(on: bool) -> void:
 	if autoplay == on:
 		return
 	autoplay = on
 	_auto_target = Vector2i(-1, -1)
-	_msg("Autoplay [color=#7fff7f]on[/color]." if on else "Autoplay off.")
+	_msg(("Autoplay [color=#7fff7f]on[/color] (%s)." % AUTO_MODES[auto_mode()]) if on else "Autoplay off.")
 	if hud:
 		hud.set_auto(on)
 
@@ -4417,6 +4622,21 @@ func autoplay_step() -> void:
 		var pick := _auto_best_attack(L, t)
 		leader_action({"type": "attack", "move": str(pick.move), "dir": d, "chain": pick.chain})
 		return
+	# Stairs mode: head straight for the stairs (explore only until they're found). Floors with a job to do
+	# are played like Fight mode so the job isn't missed.
+	if auto_mode() == 1 and Missions.jobs_for_floor(dkey, floor_i + 1).is_empty() and not _floor_has_want() and not _floor_find_job():
+		var sgoal := Vector2i(-1, -1)
+		if fs.stairs.x >= 0 and fs.explored[fs.idx(fs.stairs)] == 1 and fs.path_dir(L, fs.stairs, 2500, true) >= 0:
+			sgoal = fs.stairs
+			_auto_want_stairs = true
+		else:
+			if _auto_target.x < 0 or fs.explored[fs.idx(_auto_target)] == 1 or _auto_target == L.pos:
+				_auto_target = _nearest_unexplored(L)
+			sgoal = _auto_target
+		var sd := fs.path_dir(L, sgoal, 2500, true) if sgoal.x >= 0 else -1
+		if sd >= 0:
+			leader_action({"type": "move", "dir": sd})
+			return
 	# a visible foe in line for a ranged move
 	for o in fs.foes_of(L):
 		if not fs.can_see(L, o.pos):

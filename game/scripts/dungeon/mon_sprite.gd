@@ -20,6 +20,10 @@ var sparkle := 0.0                 # shiny sparkle (seconds left)
 var bob := Vector2.ZERO
 var _mark_tex: Texture2D
 var _mark_off := Vector2.ZERO
+## 3D view (scripts/dungeon/voxel): the frame drawn last, and whether the 2D body is hidden (the shadow
+## marker and the shiny sparkle still draw on the floor).
+static var body_hidden := false
+var vx := {}
 
 func setup(m: Mon) -> void:
 	mon = m
@@ -177,7 +181,13 @@ func _draw() -> void:
 	if mon and (mon.has_status("para") or mon.has_status("petrified") or mon.has_status("shadow_hold")):
 		# Red (dungeon_mon_sprite_render.c): a paralysed / petrified Pokémon shakes, x += frame counter & 2
 		dst.position.x += float(int(Time.get_ticks_msec() * 0.06) & 2)
-	draw_texture_rect_region(tex, dst, src, mod)
+	var gnd := 4.0
+	var shd2: Array = man.get("shd", [])
+	if shd2.size() > 0:
+		gnd = float(shd2[mini(mon.facing, shd2.size() - 1)][1])
+	vx = {"path": "res://assets/sp/" + sheet_name, "src": src, "dst": dst, "mod": mod, "ground": gnd}
+	if not body_hidden:
+		draw_texture_rect_region(tex, dst, src, mod)
 	if sparkle > 0.0:                # four twinkling stars around the shiny
 		var k := 1.6 - sparkle
 		for i in 4:

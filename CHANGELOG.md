@@ -3,6 +3,16 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.13 (29 Oct 2026)
+
+- **3D view (new, optional):** Game Options -> 3D View -> View: 3D plays the dungeons as voxel dioramas built from the floor's own tiles. Walls are stone faces in the tileset's cliff colours with rounded tops; the wall material is read from the tile colours (grass and flowers, rock, snow with icicles, puffy clouds, crystal clusters); water and lava sit below the floor, chasms drop deep; the map is extended with wall past its edges, so no black borders. Pokémon are rounded voxel figures made from their sprites, and animate with them. Items, traps, stairs, move animations, status icons, damage numbers and tapping the map work as in 2D. Works in Red and Explorers of Sky dungeons. Quick keys: V next shader pack, Shift+V 2D / 3D (controller: Select+R, Select+L).
+- **Shaders for the 3D view:** glowing flowing lava, see-through water with waves, swaying grass and seaweed, torch light around the team on dark floors, Pokémon outlines, 3D rain / hail / snow / sandstorm, and a screen pass for colour and film effects.
+- **Shader packs:** Off, Classic, Soft, Vibrant, Cinematic, Retro, Toon, Claymation, Miniature, Storybook, Neon Night, Golden Hour, Monochrome and Dream; 28 settings to adjust any pack (light, colour, outlines, grass, water, lava, torch, glow, fog, corner shading, depth of field, grain, vignette, scanlines, colour fringe, weather, resolution), a Performance preset (Battery / Balanced / Quality), Pack per dungeon (Auto) and Save as my pack. Custom packs (with their own shader code) load from the user folder: see [SHADERPACKS.md](SHADERPACKS.md).
+- **Explorers of Sky boss arenas:** the team stands on the arena's marked spots (it was dropped next to the boss), and arenas use their dungeon's graphics instead of Tiny Woods' (the boss rooms' own graphics aren't converted yet). Each boss says a line before the fight.
+- **Confusion** now affects the leader too: steps and attacks go in random directions, as in Red.
+- **Autoplay modes:** Fight (explore, fight, fetch job items, as before) or Stairs (straight to the stairs; floors with a job are still played in full). In the dungeon Options (Autoplay: Off / Fight / Stairs) and Game Options -> Dungeon.
+- **Makuhita Dojo mazes** match the team: wild Pokémon are 1 level above the team's level, on Normal and Hard.
+
 ## v0.8.12 (29 Oct 2026)
 
 - **Auto update (script patches):** the game checks this repository's Releases page when it starts and downloads a small patch (the open-source scripts, scenes and shaders, about 600 KB) when there is a newer one. Its size and SHA-256 are checked, and it is used from the next start; at the main menu the game offers to restart into it. Saves are not touched. A patch never holds game data, graphics or music: changes that need those (or a new engine, plugin or project setting) need a new build, and older builds skip the patch. A patch that fails to reach the main menu twice is dropped. Game Options -> Others -> Auto update turns it off; forks set `pmd/update_url` in project.godot. The main menu shows the running version.
