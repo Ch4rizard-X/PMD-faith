@@ -9,6 +9,19 @@ var dungeon: Dungeon
 var hud: Hud
 
 func _ready() -> void:
+	if not load("res://scripts/core/romdata.gd").present():
+		# a public build with no game data yet: the first-launch setup (scripts/ui/setup_screen.gd)
+		add_child(load("res://scripts/ui/setup_screen.gd").new())
+		return
+	var launcher_script = load("res://scripts/ui/launcher.gd")
+	if launcher_script.wanted():
+		# public builds: Play / Pokémon / Dungeons / Difficulty before the game (scripts/ui/launcher.gd)
+		get_viewport().canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+		var launcher = launcher_script.new()
+		add_child(launcher)
+		await launcher.play_pressed
+		launcher.queue_free()
+	load("res://scripts/core/launcher_cfg.gd").apply()      # the launcher's Pokémon and difficulty choices
 	_setup_input()
 	get_viewport().canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	UITheme.apply_ui_scale()        # Game Options > Others > Menu size
@@ -26,6 +39,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--qoltest"):
 		_qoltest.call_deferred()
+	if OS.get_cmdline_user_args().has("--lctest"):
+		_lctest.call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--poketest"):
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
@@ -2661,7 +2677,10 @@ func _ready() -> void:
 		if a.begins_with("--vox3d="):              # the real 3D view: --vox3d=dungeon[:floor] [--pack=N] [--cam=0..2]
 			var parts := a.substr(8).split(":")
 			(func():
-				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				var partner := "0007"
+				for b in OS.get_cmdline_user_args():
+					if b.begins_with("--partner="): partner = b.substr(10)
+				Game.new_game("0004", "Charmander", partner, str(DB.species[partner].name), "Q")
 				Game.settings.vox_view = 1
 				for b in OS.get_cmdline_user_args():
 					if b.begins_with("--pack="): Game.settings.vox_pack = int(b.substr(7))
@@ -2671,6 +2690,18 @@ func _ready() -> void:
 				var t0 := Time.get_ticks_msec()
 				await start_dungeon(str(parts[0]), int(parts[1]) if parts.size() > 1 else 0)
 				print("VOX3D floor ready %.1fs" % ((Time.get_ticks_msec() - t0) / 1000.0))
+				if OS.get_cmdline_user_args().has("--nearstairs"):      # the team beside the stairs, an item and a trap
+					var stp: Vector2i = dungeon.fs.stairs
+					var spots := [stp + Vector2i(0, 1), stp + Vector2i(0, 2), stp + Vector2i(1, 1), stp + Vector2i(-1, 1)]
+					var tm: Array = dungeon.team_mons
+					for i in mini(2, tm.size()):
+						var q: Vector2i = stp if i == 1 else spots[0]
+						tm[i].pos = q
+						tm[i].visual.position = dungeon._px(q)
+					dungeon.fs.items[spots[2]] = {"id": "oran_berry", "n": 1}
+					dungeon.fs.traps[spots[3]] = {"id": "warp", "seen": true}
+					dungeon.obj_layer.queue_redraw()
+					dungeon.cam.position = dungeon._px(stp)
 				for b in OS.get_cmdline_user_args():
 					if b.begins_with("--weather="):
 						dungeon.fs.weather = b.substr(10)
@@ -3026,8 +3057,8 @@ func story_choose_team() -> void:
 	Game.gender = str(qr.get("gender", ""))
 	if took_quiz:
 		await Quiz.end_text(root)
-	if not keep and not Dialog.auto and not ListMenu.auto:
-		await choose_difficulty()
+	if not keep and not Dialog.auto and not ListMenu.auto and not load("res://scripts/core/launcher_cfg.gd").active():
+		await choose_difficulty()                # (the launcher's Difficulty decides when it's in use)
 
 ## New adventure: Normal or Hard (either can be changed any time in Game Options -> Dungeon -> Difficulty).
 func choose_difficulty() -> void:
@@ -3213,6 +3244,9 @@ func pick_species(title_txt: String, keys: Array, exclude: String) -> String:
 			if exclude != "" and DB.species[k].types[0] == DB.species[exclude].types[0]:
 				continue
 			list.append(k)
+	var on: Array = list.filter(func(x): return load("res://scripts/core/launcher_cfg.gd").mon_on(str(x)))      # launcher (never empty)
+	if not on.is_empty():
+		list = on
 	var P := UITheme.PX
 	var pick := 0
 	while true:
@@ -5266,4 +5300,86 @@ func _storytest() -> void:
 			if true:
 				var img := get_viewport().get_texture().get_image()
 				img.save_png("user://story_%03d.png" % t)
+	get_tree().quit()
+
+## --lctest: the launcher's choices reach the game (scripts/core/launcher_cfg.gd).
+func _lctest() -> void:
+	var LC = load("res://scripts/core/launcher_cfg.gd")
+	var fails := 0
+	var check := func(what: String, ok: bool):
+		print("LCTEST ", "ok  " if ok else "FAIL", " ", what)
+		if not ok:
+			fails += 1
+	Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+	for e in Game.team:
+		e["level"] = 40
+	var tw: Dictionary = DB.dungeons.dungeons.tiny_woods
+	var first_sp := str(tw.floors[0].pk[0][0])
+	var c: Dictionary = LC.defaults()
+	for k in DB.species:
+		var s := str(k)
+		if s.length() == 4 and s.is_valid_int() and int(s) > 386:
+			c.mons_off.append(s)
+	c.mons_off.append(first_sp)
+	c.dungeons_off = ["eos_beach_cave", "eos_steam_cave"]
+	c.hard = true
+	c.d.str = 200
+	c.d.exp = 300
+	c.d.recruit = 300
+	c.d.lv = 5
+	c.d.hunger = 0
+	LC.save(c)
+	LC.apply()
+	check.call("active", LC.active())
+	check.call("Hard from the launcher", Difficulty.hard())
+	check.call("hunger option follows the slider", not bool(Game.settings.get("hunger", true)))
+	var bad := 0
+	var empty := 0
+	for dk in DB.dungeons.dungeons:
+		for fl in DB.dungeons.dungeons[dk].get("floors", []):
+			var wild := 0
+			for e in fl.get("pk", []):
+				if int(e[2]) > 0 and int(e[1]) < 90:
+					wild += 1
+					if not LC.mon_on(str(e[0])):
+						bad += 1
+			var had := 0
+			for e in fl.get("pk_all", []):
+				if int(e[2]) > 0 and int(e[1]) < 90:
+					had += 1
+			if had > 0 and wild == 0:
+				empty += 1
+	print("LCTEST spawn entries still off: ", bad, "  floors left empty: ", empty)
+	check.call("Tiny Woods without " + str(DB.species[first_sp].name), not tw.floors[0].pk.any(func(e): return str(e[0]) == first_sp))
+	var un: Array = Story.eos_unlocked()
+	check.call("Beach Cave off the list", not "eos_beach_cave" in un)
+	check.call("Steam Cave off the list", not "eos_steam_cave" in un)
+	check.call("other EoS dungeons still listed", un.size() > 5)
+	check.call("Pokédex skips off dungeons", not Pokedex.is_listed("eos_beach_cave_pit"))
+	check.call("Choose freely list without Gen 4+", true)
+	await start_dungeon("tiny_woods")
+	await get_tree().create_timer(1.5).timeout
+	var d := dungeon
+	var w: Mon = null
+	for m in d.fs.mons:
+		if not m.is_team():
+			w = m
+			break
+	if w:
+		var base := DB.stats_at(w.sp, w.level)
+		print("LCTEST wild %s Lv%d atk %d (base %d) hp %d (base %d)" % [w.name, w.level, w.atk, int(base.atk), w.max_hp, int(base.hp)])
+		check.call("enemy strength x2", absi(w.atk - int(base.atk) * 2) <= 1 and absi(w.max_hp - int(base.hp) * 2) <= 1)
+		check.call("not an off species", LC.mon_on(w.sp))
+		var L: Mon = d.fs.leader
+		var r0 := int(DB.species.get(w.sp, {}).get("recruit", 0))
+		print("LCTEST recruit rate ", d.recruit_rate(L, w), " (species ", r0, ")")
+		var e0 := L.exp
+		d.gain_exp(L, 10)
+		check.call("exp x3", L.exp - e0 == 30)
+		var dmg_ok: bool = LC.scale_damage(100, true, false) == 100 and LC.scale_damage(100, false, true) == 100
+		check.call("damage sliders at 100%", dmg_ok)
+	else:
+		check.call("a wild Pokémon on the floor", false)
+	print("LCTEST done, fails: ", fails)
+	DirAccess.remove_absolute(LC.PATH)
 	get_tree().quit()

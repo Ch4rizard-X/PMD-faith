@@ -202,7 +202,7 @@ static func item_in_dungeon(key: String, id: String) -> bool:
 static func job_dungeons() -> Array:
 	var out: Array = []
 	for k in Game.cleared:
-		if bool(dinfo(k).get("jobs", false)) and ddb(k).has("floors") and not k in out:
+		if bool(dinfo(k).get("jobs", false)) and ddb(k).has("floors") and not k in out and load("res://scripts/core/launcher_cfg.gd").dungeon_on(str(k)):
 			out.append(k)
 	if out.is_empty():
 		for k in data().get("fallback_dungeons", ["tiny_woods", "thunderwave_cave"]):
@@ -241,7 +241,7 @@ static func eligible_species() -> Array:
 	var partner := str(Game.team[1].get("sp", "")) if Game.team.size() > 1 else ""
 	var out: Array = []
 	for sp in seen:
-		if sp.length() != 4 or not DB.species.has(sp) or sp in banned or not _in_red(sp):
+		if sp.length() != 4 or not DB.species.has(sp) or sp in banned or not _in_red(sp) or not load("res://scripts/core/launcher_cfg.gd").mon_on(sp):
 			continue
 		if not post and (sp in banned_pre or sp == hero or sp == partner):
 			continue

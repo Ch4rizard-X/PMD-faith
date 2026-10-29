@@ -3,6 +3,15 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.16 (30 Oct 2026)
+
+- **Launcher (Windows public build):** the game opens to Play, Pokémon, Dungeons and Difficulty. Choices are saved for every save file and can be changed at every launch.
+  - **Pokémon:** which Pokémon are in the game. Presets (Red only, Gen 1-4, All), a tab per generation with All on / All off, and a switch per Pokémon. Switched-off Pokémon don't spawn, can't be chosen as starter or partner, aren't used in jobs and don't evolve in; story Pokémon and bosses always stay. A floor whose whole list is switched off borrows the nearest floor's Pokémon (or the previous part's, in Explorers of Sky dungeons in several parts).
+  - **Dungeons:** which Explorers of Sky dungeons are on the dungeon list, world map, job board and Pokédex. Red's dungeons are always there.
+  - **Difficulty:** Easy, Normal and Hard presets, the Hard level curve, and sliders for enemy level, enemy and boss strength, damage taken and dealt, enemies per floor, Exp., recruit rate, money, items, hunger and traps. With the launcher in use, Game Options no longer shows Difficulty and Hunger, and New Game doesn't ask Normal or Hard.
+- **Public build setup (Windows):** a build without any game data shows a first-time setup screen. It takes the game folder made by the setup tools (it finds one next to the program), builds the graphics, music and data into the game's own storage (about 410 MB, a minute or two, once), then starts the game. Export preset "Windows Public".
+- **3D view:** the stairs, traps, items, the Kecleon Shop floor and the shadow marker under each Pokémon now lie on the 3D floor. They were drawn over the whole view, so they covered Pokémon standing on or in front of them.
+
 ## v0.8.15 (29 Oct 2026)
 
 - **Android updates fixed:** the Android build had no internet permission, so it could never reach the Releases page (Auto update and Check for Updates silently failed). The export preset now asks for it; install this APK once and updates work from then on.

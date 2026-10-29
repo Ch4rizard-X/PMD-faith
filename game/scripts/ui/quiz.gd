@@ -105,7 +105,8 @@ static func partner_options(hero: String) -> Array:
 				ok = false
 		if ok:
 			out.append(p)
-	return out
+	var on: Array = out.filter(func(x): return load("res://scripts/core/launcher_cfg.gd").mon_on(str(x)))     # launcher (never empty)
+	return on if not on.is_empty() else out
 
 # ------------------------------------------------------------------ presentation
 ## Dialog.get_box(), plus a size fix: Dialog._ready() uses set_anchors_preset(FULL_RECT) which in Godot 4

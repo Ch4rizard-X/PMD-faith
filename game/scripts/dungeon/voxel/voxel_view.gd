@@ -162,6 +162,9 @@ func set_active(on: bool) -> void:
 	for m in dg.fs.mons if dg.fs else []:
 		if m.visual:
 			m.visual.queue_redraw()
+	if dg.get("obj_layer") != null:
+		dg.obj_layer.queue_redraw()             # stairs / traps / items move between the 2D and 3D floors
+	_objs_sig = ""
 	if on:
 		apply_settings()
 		rebuild()
@@ -264,6 +267,14 @@ func _clear_floor() -> void:
 		if is_instance_valid(_figs[m]):
 			_figs[m].queue_free()
 	_figs.clear()
+	for m in _marks:
+		if is_instance_valid(_marks[m]):
+			_marks[m].queue_free()
+	_marks.clear()
+	if _objs != null and is_instance_valid(_objs):
+		_objs.queue_free()
+	_objs = null
+	_objs_sig = ""
 
 ## A new floor (or the terrain changed): rebuild the chunks, nearest to the leader first.
 func rebuild() -> void:
@@ -435,11 +446,52 @@ func _sync_figures() -> void:
 		sm.set_shader_parameter("lead_pos", _lead_pos())
 		sm.set_shader_parameter("wet", _wet)
 		mi.visible = mod.a > 0.02
+		_sync_mark(m, v, vx.get("mark", {}))
 	for m in _figs.keys():
 		if not alive.has(m):
 			if is_instance_valid(_figs[m]):
 				_figs[m].queue_free()
 			_figs.erase(m)
+	for m in _marks.keys():
+		if not alive.has(m):
+			if is_instance_valid(_marks[m]):
+				_marks[m].queue_free()
+			_marks.erase(m)
+
+## The shadow marker under a Pokémon (team colour / plain shadow) as a flat tile on the floor, under its figure.
+var _marks := {}                 # Mon -> MeshInstance3D
+
+func _sync_mark(m, v, mk: Dictionary) -> void:
+	var mi: MeshInstance3D = _marks.get(m)
+	if mk.is_empty() or mk.get("tex") == null:
+		if mi and is_instance_valid(mi):
+			mi.visible = false
+		return
+	var tex: Texture2D = mk.tex
+	var sz := tex.get_size()
+	if mi == null or not is_instance_valid(mi):
+		mi = MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		mi.mesh = pm
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mat := StandardMaterial3D.new()
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.render_priority = -1
+		mi.material_override = mat
+		_world.add_child(mi)
+		_marks[m] = mi
+	(mi.mesh as PlaneMesh).size = sz
+	var mat2 := mi.material_override as StandardMaterial3D
+	if mat2.albedo_texture != tex:
+		mat2.albedo_texture = tex
+	var col: Color = mk.get("col", Color.WHITE)
+	col.a *= v.modulate.a * v.self_modulate.a
+	mat2.albedo_color = col
+	var p: Vector2 = v.position + Vector2(mk.pos) + sz / 2.0
+	mi.position = Vector3(p.x, OBJ_Y + 0.04, p.y)
+	mi.visible = v.visible and col.a > 0.02
 
 func _lead_pos() -> Vector3:
 	if dg.fs and dg.fs.leader and dg.fs.leader.visual:
@@ -601,6 +653,59 @@ func _process(_dt: float) -> void:
 		if _mats.has(k):
 			_mats[k].set_shader_parameter("lead_pos", lp)
 	_sync_figures()
+	_sync_objects()
+
+# ------------------------------------------------------------------ floor objects
+## The stairs, traps, items and the Kecleon Shop floor (Dungeon.floor_objects) as flat tiles on the 3D floor,
+## so Pokémon stand on them instead of being covered by the 2D layer. Rebuilt when something changes.
+var _objs: Node3D
+var _objs_sig := ""
+var _obj_mats := {}
+const OBJ_Y := 1.06
+
+func _sync_objects() -> void:
+	var list: Array = dg.floor_objects()
+	var sig := str(dg.floor_i) + "|" + str(list.size())
+	for o in list:
+		sig += "|%d,%d,%d,%d" % [o[1].position.x, o[1].position.y, o[2].position.x, o[2].position.y]
+	if sig == _objs_sig and _objs != null and is_instance_valid(_objs):
+		return
+	_objs_sig = sig
+	if _objs != null and is_instance_valid(_objs):
+		_objs.queue_free()
+	_objs = Node3D.new()
+	_world.add_child(_objs)
+	for o in list:
+		var r: Rect2 = o[1]
+		var mi := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = r.size
+		mi.mesh = pm
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.material_override = _obj_mat(o[0], o[2], o[3])
+		mi.position = Vector3(r.position.x + r.size.x / 2.0, OBJ_Y, r.position.y + r.size.y / 2.0)
+		_objs.add_child(mi)
+
+func _obj_mat(tex: Texture2D, src: Rect2, col: Color) -> StandardMaterial3D:
+	var key := "%s|%s|%s" % [str(tex.get_rid()) if tex else "", str(src), str(col)]
+	if _obj_mats.has(key):
+		return _obj_mats[key]
+	var m := StandardMaterial3D.new()
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	m.alpha_scissor_threshold = 0.5
+	m.roughness = 1.0
+	m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	if tex:
+		var ts := tex.get_size()
+		m.albedo_texture = tex
+		m.uv1_scale = Vector3(src.size.x / ts.x, src.size.y / ts.y, 1)
+		m.uv1_offset = Vector3(src.position.x / ts.x, src.position.y / ts.y, 0)
+	else:
+		m.albedo_color = col
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_obj_mats[key] = m
+	return m
 
 func _exit_tree() -> void:
 	_pending.clear()

@@ -6,6 +6,7 @@ static var test_invincible := false   # --storytest: the team can't faint
 static var test_want := ""            # --storytest: an item the story needs (autoplay fetches it)
 signal finished(result: String)        # "cleared" | "defeated" | "quit"
 
+const LCFG := preload("res://scripts/core/launcher_cfg.gd")   # the launcher's choices (Pokémon, dungeons, difficulty)
 const T := 24
 const WALK_TIME := 0.13
 const RUN_TIME := 0.045
@@ -176,6 +177,7 @@ func build_floor() -> void:
 	eos_arena = {}
 	if int(fdata.get("eos_fixed", 0)) > 0:
 		eos_arena = eos_fixed_data().get(str(int(fdata.eos_fixed)), {})
+	LCFG.scale_props(props)                        # launcher: enemies / items / traps per floor
 	var gen: Dictionary = DungeonGen.generate(props, rng.randi()) if eos_arena.is_empty() else _eos_arena_gen(eos_arena, str(fdata.get("eos_secondary", "water")))
 	var arena_key := ""
 	if int(props.get("tileset", 14)) >= 64 and not fdata.has("eos_tileset"):
@@ -255,6 +257,8 @@ func build_floor() -> void:
 			# (FloorProperties max_money_amount_div_5), so its floors use x 5 (x 40 made them pay 8 times too much)
 			var mult := 5 if bool(ddata.get("eos", false)) else 40
 			n = rng.randi_range(1, maxi(1, int(props.get("moneyUpperBound", 1)) * mult))
+			if LCFG.active():
+				n = maxi(1, int(round(n * LCFG.f("money"))))      # launcher: Money on floors
 		elif I.has("amt"):
 			n = rng.randi_range(int(I.amt[0]), int(I.amt[1]))
 		var price := KecleonShop.buy_price(id, n) if kind == "shop" and KecleonShop.shoppable(id) else 0
@@ -362,6 +366,8 @@ func _spawn_fixed(gen: Dictionary) -> void:
 			m.set_meta("story_npc", true)
 		if b != "BEHAVIOR_FIXED_ENEMY":
 			m.recruit_ok = false
+		if not (b in BossScene.NEUTRAL):
+			LCFG.strengthen(m, true)                     # launcher: Boss strength
 		if not (b in BossScene.NEUTRAL) and Shiny.roll_boss(fs.rng):
 			m.set_meta("shiny", true)                    # bosses and legendaries can be shiny too (re-enter to try again)
 		fs.mons.append(m)
@@ -556,6 +562,7 @@ func _spawn_eos_bosses(a: Dictionary) -> void:
 		m.recruit_ok = dkey in Game.cleared        # remake: an EoS boss can join (and be shiny-hunted) once its dungeon is cleared
 		m.set_meta("eos_boss", true)
 		m.set_meta("boss", true)
+		LCFG.strengthen(m, true)                         # launcher: Boss strength
 		fs.mons.append(m)
 		_add_sprite(m)
 		if Dialog.auto:
@@ -831,6 +838,7 @@ func _spawn_wild(p: Vector2i) -> Mon:
 	var m := DB.make_mon(str(e[0]), Difficulty.wild_level(self, maxi(1, int(e[1]))), "enemy")
 	if Shiny.roll(fs.rng):
 		m.set_meta("shiny", true)                    # DX: a rare shiny
+	LCFG.strengthen(m)                               # launcher: Enemy strength
 	TurnRules.init_spawned(m, fs.rng)
 	m.pos = p
 	m.facing = rng.randi_range(0, 7)
@@ -859,33 +867,43 @@ func _draw_objects() -> void:
 				if not fs.inb(q) or fs.is_wall(q) or not _tile_seen(q):
 					continue
 				obj_layer.draw_texture(ht if line.has(q) else gt, Vector2(q.x * T, q.y * T))
+	if voxel != null and is_instance_valid(voxel) and voxel.active:
+		return                                    # the 3D view lays these on its floor (voxel_view._sync_objects)
+	for o in floor_objects():
+		if o[0] == null:
+			obj_layer.draw_rect(o[1], o[3])
+		else:
+			obj_layer.draw_texture_rect_region(o[0], o[1], o[2])
+
+## What lies on the floor, in drawing order: [texture (null = a plain rect), dst Rect2, src Rect2, colour].
+## The stairs, the Kecleon Shop floor (trappat metatile 25), seen traps and items.
+func floor_objects() -> Array:
+	var out: Array = []
 	if _stairs_tex and fs.stairs.x >= 0:
-		obj_layer.draw_texture(_stairs_tex, Vector2(fs.stairs.x * T, fs.stairs.y * T) + (Vector2(T, T) - _stairs_tex.get_size()) / 2)
-	# Kecleon Shop floor (dungeon_map_access.c: TERRAIN_TYPE_SHOP tiles use trappat metatile 25)
-	if shop and shop.active():
+		var ss := _stairs_tex.get_size()
+		out.append([_stairs_tex, Rect2(Vector2(fs.stairs.x * T, fs.stairs.y * T) + (Vector2(T, T) - ss) / 2, ss), Rect2(Vector2.ZERO, ss), Color.WHITE])
+	var tt := DB.tex("res://assets/ui/traps_red.png")
+	if shop and shop.active() and tt:
 		var srect: Rect2i = shop.rect()
-		var stt := DB.tex("res://assets/ui/traps_red.png")
-		if stt:
-			for sy in range(srect.position.y, srect.end.y):
-				for sx in range(srect.position.x, srect.end.x):
-					var sp := Vector2i(sx, sy)
-					if shop.is_shop_tile(sp):
-						obj_layer.draw_texture_rect_region(stt, Rect2(sx * T, sy * T, T, T), Rect2(25 * 24, 0, 24, 24))
+		for sy in range(srect.position.y, srect.end.y):
+			for sx in range(srect.position.x, srect.end.x):
+				if shop.is_shop_tile(Vector2i(sx, sy)):
+					out.append([tt, Rect2(sx * T, sy * T, T, T), Rect2(25 * 24, 0, 24, 24), Color.WHITE])
 	for p in fs.traps:
 		var t: Dictionary = fs.traps[p]
 		if t.seen:
 			var ti: int = TRAP_ICON.get(str(t.id), -1)
-			var tt := DB.tex("res://assets/ui/traps_red.png")
 			if ti >= 0 and tt:
-				obj_layer.draw_texture_rect_region(tt, Rect2(p.x * T, p.y * T, T, T), Rect2(ti * 24, 0, 24, 24))
+				out.append([tt, Rect2(p.x * T, p.y * T, T, T), Rect2(ti * 24, 0, 24, 24), Color.WHITE])
 			else:
-				var r := Rect2(p.x * T + 5, p.y * T + 5, T - 10, T - 10)
-				obj_layer.draw_rect(r, Color(0.9, 0.3, 0.3, 0.85) if t.id != "wonder" else Color(0.4, 0.8, 1, 0.85))
+				out.append([null, Rect2(p.x * T + 5, p.y * T + 5, T - 10, T - 10), Rect2(),
+					Color(0.9, 0.3, 0.3, 0.85) if t.id != "wonder" else Color(0.4, 0.8, 1, 0.85)])
 	for p in fs.items:
 		var it: Dictionary = fs.items[p]
 		var ic := _icon_rect(it.id)
 		if ic.size.x > 0 and _icon_tex:
-			obj_layer.draw_texture_rect_region(_icon_tex, Rect2(p.x * T + 4, p.y * T + 4, 16, 16), ic)
+			out.append([_icon_tex, Rect2(p.x * T + 4, p.y * T + 4, 16, 16), ic, Color.WHITE])
+	return out
 
 func _icon_rect(id: String) -> Rect2:
 	var a = DB.item_icons.get(id)
@@ -2681,6 +2699,8 @@ func recruit_rate(r: Mon, t: Mon) -> int:
 			break
 	if fs != null and bool(fs.get_meta("inviting", false)):
 		rate *= 2                                        # Inviting Orb
+	if LCFG.active() and rate > 0:
+		rate = int(round(rate * LCFG.f("recruit")))      # launcher: Recruit rate
 	return rate
 
 ## Red: each legendary joins only once. Shinies: a shiny one may still join when you only have the normal one.
@@ -2871,6 +2891,8 @@ func gain_exp(m: Mon, n: int) -> void:
 		return
 	if EosItems.has(m, "exp_bonus"):
 		n = int(ceil(n * 1.5))                       # Wonder Chest / exclusive items: bonus Exp.
+	if LCFG.active() and n > 0:
+		n = maxi(1, int(round(n * LCFG.f("exp"))))   # launcher: Exp. gained
 	m.exp += n
 	# dungeon_leveling.c: "$m0 gained $d0 Exp. Points!", then per level the fanfare (once) and
 	# "$m0 grew to Level $d0!", new moves, then the level-up message boxes (sub_807218C).

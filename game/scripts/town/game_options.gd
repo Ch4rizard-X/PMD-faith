@@ -111,6 +111,8 @@ static func open(root: Control) -> void:
 
 static func page(root: Control, title: String) -> void:
 	var keys: Array = PAGES[title]
+	if load("res://scripts/core/launcher_cfg.gd").active():
+		keys = keys.filter(func(k): return not k in ["difficulty", "hunger"])     # set in the launcher instead
 	var vals := {}
 	for k in keys:
 		if k != "second_screen":

@@ -20,6 +20,7 @@ var sparkle := 0.0                 # shiny sparkle (seconds left)
 var bob := Vector2.ZERO
 var _mark_tex: Texture2D
 var _mark_off := Vector2.ZERO
+var _mark_vx := {}                   # the shadow marker for the 3D view: {tex, pos, col}
 ## 3D view (scripts/dungeon/voxel): the frame drawn last, and whether the 2D body is hidden (the shadow
 ## marker and the shiny sparkle still draw on the floor).
 static var body_hidden := false
@@ -172,7 +173,11 @@ func _draw() -> void:
 		if shd and shd.size() > 0:
 			var e: Array = shd[mini(mon.facing, shd.size() - 1)]
 			fp = Vector2(e[0], e[1])
-		draw_texture(_mark_tex, (fp + Vector2(0, 1) + _mark_off + Vector2(0, -2)).round(), Color(1, 1, 1, fade * (1.0 if _team_mark(mon) else 0.6)))
+		var mpos := (fp + Vector2(0, 1) + _mark_off + Vector2(0, -2)).round()
+		var mcol := Color(1, 1, 1, fade * (1.0 if _team_mark(mon) else 0.6))
+		_mark_vx = {"tex": _mark_tex, "pos": mpos, "col": mcol}
+		if not body_hidden:                  # the 3D view lays the marker on its floor (voxel_view._sync_figures)
+			draw_texture(_mark_tex, mpos, mcol)
 	var src := Rect2(int(A.get("x", 0)) + f * w, int(A.y) + row * h, w, h)
 	if A.has("cols"):        # frames wrap onto further lines (sheets wider than 4096 px)
 		var cols := maxi(1, int(A.cols))
@@ -185,7 +190,7 @@ func _draw() -> void:
 	var shd2: Array = man.get("shd", [])
 	if shd2.size() > 0:
 		gnd = float(shd2[mini(mon.facing, shd2.size() - 1)][1])
-	vx = {"path": "res://assets/sp/" + sheet_name, "src": src, "dst": dst, "mod": mod, "ground": gnd}
+	vx = {"path": "res://assets/sp/" + sheet_name, "src": src, "dst": dst, "mod": mod, "ground": gnd, "mark": _mark_vx}
 	if not body_hidden:
 		draw_texture_rect_region(tex, dst, src, mod)
 	if sparkle > 0.0:                # four twinkling stars around the shiny

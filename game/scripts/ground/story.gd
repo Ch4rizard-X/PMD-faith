@@ -437,6 +437,8 @@ static func eos_unlocked() -> Array:
 		var chain := eos_chain_of(str(k))
 		if not chain.is_empty() and str(chain[0]) != str(k):
 			continue                                # later parts come with their chain's first part
+		if not load("res://scripts/core/launcher_cfg.gd").dungeon_on(str(k)):
+			continue                                # switched off in the launcher
 		var need := int(d.get("eos_level", 1))
 		for ck in chain:                            # a chain opens when the team is ready for its longest parts
 			var cd: Dictionary = DB.dungeons.dungeons.get(ck, {})

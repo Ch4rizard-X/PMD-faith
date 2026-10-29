@@ -35,7 +35,7 @@ const POST_BOSS_MIN := 75
 const BACKSTOP_MARGIN := 10
 
 static func hard() -> bool:
-	return bool(Game.flags.get("hard_mode", false))
+	return load("res://scripts/core/launcher_cfg.gd").hard(bool(Game.flags.get("hard_mode", false)))
 
 static func set_hard(on: bool) -> void:
 	Game.flags["hard_mode"] = on
@@ -140,6 +140,9 @@ static func _backstop(dg, target: int) -> int:
 	return target + (over / 2 if over > 0 else 0)
 
 static func wild_level(dg, lv: int) -> int:
+	return load("res://scripts/core/launcher_cfg.gd").level_offset(_wild_level(dg, lv))     # launcher: Enemy level
+
+static func _wild_level(dg, lv: int) -> int:
 	if lv < 90 and str(dg.dkey).begins_with("maze_") and not bool(dg.ddata.get("level_reset", false)):
 		return maze_level(dg, lv)
 	if not _scaled(dg) or lv >= 90:

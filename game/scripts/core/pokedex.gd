@@ -65,7 +65,7 @@ static func is_seen(sp: String) -> bool:
 static func species_list() -> Array:
 	if _species.is_empty():
 		for k in DB.species:
-			if str(k).length() == 4 and int(DB.species[k].get("red", 0)) == 1:
+			if str(k).length() == 4 and int(DB.species[k].get("red", 0)) == 1 and (load("res://scripts/core/launcher_cfg.gd").mon_on(str(k)) or is_recruited(str(k))):
 				_species.append(str(k))
 		_species.sort()
 	return _species
@@ -84,7 +84,7 @@ static func counts() -> Dictionary:
 ## Red's internal dungeon slots (boss rooms, "D50"-style placeholders, Autopilot) aren't places to visit.
 static func is_listed(dk: String) -> bool:
 	var r := RegEx.create_from_string("^(boss\\d+|d\\d+|autopilot)$")
-	return r.search(dk) == null
+	return r.search(dk) == null and load("res://scripts/core/launcher_cfg.gd").dungeon_on(dk)
 
 ## A floor where wild Pokémon actually appear: not an Explorers of Sky boss arena or one of Red's floor-wide
 ## boss rooms (their spawn lists are never used: Labyrinth Cave's B10F lists Lv 35 dragons that never come).

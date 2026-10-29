@@ -32,6 +32,7 @@ Added or changed, among them:
 - **Wonder Mail:** byte-compatible with the original codes, plus an in-game code maker.
 - **Second screen** (AYN Thor and other dual-screen devices, or a second window on PC), *Explorers of Sky*-style: the dungeon map, team and log; in town the team, location and jobs; item, job and dungeon info (what lives in a dungeon, in the Pokédex colours) and Friend Area residents while you browse.
 - **3D view (optional):** the dungeons as voxel dioramas built from their own tiles, with rounded voxel Pokémon, swaying grass, glowing lava, water and torch-lit dark floors; 14 shader packs and custom ones ([SHADERPACKS.md](SHADERPACKS.md)).
+- **Launcher (Windows public build):** choose which Pokémon (by generation or one by one) and which Explorers of Sky dungeons are in the game, and set the difficulty with presets and sliders, before you press Play.
 - **Auto update:** script patches (a few hundred KB) download from this repository's Releases page and apply on the next start; nothing built from the ROMs is ever in a patch. Can be switched off.
 - **Platforms:** Android and Windows, touch controls, controller support with rebinding.
 
@@ -50,6 +51,8 @@ build_thor.bat, build_thor_debug.bat, set_godot_java.ps1   Windows build scripts
 **Windows (no programming needed):** download the ZIP, then double-click `SETUP_STEP1_install_tools.bat`, close it, and double-click `SETUP_STEP2_build_game_files.bat`. It asks for your three ROM files and builds everything. Then open `game/project.godot` in Godot 4.7.2 and press Play.
 
 **Mac / Linux:** set your ROM paths in `build_config.json` (copy `build_config.example.json`), run `python3 build_all.py`, then open the project in Godot 4.7.2.
+
+**Windows public build:** the "Windows Public" export preset makes an exe without any game data. On its first start it asks for the game folder made by the setup tools and builds what it needs into its own storage.
 
 The step-by-step guide, with what to expect at each step and fixes for common problems, is [SETUP.md](SETUP.md).
 

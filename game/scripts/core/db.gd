@@ -169,6 +169,13 @@ func recalc(m: Mon) -> void:
 	m.spa = int(s.spa) + int(bonus.get("spa", 0))
 	m.def = int(s.def) + int(bonus.get("def", 0))
 	m.spd = int(s.spd) + int(bonus.get("spd", 0))
+	if m.has_meta("lscale"):                        # launcher: enemy / boss strength
+		var k := int(m.get_meta("lscale")) / 100.0
+		m.max_hp = maxi(1, int(round(m.max_hp * k)))
+		m.atk = maxi(1, int(round(m.atk * k)))
+		m.spa = maxi(1, int(round(m.spa * k)))
+		m.def = maxi(1, int(round(m.def * k)))
+		m.spd = maxi(1, int(round(m.spd * k)))
 	if old_max > 1 and m.hp > 0:
 		m.hp = mini(m.max_hp, m.hp + (m.max_hp - old_max))
 

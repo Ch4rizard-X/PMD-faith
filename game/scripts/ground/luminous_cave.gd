@@ -57,7 +57,8 @@ static func evolutions(sp: String) -> Array:
 			out.append([tgt, "item", cond, 0])
 		elif int(e[1]) > 0:
 			out.append([tgt, "level", int(e[1]), 0])
-	return out
+	var lc = load("res://scripts/core/launcher_cfg.gd")
+	return out.filter(func(x): return lc.mon_on(str(x[0])))      # launcher: switched-off Pokémon don't evolve in
 
 static func _friends_in(area: String) -> int:
 	var n := 0

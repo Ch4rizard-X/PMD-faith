@@ -692,6 +692,7 @@ static func calc_damage(att: Mon, def: Mon, mv: Dictionary, rng: RandomNumberGen
 		sp8 = fp_mul(sp8, fp_from_f248(modifier))
 		sp8 = fp_mul(sp8, 0xE000 + _rand(rng, 0x4000))      # random x0.875 .. x1.125
 		out.dmg = fp_to_s32(sp8)
+		out.dmg = load("res://scripts/core/launcher_cfg.gd").scale_damage(int(out.dmg), _team(att), _team(def))   # launcher sliders
 		if out.dmg == 0:
 			out.crit = false
 

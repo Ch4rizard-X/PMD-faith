@@ -296,6 +296,9 @@ static func belly_loss(m: Mon, linked_moves_used := 0) -> float:
 	var loss: float = BELLY_BASE_DECREMENT * float(BELLY_GO_DOWN_VALUES[i])
 	if linked_moves_used > 1:
 		loss += float(LINKED_MOVES_BELLY_GO_DOWN[mini(linked_moves_used, 4)])
+	var lc = load("res://scripts/core/launcher_cfg.gd")
+	if lc.active():
+		loss *= lc.f("hunger")                           # launcher: Hunger speed
 	return loss
 
 ## Full belly step for the leader. state = {"belly": float, "empty_alert": int} (caller-owned).
