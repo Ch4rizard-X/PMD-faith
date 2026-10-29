@@ -1,0 +1,63 @@
+# Publishes the in-game updater's script patch (tools/release/make_patch.py) as a GitHub release.
+# Runs on every push to main that touches the game's code: the release is named after BASE_NAME in
+# game/scripts/core/patcher.gd (v0.8.12, ...); a later push with the same version replaces its files.
+# The patch holds only tracked scripts, scenes and shaders: no game assets.
+name: Patch release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "game/**"
+      - "tools/release/**"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: v
+        run: |
+          name=$(sed -n 's/^const BASE_NAME := "\(.*\)".*/\1/p' game/scripts/core/patcher.gd)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "tag=v$name" >> "$GITHUB_OUTPUT"
+
+      - name: Build patch
+        run: |
+          python3 tools/release/make_patch.py --out dist \
+            --url "https://github.com/${{ github.repository }}/releases/download/${{ steps.v.outputs.tag }}"
+
+      - name: Release notes
+        run: |
+          python3 - "${{ steps.v.outputs.name }}" > dist/notes.md <<'PY'
+          import re, sys
+          v = re.escape(sys.argv[1])
+          s = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"^## v%s\b[^\n]*\n(.*?)(?=^## v|\Z)" % v, s, re.S | re.M)
+          print((m.group(1).strip() if m else "See CHANGELOG.md.") +
+                "\n\n`patch.zip` / `patch.json`: the script patch for the in-game updater (code only, no game assets).")
+          PY
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.v.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes-file dist/notes.md --latest
+            gh release upload "$tag" dist/patch.zip dist/patch.json --clobber
+          else
+            gh release create "$tag" dist/patch.zip dist/patch.json --title "$tag" \
+              --notes-file dist/notes.md --target "${{ github.sha }}" --latest
+          fi
