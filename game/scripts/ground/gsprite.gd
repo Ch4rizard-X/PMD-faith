@@ -16,6 +16,8 @@ const FALLBACK := {"Kick": "Attack", "Shoot": "Attack", "Strike": "Attack", "Swi
 	"Cringe": "Hurt", "LostBalance": "Hurt", "TumbleBack": "Hurt", "Faint": "Hurt", "HitGround": "Hurt", "Hop": "Idle",
 	"Hurt": "Idle", "Attack": "Idle", "Sleep": "Idle"}
 
+static var body_hidden := false        # the 3D view draws the body (scripts/ground/ground_voxel.gd)
+var vx := {}                           # the current frame for the 3D view: {path, src, dst, ground, fx}
 var species := ""
 var man: Dictionary = {}
 var ornament := ""                    # object sprite (assets/ground/orn/<name>.png + json)
@@ -188,6 +190,7 @@ func _draw() -> void:
 		return
 	var tex := DB.tex("res://assets/sp/" + str(A.get("s", man.sheet)))
 	if tex == null:
+		vx = {}
 		return
 	var dur: Array = A.dur
 	var total := 0
@@ -211,7 +214,7 @@ func _draw() -> void:
 	var row := mini(dir, int(A.rows) - 1)
 	var w := int(A.w)
 	var h := int(A.h)
-	if shadow:
+	if shadow and not body_hidden:
 		var shd: Array = man.get("shd", [])
 		var fp := Vector2(0, 4)
 		if shd.size() > 0:
@@ -228,7 +231,13 @@ func _draw() -> void:
 		src.position = Vector2(int(A.get("x", 0)) + (f % cols) * w, int(A.y) + (f / cols) * int(A.rows) * h + row * h)
 	var toff := _track_offset()
 	var dst := Rect2((Vector2(-w / 2.0, -h / 2.0 - 2.0 - height) + toff).round(), Vector2(w, h))
-	draw_texture_rect_region(tex, dst, src)
+	var gnd := 4.0
+	var shd3: Array = man.get("shd", [])
+	if shd3.size() > 0:
+		gnd = float(shd3[mini(dir, shd3.size() - 1)][1])
+	vx = {"path": "res://assets/sp/" + str(A.get("s", man.sheet)), "src": src, "dst": dst, "ground": gnd}
+	if not body_hidden:
+		draw_texture_rect_region(tex, dst, src)
 	if emote >= 0:
 		# Red anchors effects at an ax position set of the pose (0 head, 3 body centre; -1 = sprite origin).
 		# SpriteCollab sheets have no such points: use Red's typical head / centre heights per body size

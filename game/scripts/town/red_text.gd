@@ -196,15 +196,24 @@ static func ask(root: Control, key_or_text: String, speaker_name: String, sp: St
 	var m := TeamScreens.menu("", rows)
 	m.remember = false
 	m.sel = default_i
-	await root.get_tree().process_frame
-	var vs := root.get_viewport_rect().size
-	var at := Vector2(vs.x - 8, d.panel.position.y - 4)
 	var bd := TeamScreens._backdrop(root, m)
 	root.add_child(m)
-	await root.get_tree().process_frame
-	if is_instance_valid(m):
-		m.position = Vector2(at.x - m.size.x, at.y - m.size.y)
+	# above the message box's right end; placed again whenever either box changes size (sizes aren't always
+	# settled on the first frame: the menu could end up behind the message box)
+	var place := func():
+		if not is_instance_valid(m) or not is_instance_valid(d):
+			return
+		var vs := root.get_viewport_rect().size
+		var top: float = d.panel.global_position.y - root.global_position.y
+		m.position = Vector2(clampf(vs.x - 8 - m.size.x, 0, vs.x), clampf(top - 4 - m.size.y, 0, vs.y))
+	m.resized.connect(place)
+	d.panel.resized.connect(place)
+	for k in 2:
+		await root.get_tree().process_frame
+		place.call()
 	var r: Dictionary = m.result if m.finished else await m.done
+	if is_instance_valid(d) and d.panel.resized.is_connected(place):
+		d.panel.resized.disconnect(place)
 	TeamScreens._drop(bd)
 	TeamScreens._drop(m)
 	d.hide_box()

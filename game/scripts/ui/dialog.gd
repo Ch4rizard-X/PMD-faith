@@ -48,10 +48,23 @@ static func ask(root: Control, msg: String, options: Array, speaker := "", emoti
 	var lm := ListMenu.make("", options, cancel)
 	lm.remember = false
 	root.add_child(lm)
+	# above the message box's right end; placed again whenever either box changes size (on some window shapes the
+	# sizes aren't settled on the first frame and the menu ended up behind the message box)
+	var place := func():
+		if not is_instance_valid(lm) or not is_instance_valid(d):
+			return
+		var vs := root.get_viewport_rect().size
+		var top: float = d.panel.global_position.y - root.global_position.y if d.panel.visible else vs.y
+		lm.position = Vector2(clampf(vs.x - lm.size.x - 8, 0, vs.x), clampf(top - lm.size.y - 4, 0, vs.y))
+	lm.resized.connect(place)
+	d.panel.resized.connect(place)
 	await root.get_tree().process_frame
-	var vs := root.get_viewport_rect().size
-	lm.position = Vector2(vs.x - lm.size.x - 8, d.panel.position.y - lm.size.y - 4)
+	place.call()
+	await root.get_tree().process_frame
+	place.call()
 	var i := await lm.choose()
+	if is_instance_valid(d) and d.panel.resized.is_connected(place):
+		d.panel.resized.disconnect(place)
 	d.hide_box()
 	return i
 
@@ -180,4 +193,6 @@ func _unhandled_input(e: InputEvent) -> void:
 			if c is ListMenu:
 				return
 		_press()
-		get_viewport().set_input_as_handled()
+		var vp := get_viewport()                 # _press can close the box and take it out of the tree
+		if vp:
+			vp.set_input_as_handled()

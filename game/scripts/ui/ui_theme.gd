@@ -25,6 +25,14 @@ static var _cursor: AtlasTexture
 static func font() -> Font:
 	if _font == null:
 		var f = load(FONT_PATH)
+		if f is FontFile and not (f.data as PackedByteArray).is_empty():
+			# a fresh font from the raw TTF bytes: a font saved into the player's game pack (public builds) could
+			# carry a glyph cache that drew some capitals wrong on Windows (C as OE, B as C, L as U)
+			var nf := FontFile.new()
+			nf.data = f.data
+			nf.disable_embedded_bitmaps = true
+			nf.allow_system_fallback = false
+			f = nf
 		if f is FontFile:
 			f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 			f.hinting = TextServer.HINTING_NONE

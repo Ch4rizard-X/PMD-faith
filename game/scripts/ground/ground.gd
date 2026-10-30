@@ -105,6 +105,7 @@ var zoom: float:
 	set(v): _zoom = v
 var auto_test := false
 var autopilot = null           # GAutopilot (tests)
+var voxel = null               # scripts/ground/ground_voxel.gd
 
 func _ready() -> void:
 	GData.load_all()
@@ -174,6 +175,9 @@ func _ready() -> void:
 	for i in N_EVENTS:
 		events.append({"used": false})
 	zoom = float(Game.settings.get("ground_zoom", 1.6875))
+	voxel = load("res://scripts/ground/ground_voxel.gd").new()      # remake: the 3D view on town / base / Friend Area maps
+	add_child(voxel)
+	voxel.setup(self)
 
 # ------------------------------------------------------------------ boot demos (STARTMODE_14..17)
 ## Red's boot sequence runs DEMO_01..04 (health & safety, company screens, intro + title, title) through
@@ -575,6 +579,8 @@ func _render() -> void:
 		off = Vector2(cam) - (view_gba - Vector2(240, 160)) / 2.0      # boot screens: exactly Red's 240x160 view
 	_demo_mask_update(demo and cur_map >= 224 and cur_map <= 227, vs)
 	world.position = (-off * zoom).round()
+	if voxel and voxel.active:
+		voxel.sync(off + view_gba / 2.0, zoom, vs)
 	weather.place(off, view_gba)
 	var lvl := float(fadeA.lvl) / 256.0
 	fade_rect.color = Color(0, 0, 0, 1.0 - clampf(lvl, 0.0, 1.0))
@@ -995,6 +1001,8 @@ func _map_reset() -> void:
 	map_action.reset()
 
 func _clear_map_nodes() -> void:
+	if voxel:
+		voxel.deactivate()
 	edge_fill.texture = null
 	map_lo.texture = null
 	map_hi.texture = null
@@ -1067,6 +1075,8 @@ func _load_map(m: int, dungeon_id := -1, floor_n := 0) -> void:
 		_build_pal_anim(map_info)
 		_apply_blend(map_info)
 		_build_edge_fill(w, h)
+	if voxel:
+		voxel.on_map()
 
 ## GBA colour blending of a map layer (BLDCNT/BLDALPHA: out = layer*eva/16 + below*evb/16). evb = 0 is plain
 ## drawing; otherwise the layer is added onto what's below it (the Silent Chasm fog, the Personality Test

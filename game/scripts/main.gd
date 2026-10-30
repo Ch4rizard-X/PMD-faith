@@ -39,6 +39,62 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--qoltest"):
 		_qoltest.call_deferred()
+	if OS.get_cmdline_user_args().has("--optshot"):     # Game Options -> 3D View page screenshot
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			GameOptions.page(root, "3D View")
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://optshot.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--optshot2"):     # Game Options pages as the player sees them -> user://logs/
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			if OS.get_cmdline_user_args().has("--nofallback"):
+				var ff = UITheme.font()
+				if ff is FontFile:
+					ff.allow_system_fallback = false
+			var tag := "_nofallback" if OS.get_cmdline_user_args().has("--nofallback") else ""
+			print("OPTSHOT start")
+			for pg in ["3D View", "Dungeon", "Others"]:
+				print("OPTSHOT page ", pg)
+				GameOptions.page(root, pg)
+				await get_tree().create_timer(0.8).timeout
+				get_viewport().get_texture().get_image().save_png("user://logs/optshot_%s%s.png" % [pg.replace(" ", ""), tag])
+				for c in root.get_children():
+					c.queue_free()
+				await get_tree().process_frame
+			print("OPTSHOT done ", DisplayServer.window_get_size())
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--fonttest"):    # the text font as loaded (romdata or imported)
+		(func():
+			for a1 in OS.get_cmdline_user_args():
+				if a1.begins_with("--uiscale="):
+					Game.settings.ui_scale = float(a1.substr(10))
+					UITheme.apply_ui_scale()
+			if OS.get_cmdline_user_args().has("--afterlauncher"):   # the launcher's pages first (as in the exe)
+				var la = load("res://scripts/ui/launcher.gd").new()
+				add_child(la)
+				await get_tree().create_timer(0.5).timeout
+				la._show_mons()
+				la._pick_gen(5)
+				await get_tree().create_timer(0.5).timeout
+				la._show_difficulty()
+				await get_tree().create_timer(0.3).timeout
+				la.queue_free()
+				await get_tree().process_frame
+			var l := Label.new()
+			l.theme = UITheme.theme()
+			l.text = "Classic Camera Low Battery Balanced\nBright Warmth Cool Pack Off Soft Hard\nABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz"
+			l.position = Vector2(8, 8)
+			root.add_child(l)
+			var f = UITheme.font()
+			print("FONTTEST ", f, " path ", f.resource_path if f else "", " glyphs C=", f.get_char_size(67, 22) if f else "")
+			await get_tree().create_timer(0.5).timeout
+			get_viewport().get_texture().get_image().save_png("user://fonttest.png")
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--lctest"):
 		_lctest.call_deferred()
 		return
@@ -2649,6 +2705,8 @@ func _ready() -> void:
 		if a0.begins_with("--mapshot="):              # ground map render check: --mapshot=186
 			(func():
 				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				if OS.get_cmdline_user_args().has("--vox"):
+					Game.settings.vox_view = 1               # the ground 3D view (scripts/ground/ground_voxel.gd)
 				_clear()
 				Story.host = self
 				ground = Ground.new()
@@ -2658,7 +2716,25 @@ func _ready() -> void:
 				await get_tree().process_frame
 				ground._load_map(int(a0.substr(10)))
 				for a1 in OS.get_cmdline_user_args():
+					if a1.begins_with("--at="):          # centre the view on map pixel x,y
+						var xy := a1.substr(5).split(",")
+						ground.camera.set_target(Vector2i(int(xy[0]) << 8, int(xy[1]) << 8))
+						for f in 3:
+							ground.camera.update()
+				if OS.get_cmdline_user_args().has("--actors"):  # a few Pokémon standing around the view centre
+					var c: Vector2i = ground.camera.top_left_px() + Vector2i(120, 80)
+					var k := 0
+					for sp in ["0004", "0007", "0025", "0001"]:
+						var gs := GSprite.new()
+						gs.set_species(sp)
+						gs.play(7 | 0x800, 0)
+						gs.position = Vector2(c) + Vector2(-36 + 24 * k, 10 + (k % 2) * 14)
+						ground.actors.add_child(gs)
+						k += 1
+				for a1 in OS.get_cmdline_user_args():
 					if a1.begins_with("--zoom="): ground.set_ground_zoom(float(a1.substr(7)))
+				for a1 in OS.get_cmdline_user_args():
+					if a1.begins_with("--shotdelay="): await get_tree().create_timer(float(a1.substr(12))).timeout
 				for i in 3:
 					await get_tree().create_timer(0.6).timeout
 					get_viewport().get_texture().get_image().save_png("user://mapshot_%s_%d.png" % [a0.substr(10), i])
@@ -4133,6 +4209,14 @@ func _thortest() -> void:
 		await _mt_press("ui_cancel")
 	await get_tree().create_timer(0.3).timeout
 	print("menu closed: ", not dungeon.menu_open)
+	var m0 := Dungeon.auto_mode()
+	bs.test_tap("mode")
+	await get_tree().process_frame
+	print("mode tap: ", m0, " -> ", Dungeon.auto_mode(), " label=", bs.buttons["mode"].text)
+	await _thor_shot("mode")
+	bs.test_tap("mode")
+	await get_tree().process_frame
+	print("mode tap back: ", Dungeon.auto_mode(), " label=", bs.buttons["mode"].text)
 	bs.test_tap("auto")
 	await get_tree().create_timer(0.3).timeout
 	print("autoplay on: ", dungeon.autoplay)
@@ -5154,6 +5238,8 @@ func _storytest() -> void:
 		if a.begins_with("--spam="):
 			GText.spam = int(a.substr(7))
 	Game.settings.hunger = false
+	if OS.get_cmdline_user_args().has("--vox"):
+		Game.settings.vox_view = 1                   # play the story with the 3D view on
 	Dungeon.test_invincible = not OS.get_cmdline_user_args().has("--force=defeated")
 	get_tree().process_frame.connect(func():
 		if is_instance_valid(dungeon) and dungeon.fs and dungeon.fs.leader:

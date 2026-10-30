@@ -504,7 +504,7 @@ func _build_scene() -> void:
 		"dungeon":
 			var bh := 36.0
 			var rows := [[["Moves", "moves"], ["Items", "bag"], ["Team", "team"], ["Others", "others"]],
-				[["Map", "zoom"], ["Auto", "auto"], ["Wait", "wait"], ["Attack", "attack"]]]
+				[["Map", "zoom"], ["Auto", "auto"], ["Wait", "wait"], ["Fight", "mode"]]]      # mode: Autoplay Fight / Stairs
 			var by := H - 2 * bh - 2 * g
 			_button_rows(rows, by, bh, g)
 			var log_h := 2.0 * UITheme.LINE + 10
@@ -595,7 +595,7 @@ func _make_button(label: String, key: String) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	b.clip_text = true
 	b.add_theme_font_size_override("font_size", FS)
-	var accent := key == "attack"
+	var accent := key == "attack" or key == "mode"
 	var fill := Color(0.36, 0.17, 0.08, 0.96) if accent else Color(0.09, 0.22, 0.47, 0.96)
 	var fill_p := Color(0.62, 0.32, 0.12, 1.0) if accent else Color(0.22, 0.45, 0.82, 1.0)
 	var edge := Color(1.0, 0.82, 0.45) if accent else EDGE
@@ -636,6 +636,9 @@ func _on_button(key: String) -> void:
 		if d == null:
 			return
 		match key:
+			"mode":                          # Autoplay's mode, switchable any time (also while it runs)
+				Game.settings.auto_mode = 1 - Dungeon.auto_mode()
+				d._msg("Autoplay mode: %s." % Dungeon.AUTO_MODES[Dungeon.auto_mode()])
 			"zoom":
 				map_zoom = not map_zoom
 				if map_view:
@@ -708,6 +711,8 @@ func _refresh() -> void:
 		buttons.auto.text = "Auto" if not d.autoplay else "Auto ON"
 		buttons.auto.modulate = Color(0.6, 1, 0.65) if d.autoplay else Color.WHITE
 		var locked: bool = d.busy or d.menu_open or d.result_sent
+		if buttons.has("mode"):
+			buttons.mode.text = Dungeon.AUTO_MODES[Dungeon.auto_mode()]
 		for k in ["moves", "bag", "team", "others", "wait", "attack"]:
 			if buttons.has(k):
 				buttons[k].modulate = Color(1, 1, 1, 0.55) if (locked and not d.autoplay) else Color.WHITE
