@@ -5144,7 +5144,7 @@ func red_number(t: Mon, value: int) -> void:
 	n.draw.connect(func():
 		for i in tiles.size():
 			n.draw_texture_rect_region(tex, Rect2(i * 6 - w / 2.0, 0, 8, 8), Rect2(int(tiles[i]) * 8, row * 8, 8, 8)))
-	n.position = (t.visual.position + Vector2(0, -20)).round()
+	n.position = MonSprite.fig_point(t.visual, Vector2(0, -20)).round()
 	fx_layer.add_child(n)
 	var tw := create_tween()
 	tw.tween_property(n, "position:y", n.position.y - 46.0 * 60.0 / 256.0, 1.0)

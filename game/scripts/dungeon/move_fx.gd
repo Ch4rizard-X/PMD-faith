@@ -150,14 +150,13 @@ static func _frames(F: Dictionary, dir: int) -> Array:
 	return a.get(k, a.get("0", []))
 
 static func _anchor(m: Mon, att: String) -> Vector2:
-	var p: Vector2 = m.visual.position + m.visual.bob
+	var off := Vector2(0, -6)
 	match att:
 		"head":
-			return p + Vector2(0, -16)
+			off = Vector2(0, -16)
 		"none":
-			return p
-		_:
-			return p + Vector2(0, -6)
+			off = Vector2.ZERO
+	return MonSprite.fig_point(m.visual, m.visual.bob + off)     # on the 3D figure's body in the 3D view
 
 static func _sprite_node(dg: Node, tex: Texture2D, frames: Array, loop: bool, at: Vector2) -> FxNode:
 	var n := FxNode.new()
@@ -165,6 +164,7 @@ static func _sprite_node(dg: Node, tex: Texture2D, frames: Array, loop: bool, at
 	n.frames = frames
 	n.loop = loop
 	n.position = at
+	n.scale = Vector2(1, MonSprite.fig_k)      # 3D view: as tall as the figures, not squashed with the floor
 	n.z_index = 6
 	dg.fx_layer.add_child(n)
 	return n

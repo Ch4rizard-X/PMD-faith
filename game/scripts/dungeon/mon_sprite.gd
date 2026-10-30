@@ -24,7 +24,18 @@ var _mark_vx := {}                   # the shadow marker for the 3D view: {tex, 
 ## 3D view (scripts/dungeon/voxel): the frame drawn last, and whether the 2D body is hidden (the shadow
 ## marker and the shiny sparkle still draw on the floor).
 static var body_hidden := false
+## 3D view: how tall a pixel of a standing figure is in the (squashed) 2D world, so effects, status icons and
+## numbers drawn in 2D line up with the figure's body (voxel_view.fig_k(); 1.0 in 2D).
+static var fig_k := 1.0
 var vx := {}
+
+## A point given relative to the sprite (like the 2D body: (0, -16) = head height) where it is on the 3D figure:
+## heights above the feet are stretched by fig_k. In 2D just position + local.
+static func fig_point(v, local: Vector2) -> Vector2:
+	if not body_hidden or v == null or v.vx.is_empty():
+		return v.position + local
+	var g := float(v.vx.ground)
+	return v.position + Vector2(local.x, g - (g - local.y) * fig_k)
 
 func setup(m: Mon) -> void:
 	mon = m
@@ -190,10 +201,17 @@ func _draw() -> void:
 	var shd2: Array = man.get("shd", [])
 	if shd2.size() > 0:
 		gnd = float(shd2[mini(mon.facing, shd2.size() - 1)][1])
-	vx = {"path": "res://assets/sp/" + sheet_name, "src": src, "dst": dst, "mod": mod, "ground": gnd, "mark": _mark_vx}
+	# the 3D figure stands on the middle of its shadow marker ('shd' places the marker's top-left corner)
+	if _mark_tex and not _mark_vx.is_empty():
+		gnd = float(_mark_vx.pos.y) + _mark_tex.get_height() / 2.0
+	else:
+		gnd += 3.0
+	vx ={"path": "res://assets/sp/" + sheet_name, "src": src, "dst": dst, "mod": mod, "ground": gnd, "mark": _mark_vx}
 	if not body_hidden:
 		draw_texture_rect_region(tex, dst, src, mod)
 	if sparkle > 0.0:                # four twinkling stars around the shiny
+		if body_hidden:
+			draw_set_transform(Vector2(0, gnd * (1.0 - fig_k)), 0.0, Vector2(1, fig_k))
 		var k := 1.6 - sparkle
 		for i in 4:
 			var ph := k * 3.0 - i * 0.35

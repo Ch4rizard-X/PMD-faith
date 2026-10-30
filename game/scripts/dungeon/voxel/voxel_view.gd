@@ -153,6 +153,7 @@ func set_active(on: bool) -> void:
 	_post_layer.visible = false
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 	MonSprite.body_hidden = on
+	MonSprite.fig_k = fig_k()
 	if dg == null:
 		return
 	if dg.terrain_view:
@@ -175,9 +176,20 @@ func set_active(on: bool) -> void:
 func cam_squash() -> float:
 	return sin(deg_to_rad(pitch)) if active else 1.0
 
+## How far the figures lean back from upright, toward the camera (degrees).
+func lean() -> float:
+	return (90.0 - pitch) * 0.7
+
+## A figure pixel's height in 2D-world units: its screen height (cos(pitch - lean)) over the floor's squash.
+func fig_k() -> float:
+	if not active:
+		return 1.0
+	return cos(deg_to_rad(pitch - lean())) / sin(deg_to_rad(pitch))
+
 func apply_settings() -> void:
 	st = PACKS.resolve(dg)
 	pitch = [35.0, 45.0, 60.0][clampi(int(Game.settings.get("vox_cam", 1)), 0, 2)]
+	MonSprite.fig_k = fig_k()
 	_base_light = {"sun": float(st.sun), "sun_col": st.sun_col, "amb": float(st.ambient), "amb_col": st.amb_col}
 	_sun.light_energy = float(st.sun)
 	_sun.light_color = st.sun_col
@@ -411,6 +423,20 @@ func _fig_mat(mi: MeshInstance3D) -> void:
 		sm.next_pass = ol
 	mi.material_override = sm
 
+## Figures are drawn pulled toward the camera (depth only, the picture doesn't move): enough that the leaning
+## top stays in front of the wall behind, the feet in front of the wall tops below, and pixels under the
+## shadow line on top of the floor instead of in it - as the 2D sprites are drawn over walls and floor.
+func _fig_push(sm: ShaderMaterial) -> void:
+	var th := deg_to_rad(pitch)
+	var c := 14.0 / cos(th)
+	var k := sin(deg_to_rad(lean())) / cos(th) + 0.1
+	sm.set_shader_parameter("push_c", c)
+	sm.set_shader_parameter("push_k", k)
+	sm.set_shader_parameter("push_floor", 1.0 / sin(th) + 0.2)
+	if sm.next_pass is ShaderMaterial:
+		for n in ["push_c", "push_k", "push_floor"]:
+			(sm.next_pass as ShaderMaterial).set_shader_parameter(n, sm.get_shader_parameter(n))
+
 func _sync_figures() -> void:
 	var alive := {}
 	for m in dg.fs.mons:
@@ -430,9 +456,11 @@ func _sync_figures() -> void:
 		mi.mesh = mesh
 		var dst: Rect2 = vx.dst
 		var g: float = float(vx.ground)
-		var tilt := Basis(Vector3.RIGHT, deg_to_rad(-(90.0 - pitch) * 0.7))
-		var base := Vector3(v.position.x + dst.position.x, 1.0 + (g - dst.end.y), v.position.y + g)
-		mi.transform = Transform3D(tilt, base)
+		var tilt := Basis(Vector3.RIGHT, deg_to_rad(-lean()))
+		# tilted about the feet (the shadow row, 1 above the floor plane), so leaning doesn't lift the figure off
+		# its shadow marker; the frame's rows below the feet are drawn over the floor (_fig_push)
+		var feet := Vector3(v.position.x + dst.position.x, 1.0, v.position.y + g)
+		mi.transform = Transform3D(tilt, feet) * Transform3D(Basis(), Vector3(0, -(dst.end.y - g), 0))
 		var sm := mi.material_override as ShaderMaterial
 		var mod: Color = vx.mod
 		mod.a *= v.modulate.a * v.self_modulate.a
@@ -445,6 +473,7 @@ func _sync_figures() -> void:
 		sm.render_priority = 1 if mod.a < 0.99 else 0
 		sm.set_shader_parameter("lead_pos", _lead_pos())
 		sm.set_shader_parameter("wet", _wet)
+		_fig_push(sm)
 		mi.visible = mod.a > 0.02
 		_sync_mark(m, v, vx.get("mark", {}))
 	for m in _figs.keys():

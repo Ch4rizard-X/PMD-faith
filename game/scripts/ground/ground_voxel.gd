@@ -1,6 +1,6 @@
 extends Node
-## Remake: the 3D view for ground maps (Game Options -> 3D View -> View: 3D): the town, the team bases, Makuhita
-## Dojo, Whiscash Pond, the Post Office and the Friend Areas as voxel dioramas built from the map's own painting:
+## Remake: the 3D view for ground maps (Game Options -> 3D View -> View: 3D): the Friend Areas as voxel dioramas
+## built from the map's own painting (the town and the team base stay 2D):
 ##   - walkable ground stays flat with the painting on it; smooth green pixels (lawns between bushes and houses)
 ##     too, whatever the walk grid says
 ##   - other pixels the walk grid blocks that aren't in a ground colour (trees, houses, bushes, rocks) stand up as
@@ -18,7 +18,7 @@ const CELL := 8
 const STEP := 2
 const MAX_H := 22.0
 const GRASS_CONTRAST := 0.09
-const PREFIXES := ["friend_area_", "team_base_", "pokemon_square", "makuhita_dojo", "whiscash_pond", "pelipper_post_office"]
+const PREFIXES := ["friend_area_"]
 
 var g                       # Ground
 var active := false         # the current map is shown in 3D
@@ -497,7 +497,9 @@ func _sync_figures() -> void:
 		var gnd: float = float(vx.ground)
 		var p: Vector2 = s.position
 		var tilt := Basis(Vector3.RIGHT, deg_to_rad(-(90.0 - pitch) * 0.7))
-		mi.transform = Transform3D(tilt, Vector3(p.x + dst.position.x, gnd - dst.end.y, p.y + gnd))
+		# tilted about the feet (the shadow row), so leaning doesn't lift the figure off its shadow
+		var lift := dst.end.y - gnd
+		mi.transform = Transform3D(tilt, Vector3(p.x + dst.position.x, 0.0, p.y + gnd)) * Transform3D(Basis(), Vector3(0, -lift, 0))
 		var a: float = s.modulate.a * s.self_modulate.a
 		var fm2 := mi.material_override as StandardMaterial3D
 		fm2.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if a < 0.99 else BaseMaterial3D.TRANSPARENCY_DISABLED

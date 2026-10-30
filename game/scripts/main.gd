@@ -2897,6 +2897,9 @@ func _ready() -> void:
 				get_viewport().get_texture().get_image().save_png("user://arena_%s.png" % ak)
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--vfx3d"):
+		add_child(load("res://tests/test_vfx3d.gd").new())
+		return
 	if OS.get_cmdline_user_args().has("--voxelshot"):
 		add_child(load("res://tests/test_voxelshot_fx.gd" if OS.get_cmdline_user_args().has("--fx") else "res://tests/test_voxelshot.gd").new())
 		return

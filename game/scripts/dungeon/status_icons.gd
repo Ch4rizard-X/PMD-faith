@@ -152,7 +152,7 @@ func _draw() -> void:
 			var bit := int(st[i][0])
 			if bit == 0:
 				continue
-			_draw_icon(_bit_index(bit), v.position + v.bob + head)
+			_draw_icon(_bit_index(bit), MonSprite.fig_point(v, v.bob + head))
 
 ## DrawStatusSprite: centred on the head point, 16 px higher (Frozen sits on the body); Sleep's Zzz 8 px right.
 func _draw_icon(id: int, at: Vector2) -> void:

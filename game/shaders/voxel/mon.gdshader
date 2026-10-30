@@ -10,10 +10,16 @@ uniform vec3 torch_col = vec3(1.0);
 uniform int toon = 0;
 uniform float wrap = 0.0;
 varying vec3 wpos;
+uniform float push_c = 8.0;      // depth pull toward the camera (voxel_view._fig_push)
+uniform float push_k = 0.8;      // more per unit of height (the leaning top)
+uniform float push_floor = 2.0;  // more per unit under the floor
 uniform float wet = 0.0;
 vec3 to_lin(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec4 v = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	v.z += push_c + max(VERTEX.y, 0.0) * push_k + max(1.1 - wpos.y, 0.0) * push_floor;
+	POSITION = PROJECTION_MATRIX * v;
 }
 void fragment() {
 	vec3 c = to_lin(COLOR.rgb) * mod_col.rgb;

@@ -3,6 +3,13 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.19 (30 Oct 2026)
+
+- **3D view only in the Friend Areas:** Pokémon Square (with Makuhita Dojo, Whiscash Pond and the Post Office) and the team base are back to the 2D view; the Friend Areas keep their dioramas.
+- **3D figures stand on their shadows:** Pokémon now stand on the middle of their shadow marker at every camera height (they leaned back from below their feet, which lifted them off it). Same in the Friend Areas.
+- **3D figures no longer clip:** a Pokémon is drawn in front of the wall behind it and over the floor (as the 2D sprites are), so heads don't vanish into walls and feet don't sink into the ground. Where it stands on screen doesn't change.
+- **Move animations in 3D** play on the Pokémon's body at its real height, and at the figures' size instead of squashed with the tilted floor. Status icons, damage and healing numbers, the Awakening glow and the shiny sparkle follow the figures the same way.
+
 ## v0.8.18 (30 Oct 2026)
 
 - **3D view in town, the base and Friend Areas:** with Game Options -> 3D View -> View: 3D, Pokémon Square, the team base and the Friend Areas become dioramas too. Each map is raised from its own picture and walk grid: paths and grass lie flat, trees, cliffs and buildings rise with rounded tops, water sits below the ground, and the sky stays in the background where the map shows it. Pokémon are voxel figures with shadows. Walking, talking, menus and cutscenes work as in 2D; maps without a walk grid stay 2D.

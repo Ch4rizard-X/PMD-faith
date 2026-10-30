@@ -75,7 +75,7 @@ static func _mega_fx(d, m: Mon, mk: String) -> void:
 		2:
 			Audio.sfx("evolve")
 			var g := MegaGlow.new()
-			g.position = vis.position + Vector2(0, -6)
+			g.position = MonSprite.fig_point(vis, Vector2(0, -6))
 			g.z_index = 6
 			d.fx_layer.add_child(g)
 			var tw: Tween = d.create_tween()
