@@ -25,7 +25,7 @@ TOOLS = os.path.dirname(HERE)
 sys.path.insert(0, TOOLS)
 import common  # noqa: E402
 
-PY = [sys.executable, "-I"]
+PY = [sys.executable, "-I", "-X", "utf8"]           # -I ignores PYTHONUTF8; -X utf8 still applies (Windows: UTF-8 files, not cp1252)
 UI_OTHERS = ("mark_", "items.png")           # files in assets/ui other workers own
 
 
@@ -39,6 +39,7 @@ STEPS = [
     ("scripts", [T("ground", "gen_ground_scripts.py")]),
     ("extra", [T("ground", "gen_ground_extra.py")]),
     ("ornaments", [T("ground", "gen_ornaments.py")]),
+    ("red_moves", [T("fx", "red_moves.py")]),
     ("anim_offsets", [T("ground", "gen_red_anim_offsets.py")]),
     ("credits", [T("ground", "gen_credits.py")]),
     ("front", [T("ground", "gen_front_assets.py")]),
@@ -64,6 +65,8 @@ def clean(steps):
         rm.append(os.path.join(D, "ground"))
     if "ornaments" in steps:
         rm.append(os.path.join(A, "ground", "orn"))
+    if "red_moves" in steps:
+        rm += [os.path.join(A, "fx_red"), os.path.join(D, "red_move_fx.json")]
     if "credits" in steps:
         rm += [os.path.join(A, "ground", "credits"), os.path.join(D, "red_credits.json")]
     if "front" in steps:
@@ -113,6 +116,8 @@ def main(argv=None):
             sys.exit("unknown step(s): %s" % bad)
     else:
         want = names
+    if common.RED_ONLY:
+        want = [w for w in want if w != "eos_music"]
     if "--skip-audio" in argv:
         want = [w for w in want if w not in AUDIO]
     common.need(os.path.join(common.PMDRED, "baserom.gba"), "pmd-red decomp with your Red ROM (tools/fetch.py)")
@@ -123,7 +128,12 @@ def main(argv=None):
             continue
         t0 = time.time()
         print("== %s" % name, flush=True)
-        r = subprocess.run(PY + cmd, cwd=common.ROOT)
+        # the part's output goes through this process's stdout, so build_all's log (and the setup screen) gets it
+        r = subprocess.Popen(PY + cmd, cwd=common.ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, encoding="utf-8", errors="replace")
+        for ln in r.stdout:
+            print("   " + ln.rstrip(), flush=True)
+        r.wait()
         print("== %s %s (%.0fs)" % (name, "ok" if r.returncode == 0 else "FAILED", time.time() - t0), flush=True)
         if r.returncode:
             failed.append(name)

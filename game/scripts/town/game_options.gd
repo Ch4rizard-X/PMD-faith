@@ -10,7 +10,7 @@ extends RefCounted
 ## changes asks Red's "Change settings?".
 
 const P := UITheme.PX
-const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true, "qol_debugnpc": false, "qol_clearmark": false, "qol_movegrowth": true, "qol_autobank": true, "qol_autoupdate": true, "auto_mode": 0}
+const DEFAULTS := {"msg_speed": 1, "far_off_pals": 1, "damage_turn": true, "grids": true, "map_mode": 1, "window_color": 0, "hunger": true, "prepare_screen": false, "qol_statusfade": true, "qol_recruit": 1, "qol_partner_ai": 1, "qol_msgsize": 1, "qol_autosave": true, "qol_debugnpc": false, "qol_clearmark": false, "qol_autobank": true, "qol_autoupdate": true, "auto_mode": 0}
 const ROWS := {
 	"msg_speed": ["Speed", ["Slow", "Normal", "Fast"]],
 	"far_off_pals": ["Far-off pals", ["Self", "Look"]],
@@ -27,14 +27,13 @@ const ROWS := {
 	"qol_clearmark": ["Cleared marks", ["Off", "On"]],   # remake: stars / gold map markers on cleared dungeons (DX)
 	"qol_debugnpc": ["Debug NPC", ["Off", "On"]],     # remake: a Porygon at the base that jumps around the story (testing)     # remake: Off = only the bed / save points / Quicksave save
 	"difficulty": ["Difficulty", ["Normal", "Hard"]],
-	"qol_movegrowth": ["Move growth", ["Off", "On"]],      # remake: Explorers Remixed's Move Growth (moves level up with use)     # remake: Hard = enemy and boss levels scale with the team (Game.flags)
 	"qol_autobank": ["Auto bank", ["Off", "On"]],      # remake: money goes to the bank after a dungeon; town pays from it
 	"qol_autoupdate": ["Auto update", ["Off", "On"]],  # remake: download script patches (scripts/core/patcher.gd)
 	"auto_mode": ["Autoplay mode", ["Fight", "Stairs"]],  # remake: Fight explores and levels, Stairs goes straight down
 	"qol_msgsize": ["Message size", ["Small", "Normal", "Large"]],    # remake: dungeon messages + log       # remake: smarter Let's go together!               # remake: Rescue Team DX's temporary recruits
 }
 const VoxelPacks := preload("res://scripts/dungeon/voxel/shader_packs.gd")
-const PAGES := {"3D View": VoxelPacks.KEYS, "Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai", "qol_movegrowth", "auto_mode", "difficulty"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale", "qol_msgsize", "qol_autosave", "qol_autobank", "qol_autoupdate", "qol_clearmark", "qol_debugnpc"]}
+const PAGES := {"3D View": VoxelPacks.KEYS, "Dungeon": ["msg_speed", "far_off_pals", "damage_turn", "grids", "map_mode", "hunger", "qol_statusfade", "qol_recruit", "qol_partner_ai", "auto_mode", "difficulty"], "Others": ["window_color", "prepare_screen", "second_screen", "ui_scale", "qol_msgsize", "qol_autosave", "qol_autobank", "qol_autoupdate", "qol_clearmark", "qol_debugnpc"]}
 
 ## A row's [label, choices] (the 3D View rows come from shader_packs.gd; the pack list includes custom packs).
 static func _row(k: String) -> Array:
@@ -110,7 +109,7 @@ static func open(root: Control) -> void:
 			return
 
 static func page(root: Control, title: String) -> void:
-	var keys: Array = PAGES[title]
+	var keys: Array = PAGES[title].filter(func(k): return not load("res://scripts/core/launcher_cfg.gd").red_rule(str(k)))     # Remake rules on Red's: gone
 	if load("res://scripts/core/launcher_cfg.gd").active():
 		keys = keys.filter(func(k): return not k in ["difficulty", "hunger"])     # set in the launcher instead
 	var vals := {}
@@ -151,5 +150,4 @@ static func page(root: Control, title: String) -> void:
 		for k in vals:
 			_store(k, int(vals[k]))
 		UITheme.sync_window_color()
-		MoveGrowth.sync_all()          # Move growth on / off: PP bonuses follow
 		Game.save_game()

@@ -19,7 +19,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 GAME = os.path.join(ROOT, "game")
 EXTS = (".gd", ".tscn", ".tres", ".gdshader", ".gdshaderinc")
 SKIP_DIRS = ("tests/", "addons/")
-SKIP_FILES = ("scripts/core/patcher.gd",)
+# patcher.gd runs before any patch; the setup screen belongs to each exe (MD-Recomp ships its own, newer one)
+SKIP_FILES = ("scripts/core/patcher.gd", "scripts/ui/setup_screen.gd")
 BASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "base_classes.json")
 
 

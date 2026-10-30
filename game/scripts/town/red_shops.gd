@@ -127,7 +127,8 @@ static func stock(wares: bool) -> Array:
 				ware.append(_bulk(id2, rng))
 		items.sort_custom(func(a, b): return int(DB.items[a.id].get("red_id", 999)) < int(DB.items[b.id].get("red_id", 999)))
 		ware.sort_custom(func(a, b): return int(DB.items[a.id].get("red_id", 999)) < int(DB.items[b.id].get("red_id", 999)))
-		if DB.items.has(Game.EXP_SHARE) and rng.randi_range(1, EXP_SHARE_ODDS) == 1:
+		if DB.items.has(Game.EXP_SHARE) and not load("res://scripts/core/launcher_cfg.gd").red_part("remakeitems") \
+				and rng.randi_range(1, EXP_SHARE_ODDS) == 1:     # the launcher's Game page: Remake items
 			items.append({"id": Game.EXP_SHARE, "n": 0})     # remake: an Exp. Share, very rarely (1 day in 50)
 		st = {"day": Game.day, "items": items, "wares": ware}
 		Game.flags["kecleon"] = st

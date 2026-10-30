@@ -64,10 +64,18 @@ func _ready() -> void:
 	d.cam.position = d._px(spot)
 	await get_tree().create_timer(1.0).timeout
 	get_viewport().get_texture().get_image().save_png("user://vfx3d_%d_0.png" % cam)
-	var mv: Dictionary = DB.moves.get("ember", {}) if DB.moves.has("ember") else {}
-	MoveFx.play(d, L, "Ember", mv, 2, [foe])
-	for i in 4:
-		await get_tree().create_timer(0.12).timeout
+	var mname := "Ember"
+	var shots := 4
+	var gap := 0.12
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--move="):
+			mname = a.substr(7)
+			shots = 24
+			gap = 0.03
+	var mv: Dictionary = DB.moves.get(MoveFx.key(mname), {})
+	MoveFx.play(d, L, mname, mv, 2, [foe])
+	for i in shots:
+		await get_tree().create_timer(gap).timeout
 		get_viewport().get_texture().get_image().save_png("user://vfx3d_%d_%d.png" % [cam, i + 1])
 	print("VFX3D cam=", cam, " spot=", spot, " fig_k=", MonSprite.fig_k)
 	get_tree().quit()

@@ -27,12 +27,13 @@ static func spot() -> Array:
 	return [50, 35, 0, 2]          # in front of the house by the Kecleon Shop
 
 static func unlocked() -> bool:
-	return true
+	return not load("res://scripts/core/launcher_cfg.gd").red_part("swapshop")      # the launcher's Game page
 
 # ------------------------------------------------------------------ data
 static func data() -> Dictionary:
 	if _data.is_empty():
-		var f := FileAccess.open("res://data/swap_shop.json", FileAccess.READ)
+		var path: String = load("res://scripts/core/launcher_cfg.gd").data_path("swap_shop")    # "" in Red mode
+		var f := FileAccess.open(path, FileAccess.READ) if path != "" else null
 		if f:
 			var d = JSON.parse_string(f.get_as_text())
 			if d is Dictionary:

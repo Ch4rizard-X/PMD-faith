@@ -543,6 +543,8 @@ if __name__ == "__main__":
     if "--eos" not in sys.argv:          # --eos: only redo the Explorers of Sky maps
         main()
     os.makedirs(OUT, exist_ok=True)
+    if common.RED_ONLY:
+        sys.exit(0)                      # Red only: no Explorers of Sky world map
     em = eos_maps()
     p = os.path.join(GAME, "data/world_map.json")
     j = json.load(open(p))

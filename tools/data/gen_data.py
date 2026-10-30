@@ -77,6 +77,8 @@ def remixed_numbers(moves):
     """Moves after Red that Explorers of Sky / Remixed has: take its numbers (type, power, PP, accuracy, crit, hits,
     category, range) instead of the prototype's estimates; marked src = 'remixed'."""
     md = {}
+    if common.RED_ONLY:
+        return                   # Red only: no Remixed table; Red's own moves keep the decomp's numbers
     for k, v in common.load_json(common.need(MOVES_DATA, 'moves_data.json (run tools/eos/extract.py, tools/fx/build_data.py)')).items():
         md.setdefault(norm(k.split(' #')[0]), v)
     for k, o in moves.items():
@@ -147,9 +149,15 @@ def main():
             if key in v:
                 o[key] = v[key]
         moves[k] = o
+    regular = {'id': 0, 'name': 'Attack', 't': 'None', 'p': 1, 'pp': 0, 'a1': 125, 'a2': 125, 'crit': 12, 'hits': 1, 'ai': 0,
+               'r': 'front', 'c': 'P'}
+    if not common.RED_ONLY:      # the launcher's Red mode uses the moves as a Red-only build has them (no Remixed numbers)
+        red = json.loads(json.dumps(moves))
+        red['Regular Attack'] = dict(regular)
+        os.makedirs(common.p(common.DATA, 'red'), exist_ok=True)
+        save(os.path.join('red', 'moves.json'), red)
     remixed_numbers(moves)
-    moves['Regular Attack'] = {'id': 0, 'name': 'Attack', 't': 'None', 'p': 1, 'pp': 0, 'a1': 125, 'a2': 125, 'crit': 12, 'hits': 1, 'ai': 0,
-                               'r': 'front', 'c': 'P'}
+    moves['Regular Attack'] = regular
     save('moves.json', moves)
 
     # ---------------- species

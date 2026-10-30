@@ -1,6 +1,7 @@
 """Moves the engine runs as status moves (category "X": no damage, handled by the status-move code), although
 Red's data gives them a physical/special category. Their original category is kept as "c_orig".
-Runs at the end of the eos step, after every tool that writes moves.json."""
+Runs at the end of the data step (data/moves.json and the Red copy data/red/moves.json) and again at the end of
+the eos step, after every tool that writes moves.json."""
 import os
 import sys
 
@@ -31,8 +32,10 @@ STATUS_MOVES = [
 SELF_BOOSTS = {"Sharpen": {"self": "atk", "st": 1}, "Meditate": {"self": "atk", "st": 1}, "Barrier": {"self": "def", "st": 2}}
 
 
-def main():
-    path = os.path.join(common.DATA, "moves.json")
+def main(path=None):
+    path = path or os.path.join(common.DATA, "moves.json")
+    if not os.path.exists(path):
+        return
     moves = common.load_json(path)
     n = 0
     for name in STATUS_MOVES:

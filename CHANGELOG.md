@@ -3,6 +3,21 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.23 (31 Oct 2026)
+
+- **MD-Recomp on the Releases page:** the Windows public build (`MD-Recomp.exe`) is attached to this release. It contains no game data: on its first start it builds the game from your own ROMs (Red Rescue Team alone, or with Explorers of Sky and Explorers Remixed). From this version on it updates itself with the script patches like every other build.
+- **Game page (launcher):** each part of the game is either Red Rescue Team's own or the added content, switchable one by one: Pokémon (Red's 386 or all), Dungeons (Red's or + Explorers of Sky), Abilities, Move data, Move animations, IQ skills, Items, Move Growth, Swap Shop, Mega Evolution, Fairy type, Remake rules and Remake items. **Vanilla Red** and **Everything** presets. Saves made with any choice still load.
+- **Red Rescue Team's own move animations:** with Move animations on Red's, moves play Red's effects (from the decompilation's effect tables), in Red's order: before the attack, at the hit, the projectile (at Red's speed, arcing where Red arcs) and on each target, with Red's sounds and the user's pose. Full-screen effects (Psychic, Haze, Heat Wave, Powder Snow ...) blend over the dungeon as on the GBA. Moves Red doesn't have borrow a Red move of their type.
+- **Every Pokémon can be met:** 54 Pokémon had no spawn anywhere (Yveltal, the Tapus, Arceus, Zacian ...). Now every Pokémon except Kecleon (still recruited only by fighting him as a thief) lives in at least one of Red's dungeons, and in Explorers of Sky's when those are on.
+- **Fairer spawns:** a Pokémon added to a dungeon is never much stronger than the floor's own Pokémon at that level (Ultra Beasts and other strong Pokémon could appear at Lv 1 in Purity Forest or Wish Cave), it shares a type with them (about 3,700 placements didn't), and legendaries, mythicals, Ultra Beasts and Paradox Pokémon are rare spawns deep in late-game dungeons of their type.
+- **Red's 386 plus your picks:** with Pokémon on Red's 386, the Pokémon page lists every generation (the later ones off) and you can switch on single ones, for example Dialga or the Ultra Beasts; they appear in Red's dungeons.
+- **Mega Evolution switch:** on, the Empowerment Seed drops after the story and Mega Evolves (or Primal Reverts) the Pokémon that can; off, neither. The unused Mega Stone item is gone.
+- **Fairy type switch:** off, later Fairy Pokémon get their types from before Fairy existed (Togekiss Normal/Flying, Whimsicott Grass, a pure Fairy one Normal) and Fairy moves become Normal, as in Red.
+- **Remake rules switch:** on Red's, recruiting, partner AI and status effects follow Red's rules (DX recruiting, Smarter partner AI and burn/poison wearing off are off), and those options leave Game Options. **Remake items:** the Exp. Share on or off.
+- **Move Growth and Swap Shop** are switched on the Game page (Move growth left Game Options).
+- **ROMs page (launcher):** shows which ROMs the game was built from and rebuilds it from others (add Explorers of Sky and Remixed to a Red-only setup, or go back to Red alone). Your game and saves stay as they are until the new build is done. When a newer version builds the game differently, the launcher says so and offers **Rebuild now** with your remembered ROMs.
+- **Red-only setups:** about 100 status moves (Nightmare, Encore, Counter ...) were treated as damaging moves; fixed. They now also get every Mega and Primal form, a working Empowerment Seed and the Exp. Share.
+
 ## v0.8.22 (30 Oct 2026)
 
 - **3D view, Friend Areas:** Pokémon stand on soft oval shadows (they were flat grey rectangles), and the figures are sized like in the dungeons (keeping their proportions), so a partner walking right behind the leader isn't hidden behind it.

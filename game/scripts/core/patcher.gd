@@ -14,8 +14,8 @@ extends Node
 ## This file is never patched (it is already running when the patch is mounted): bump BASE_CODE with the
 ## version, and BASE_REV whenever a change can't ship as a patch.
 
-const BASE_CODE := 78                 # = export_presets version/code of the build this file ships in
-const BASE_NAME := "0.8.22"
+const BASE_CODE := 79                 # = export_presets version/code of the build this file ships in
+const BASE_NAME := "0.8.23"
 const BASE_REV := 1                   # APK compatibility revision (data / assets / engine / project settings)
 ## Forks: set "pmd/update_url" in project.godot to your own patch.json ("" turns updates off).
 const DEFAULT_URL := "https://github.com/Ch4rizard-X/PMD-faith/releases/latest/download/patch.json"
@@ -35,7 +35,9 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if not exported():
 		return                                     # running from the project: the files are already current
-	romdata_mounted = ROMDATA.mount()              # the game's assets built from the player's ROMs (public builds)
+	# the game's assets built from the player's ROMs (public builds); not while the player is changing ROMs (the
+	# setup screen builds a new pack and the old one must not be held open)
+	romdata_mounted = ROMDATA.mount() if not ROMDATA.change_wanted() else false
 	var info := _read_json(DIR + "patch.json")
 	if info.is_empty():
 		return

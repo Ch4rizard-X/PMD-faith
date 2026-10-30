@@ -22,6 +22,7 @@ The game logic is ported from the community decompilation of the original game, 
 Added or changed, among them:
 
 - **Content from *Explorers of Sky* / *Explorers Remixed*:** dungeons, items, exclusive items, treasure boxes, abilities, IQ skills, move animations, music, an extra world map. Dungeons in several parts are played in one trip as in *Explorers of Sky* (Steam Cave, Upper Steam Cave, Steam Cave Peak ...). Recruiting works in the *Explorers of Sky* dungeons too (boss floors once the dungeon is cleared).
+- **Vanilla or anything in between:** every part of the game can be Red Rescue Team's own or the added content, one by one (Pokémon, dungeons, abilities, move data, move animations, IQ skills, items, Move Growth, Swap Shop, Mega Evolution, Fairy type, remake rules, remake items), with a Vanilla Red preset. With Red's move animations on, moves play *Red Rescue Team*'s own effects and sounds.
 - **Move Growth** from *Explorers Remixed*: damaging moves level up with use (up to Lv 25: more power, PP and accuracy). Optional.
 - **Hard mode:** a planned level curve through the story (ending with Rayquaza at Lv 70), a post-game from Lv 70 to 100, more wild Pokémon per floor. Normal or Hard, switchable any time.
 - **From *Rescue Team DX*:** Empowerment Seed (Awakened state with Mega Evolution), shiny Pokémon (including shiny hunting for legendaries), temporary recruits.
@@ -32,7 +33,8 @@ Added or changed, among them:
 - **Wonder Mail:** byte-compatible with the original codes, plus an in-game code maker.
 - **Second screen** (AYN Thor and other dual-screen devices, or a second window on PC), *Explorers of Sky*-style: the dungeon map, team and log; in town the team, location and jobs; item, job and dungeon info (what lives in a dungeon, in the Pokédex colours) and Friend Area residents while you browse.
 - **3D view (optional):** the dungeons as voxel dioramas built from their own tiles, with rounded voxel Pokémon, swaying grass, glowing lava, water and torch-lit dark floors; 14 shader packs and custom ones ([SHADERPACKS.md](SHADERPACKS.md)).
-- **Launcher (Windows public build):** choose which Pokémon (by generation or one by one) and which Explorers of Sky dungeons are in the game, and set the difficulty with presets and sliders, before you press Play.
+- **Every Pokémon has a home:** each one lives in at least one dungeon, at a level and strength that fit the floor and in a place that suits its type; legendaries are rare finds deep in late-game dungeons.
+- **Launcher (MD-Recomp):** before you press Play, pick Red's or the added version of each part of the game (Game page), which Pokémon are in (Red's 386 plus any you add, by generation or one by one) and which Explorers of Sky dungeons, and set the difficulty with presets and sliders. The ROMs page rebuilds the game from other ROMs (for example adding Explorers of Sky to a Red-only setup).
 - **Auto update:** script patches (a few hundred KB) download from this repository's Releases page and apply on the next start; nothing built from the ROMs is ever in a patch. Can be switched off.
 - **Platforms:** Android and Windows, touch controls, controller support with rebinding.
 
@@ -52,7 +54,7 @@ build_thor.bat, build_thor_debug.bat, set_godot_java.ps1   Windows build scripts
 
 **Mac / Linux:** set your ROM paths in `build_config.json` (copy `build_config.example.json`), run `python3 build_all.py`, then open the project in Godot 4.7.2.
 
-**Windows public build:** the "Windows Public" export preset makes an exe without any game data. On its first start it asks for the game folder made by the setup tools and builds what it needs into its own storage.
+**Windows, the easy way (MD-Recomp):** download `MD-Recomp.exe` from the [Releases](../../releases) page. It contains no game data: on its first start you pick your ROM files (Red Rescue Team alone, or with Explorers of Sky and Explorers Remixed) and it builds the game into its own storage (about 20-60 minutes, needs internet once for the community resources). It can also use a game folder made by the setup tools. It updates itself with the script patches.
 
 The step-by-step guide, with what to expect at each step and fixes for common problems, is [SETUP.md](SETUP.md).
 
@@ -60,7 +62,7 @@ The step-by-step guide, with what to expect at each step and fixes for common pr
 
 What changed in each version is in [CHANGELOG.md](CHANGELOG.md) and on the Releases page.
 
-Each release carries `patch.zip` and `patch.json`, built by `tools/release/make_patch.py` from the scripts, scenes and shaders in this repository. A game you built yourself downloads them automatically (Game Options -> Others -> Auto update) as long as it is new enough for them; when a change needs new game data or assets, rebuild with the latest code instead. To point your own fork at its own releases, change `pmd/update_url` in `game/project.godot`.
+Each release carries `patch.zip` and `patch.json` (and, from v0.8.23, `MD-Recomp.exe`), built by `tools/release/make_patch.py` from the scripts, scenes and shaders in this repository. A game you built yourself downloads them automatically (Game Options -> Others -> Auto update) as long as it is new enough for them; when a change needs new game data or assets, rebuild with the latest code instead. To point your own fork at its own releases, change `pmd/update_url` in `game/project.godot`.
 
 ## Credits
 

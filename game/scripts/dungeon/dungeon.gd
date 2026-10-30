@@ -2064,6 +2064,12 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 		anim = "Shoot" if mv.get("r", "front") in ["line", "room", "room_all", "floor_all"] else "Charge"
 	if mv.get("r", "") in ["user", "team_room", "team_floor"]:
 		anim = "Charge"
+	var red_pose := MoveFx.red_anim(m, move_name)      # Red-only build: Red's own pose for this move
+	if red_pose == "spin":
+		_red_spin(m)
+		anim = "Idle"
+	elif red_pose != "":
+		anim = red_pose
 	if m.visual:
 		m.visual.play(anim)
 		if anim == "Attack":
@@ -2107,7 +2113,7 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 		if mg_lv > 0:
 			MoveGrowth.sync_all(self)
 			_msg("[color=#7fe0ff]%s[/color] grew to Lv. %d!" % [move_name, mg_lv])
-	if move_name != "" and not _quiet:
+	if (move_name != "" or MoveFx.red_on()) and not _quiet:
 		await MoveFx.play(self, m, move_name, mv, d, targets)
 	var hits := maxi(1, int(mv.get("hits", 1)))
 	if int(mv.get("hits", 1)) == 0:
@@ -2332,6 +2338,14 @@ func _status_reactions(m: Mon, t: Mon, dmg: int, physical: bool) -> void:
 			_msg("%s took [color=#ffdc4a]%d[/color] damage!" % [_nm(b), dmg])
 			if b.hp <= 0:
 				await faint(b, t)
+
+## Red's spinning moves (animation 98 / 99): the user turns through all eight directions, 2 frames each.
+func _red_spin(m: Mon) -> void:
+	var f0 := m.facing
+	for i in 9:
+		m.facing = (f0 + i) % 8
+		await get_tree().create_timer(2.0 / 60.0).timeout
+	m.facing = f0
 
 func _status_move(m: Mon, mv: Dictionary, targets: Array) -> void:
 	if str(mv.get("name", "")) == "Bide":
@@ -4337,7 +4351,7 @@ func open_settings() -> void:
 			continue
 		match r.i if r.i < 2 else r.i - 1:
 			0: await _option_page("Dungeon", ["speed", "zoom", "map", "hunger", "autoplay"])
-			1: await _option_page("Others", ["ui_scale", "touch"] + QOL.KEYS)
+			1: await _option_page("Others", ["ui_scale", "touch"] + QOL.shown_keys())
 			2: await Controls.menu(ui_root)
 			3:
 				if await TeamScreens.ask(ui_root, "Reset the options to their default setting?", ["Yes", "No"], 1) == 0:

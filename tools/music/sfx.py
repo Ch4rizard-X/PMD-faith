@@ -26,8 +26,20 @@ OGG = ("201 203 205 206 212 213 330 348 400 450 451 453 454 455 457 458 459 460 
 GAIN = 1.22          # renderer output -> level of the old set (median peak ratio over the 117 audible files)
 
 
+def move_sounds():
+    """The sounds Red's move animations use (data/red_move_fx.json from tools/fx/red_moves.py)."""
+    p = os.path.join(common.DATA, "red_move_fx.json")
+    if not os.path.exists(p):
+        return set()
+    d = common.load_json(p)
+    ids = {m["sfx"] for m in d["moves"].values()} | {f["sfx"] for f in d["fx"].values()}
+    return {"%03d" % i for i in ids if 0 < i < 997}
+
+
 def files():
+    have = set(MP3.split()) | set(OGG.split())
     out = [(n, n + ".mp3", 44100) for n in MP3.split()] + [(n, n + ".ogg", 22050) for n in OGG.split()]
+    out += [(n, n + ".ogg", 22050) for n in move_sounds() - have]
     return sorted(out)
 
 

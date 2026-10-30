@@ -49,7 +49,15 @@ var low_flashes := 0                  # times the low-HP warning fired (tests)
 var _beep: AudioStreamPlayer
 
 static func opt(k: String) -> Variant:
+	var LC = load("res://scripts/core/launcher_cfg.gd")
+	if LC.red_rule(k):                              # the launcher's Game page: Remake rules on Red's
+		return LC.RED_RULES[k]
 	return Game.settings.get(k, DEFAULTS.get(k))
+
+## The options the menus show (the Remake rules ones go when the Game page has them on Red's).
+static func shown_keys() -> Array:
+	var LC = load("res://scripts/core/launcher_cfg.gd")
+	return KEYS.filter(func(k): return not LC.red_rule(k))
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_INHERIT

@@ -8,7 +8,7 @@ PMD-faith stands on the work of many people. Thank you all.
 
 ## Decompilation and research
 
-- **[pret/pmd-red](https://github.com/pret/pmd-red)** and all its contributors: the decompilation of *Red Rescue Team*. The game logic, rules, AI, story scripts, maps, text, fixed rooms, IQ, quiz, missions, Wonder Mail tables, graphics formats and the sound sequences all come from or were ported from it.
+- **[pret/pmd-red](https://github.com/pret/pmd-red)** and all its contributors: the decompilation of *Red Rescue Team*. The game logic, rules, AI, story scripts, maps, text, fixed rooms, IQ, quiz, missions, Wonder Mail tables, graphics formats, the sound sequences and the move animation tables (effects, timing, sounds and poses) all come from or were ported from it.
 - **[pret/pmd-sky](https://github.com/pret/pmd-sky)** and its contributors: the *Explorers of Sky* decompilation (IQ skill add-ons, data layouts).
 - **[UsernameFodder/pmdsky-debug](https://github.com/UsernameFodder/pmdsky-debug)** and its contributors: *Explorers of Sky* symbols and research.
 - **[SkyTemple](https://github.com/SkyTemple)** / [skytemple-files](https://github.com/SkyTemple/skytemple-files): *Explorers of Sky* file formats and `pmd2scriptdata.xml` (map names).
@@ -18,6 +18,8 @@ PMD-faith stands on the work of many people. Thank you all.
 ## Sprites and portraits
 
 - **[PMDCollab SpriteCollab](https://github.com/PMDCollab/SpriteCollab)**, licensed CC BY-NC 4.0: every Pokémon sprite and portrait the game uses, by CHUNSOFT (the original art) and 180+ community artists. The full list of artists, and who made each sprite and portrait, is in [CREDITS_SPRITES.md](CREDITS_SPRITES.md). The build writes an up-to-date copy of it to `build_work/tmp/CREDITS_sprites.md` from SpriteCollab's own `tracker.json` and `credit_names.txt`.
+
+- **MD-Recomp's icon:** the Mega Charizard X portrait by **Emboarger** (PMDCollab SpriteCollab, CC BY-NC 4.0).
 
 ## Added content
 

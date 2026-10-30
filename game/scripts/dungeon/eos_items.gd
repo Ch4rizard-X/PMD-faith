@@ -237,7 +237,7 @@ static func is_box(id: String) -> bool:
 ## or in a Friend Area can use; sometimes a rare item instead.
 static func open_box(rng: RandomNumberGenerator) -> String:
 	if rng.randi_range(0, 99) < 20:
-		var rare: Array = BOX_RARE.filter(func(k): return DB.items.has(k))
+		var rare: Array = BOX_RARE.filter(func(k): return DB.items.has(k) and (k != "empowerseed" or Awaken.can_drop()))
 		if not rare.is_empty():
 			return str(rare[rng.randi_range(0, rare.size() - 1)])
 	var r := rng.randi_range(0, 99)

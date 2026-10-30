@@ -45,7 +45,7 @@ def xbrz_tiles(img, tile=24, k=HD_K, pad=2):
 
 def main():
     common.need(os.path.join(common.PMDRED, 'baserom.gba'), 'Red ROM (pmd-red/baserom.gba)')
-    dbin = common.need(os.path.join(common.EOS, 'fs', 'DUNGEON', 'dungeon.bin'), 'Explorers of Sky DUNGEON/dungeon.bin')
+    dbin = None if common.RED_ONLY else common.need(os.path.join(common.EOS, 'fs', 'DUNGEON', 'dungeon.bin'), 'Explorers of Sky DUNGEON/dungeon.bin')
     os.makedirs(OUT, exist_ok=True)
     meta = {}
     # ---- Red
@@ -67,14 +67,15 @@ def main():
         meta[k] = e
     print('red tilesets 64 (+t14, %d hd)' % len(HD_RED), flush=True)
     # ---- Explorers of Sky
-    E = ET.pack_entries(open(dbin, 'rb').read())
-    for t in range(ET.N_TILESETS):
+    n_eos = 0 if dbin is None else ET.N_TILESETS
+    E = ET.pack_entries(open(dbin, 'rb').read()) if dbin else None
+    for t in range(n_eos):
         img, rules = ET.render(E, t)
         k = 's%03d' % t
         Image.fromarray(img, 'RGB').save(common.p(os.path.join(OUT, k + '.png')), optimize=True)
         meta[k] = {'img': k + '.png', 'cols': 10, 'rules': rules}
-    print('eos tilesets', ET.N_TILESETS, flush=True)
-    order = ['t14'] + ['r%02d' % i for i in range(64)] + ['s%03d' % i for i in range(ET.N_TILESETS)]
+    print('eos tilesets', n_eos, flush=True)
+    order = ['t14'] + ['r%02d' % i for i in range(64)] + ['s%03d' % i for i in range(n_eos)]
     common.save_json(os.path.join(common.DATA, 'tilesets.json'), {k: meta[k] for k in order})
 
 

@@ -15,6 +15,7 @@ pret/pmd-sky (IQ skill add-ons) and the extracted Explorers of Sky / Remixed ROM
 Stage 2 (tools/eos, tools/data/convert_remix.py, gen_eos_items.py, gen_extra_spread.py, gen_megas_dx.py) runs afterwards."""
 import os
 import runpy
+import shutil
 import sys
 import time
 
@@ -46,12 +47,41 @@ def main():
     common.need(common.PMDRED, "pret/pmd-red")
     common.need(common.POKEAPI_CSV, "PokeAPI CSV data")
     # Remixed move numbers (tools/eos/extract.py -> tools/fx/build_data.py); made here if stage 2 has not made them yet
-    if not os.path.exists(os.path.join(common.TMP, "eos", "moveanim", "moves_data.json")):
+    if not common.RED_ONLY and not os.path.exists(os.path.join(common.TMP, "eos", "moveanim", "moves_data.json")):
         if not os.path.exists(os.path.join(common.TMP, "eos", "strings_e.json")):
             run(os.path.join(TOOLS, "eos", "extract.py"))
         run(os.path.join(TOOLS, "fx", "build_data.py"))
+    red_dir = os.path.join(common.DATA, "red")
     for s in STEPS:
+        if s == "gen_iq_sky" and not common.RED_ONLY:     # Red's own IQ skills, before Explorers of Sky's are added
+            shutil.copy(os.path.join(common.DATA, "iq.json"), os.path.join(red_dir, "iq.json"))
+        if common.RED_ONLY and s == "gen_iq_sky":        # Explorers of Sky's IQ skills (its text)
+            continue
         run(os.path.join(HERE, s + ".py"))
+    # Rescue Team DX's Mega Evolutions, the Empowerment Seed and the remake's Exp. Share in every build (the launcher's Mega Evolution switch
+    # turns them on or off); the old prototype's unused Mega Stone item goes
+    run(os.path.join(HERE, "gen_megas_dx.py"))
+    import gen_eos_items
+    items_path = os.path.join(common.DATA, "items.json")
+    items = common.load_json(items_path)
+    items.pop("megastone", None)
+    if "empowerseed" in items:
+        items["empowerseed"].update(gen_eos_items.EMPOWER_SEED)
+    items.setdefault("expshare", dict(gen_eos_items.EXP_SHARE))     # the remake's Exp. Share (Game page: Remake items)
+    common.save_json(items_path, items)
+    # status moves Red's data gives a damage category (also in Red-only builds, which have no eos step)
+    import fix_move_classes
+    fix_move_classes.main()
+    fix_move_classes.main(os.path.join(red_dir, "moves.json"))
+    # The launcher's Game page (each part of a full build Red's own or Explorers of Sky's): the tables as a Red-only
+    # build has them, before the Explorers of Sky step changes them (data/red/, laid over the full ones by the game).
+    if common.RED_ONLY:
+        if os.path.isdir(red_dir):
+            shutil.rmtree(red_dir)
+    else:
+        for n in ("species.json", "items.json", "dungeons.json"):
+            shutil.copy(os.path.join(common.DATA, n), os.path.join(red_dir, n))
+    common.save_json(os.path.join(common.DATA, "build_info.json"), {"red_only": bool(common.RED_ONLY)})
     print("data stage 1 done")
 
 

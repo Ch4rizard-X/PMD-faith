@@ -39,6 +39,23 @@ func _ready() -> void:
 	layer = 40
 	DisplayServer.window_set_title("MD-Recomp")
 	cfg = LC.cfg().duplicate(true)
+	_list_mons()
+	_bg = Control.new()
+	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_bg.theme = UITheme.theme()
+	_bg.draw.connect(_draw_bg)
+	add_child(_bg)
+	_load_backdrop()
+	_show_main()
+	if get_node_or_null("/root/Patcher") and get_node("/root/Patcher").get("romdata_mounted") and load("res://scripts/core/romdata.gd").outdated_notice_due():
+		_show_roms.call_deferred()                   # once per exe: tell the player there's new game data
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--launchershot"):
+			_shots.call_deferred()
+
+## The Pokémon the Pokémon page lists, by generation (Red only: Red's own).
+func _list_mons() -> void:
+	_mons_by_gen = {}
 	for k in DB.species:
 		var s := str(k)
 		if s.length() == 4 and s.is_valid_int():
@@ -48,16 +65,84 @@ func _ready() -> void:
 			_mons_by_gen[g].append(s)
 	for g in _mons_by_gen:
 		_mons_by_gen[g].sort()
-	_bg = Control.new()
-	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_bg.theme = UITheme.theme()
-	_bg.draw.connect(_draw_bg)
-	add_child(_bg)
-	_load_backdrop()
-	_show_main()
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--launchershot"):
-			_shots.call_deferred()
+	if not _mons_by_gen.has(_gen):
+		_gen = 1
+
+# ------------------------------------------------------------------ Game (full builds)
+## Each part of the game Red's own or Explorers of Sky / Remixed's (scripts/core/launcher_cfg.gd PARTS), with
+## Vanilla Red / Everything presets.
+func _show_game() -> void:
+	var v := _new_page(true)
+	_top_bar(v, "Game", "")
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	v.add_child(h)
+	h.add_child(_lbl("Presets", SMALL, DIM))
+	h.add_child(_btn(" Vanilla Red ", _set_parts.bind(true)))
+	h.add_child(_btn(" Everything ", _set_parts.bind(false)))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(sp)
+	h.add_child(_lbl(_game_summary(), SMALL, GOLD))
+	var g := GridContainer.new()
+	g.columns = 4
+	g.add_theme_constant_override("h_separation", 8)
+	g.add_theme_constant_override("v_separation", 3)
+	v.add_child(g)
+	var desc := _lbl("", SMALL, DIM)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size.y = 30
+	var first: Button = null
+	for P in LC.switchable():
+		var red := LC.red_part(str(P[0]))
+		var l := _lbl(str(P[1]), SMALL)
+		l.custom_minimum_size.x = 92
+		g.add_child(l)
+		var b := _btn(str(P[2]) if red else str(P[3]), _toggle_part.bind(str(P[0])))
+		b.custom_minimum_size.x = 118
+		b.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45) if red else Color(0.6, 0.85, 1.0))
+		b.focus_entered.connect(func(): desc.text = str(P[4]))
+		b.mouse_entered.connect(func(): desc.text = str(P[4]))
+		g.add_child(b)
+		if first == null or str(P[0]) == _game_focus:
+			first = b
+			desc.text = str(P[4])
+	v.add_child(desc)
+	if first:
+		first.grab_focus.call_deferred()      # the part just switched keeps the focus (controller / keys)
+
+var _game_focus := ""
+
+func _toggle_part(k: String) -> void:
+	_game_focus = k
+	var parts: Dictionary = cfg.get("parts", {}).duplicate()
+	parts[k] = not LC.red_part(k)
+	cfg["parts"] = parts
+	_parts_changed()
+
+func _set_parts(red: bool) -> void:
+	var parts := {}
+	for P in LC.switchable():
+		parts[P[0]] = red
+	cfg["parts"] = parts
+	_parts_changed()
+
+func _parts_changed() -> void:
+	_save()
+	_list_mons()
+	_show_game()
+
+func _game_summary() -> String:
+	var parts: Array = LC.switchable()
+	var n := 0
+	for P in parts:
+		if LC.red_part(str(P[0])):
+			n += 1
+	if n == parts.size():
+		return "Vanilla Red Rescue Team"
+	if n == 0:
+		return "Red + Mega Evolution" if LC.red_build() else "Red + Explorers of Sky + Remixed + DX"
+	return "Custom: %d of %d parts Red's" % [n, parts.size()]
 
 # ------------------------------------------------------------------ backdrop
 ## Red's title artwork (built from the player's ROM: assets/ui/menu_artwork_*.png) slowly panning and
@@ -283,6 +368,15 @@ func _show_main() -> void:
 	ver.custom_minimum_size.x = 200
 	ver.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	left.add_child(ver)
+	if P and P.get("romdata_mounted"):              # the ROMs the game was built from; add or change them
+		var R = load("res://scripts/core/romdata.gd")
+		var outdated: bool = R.data_outdated()
+		var rb := _btn(" New game data available! " if outdated else " ROMs: %s " % _roms_summary(), _show_roms)
+		if outdated:
+			rb.add_theme_color_override("font_color", GOLD)
+		rb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		rb.custom_minimum_size.x = 200
+		left.add_child(rb)
 	# right: the menu in a Red window
 	var menu := VBoxContainer.new()
 	menu.add_theme_constant_override("separation", 3)
@@ -294,6 +388,10 @@ func _show_main() -> void:
 		["Pokémon", _show_mons, _mons_summary()],
 		["Dungeons", _show_dungeons, _dungeons_summary()],
 		["Difficulty", _show_difficulty, _difficulty_summary()]]
+	if LC.red_part("dungeons"):                         # no Explorers of Sky dungeons to choose
+		rows.remove_at(2)
+	if not LC.switchable().is_empty():                  # each part Red's own or the remake's additions
+		rows.insert(1, ["Game", _show_game, _game_summary()])
 	var first: Button = null
 	for r in rows:
 		var b := _btn(str(r[0]), r[1], BIG)
@@ -306,9 +404,77 @@ func _show_main() -> void:
 			b.add_theme_color_override("font_color", GOLD)
 	first.grab_focus.call_deferred()
 
+# ------------------------------------------------------------------ ROMs
+func _roms_summary() -> String:
+	return "Red Rescue Team" if LC.red_build() else "Red + Explorers of Sky + Remixed"
+
+## Which ROMs the game was built from, and a new build from other ones (the setup screen, after a restart).
+func _show_roms() -> void:
+	var v := _new_page(true)
+	_top_bar(v, "ROMs", "")
+	var R = load("res://scripts/core/romdata.gd")
+	if R.data_outdated():                           # this exe's setup tools are newer than the game data
+		R.outdated_notice_seen()
+		var n := _lbl("New game data is available: this version builds the game differently (for example where Pokémon live, new animations or options). Rebuild it with your ROMs to get it. Your saves are kept.", SMALL, GOLD)
+		n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.add_child(n)
+		var rn := _btn("  Rebuild now  ", _rebuild_now, BIG)
+		rn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		v.add_child(rn)
+	v.add_child(_lbl("Built from:  " + ("Red Rescue Team" if LC.red_build() else "Red Rescue Team + Explorers of Sky + Explorers Remixed"), SMALL, GOLD))
+	var t := _lbl(("Add Explorers of Sky and Explorers Remixed to get their dungeons, Pokémon, move animations, IQ skills and items; then the Game page switches each part between Red's and theirs." if LC.red_build()
+		else "Build from Red Rescue Team alone, or from other copies of the ROMs. (To play as Red without rebuilding, use the Game page.)")
+		+ "\n\nThe game restarts into the setup screen with your ROMs filled in. Your current game and your saves stay as they are until the new build is done (about 20-60 minutes, needs internet); \"Back to the game\" there keeps everything as it is.", SMALL, DIM)
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(t)
+	var can: bool = ResourceLoader.exists("res://scripts/core/rom_import.gd") and load("res://scripts/core/rom_import.gd").available()
+	var b := _btn("  Add Explorers of Sky + Remixed...  " if LC.red_build() else "  Change ROMs...  ", _change_roms, BIG)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	b.disabled = not can
+	v.add_child(b)
+	if not can:
+		v.add_child(_lbl("This copy has no setup tools inside: build with the PC setup tools again (SETUP.md).", SMALL, DIM))
+
+## New game data: the setup screen starts building right away with the remembered ROMs.
+func _rebuild_now() -> void:
+	_save()
+	var R = load("res://scripts/core/romdata.gd")
+	R.request_change(true)
+	if not R.restart():
+		R.cancel_change()
+
+func _change_roms() -> void:
+	_save()
+	var R = load("res://scripts/core/romdata.gd")
+	R.request_change()
+	if not R.restart():
+		R.cancel_change()
+
 func _play() -> void:
 	_save()
 	play_pressed.emit()
+
+## A Pokémon is switched on. With Pokémon on Red's 386 (the Game page), the later ones are off unless added
+## ("mons_extra"); otherwise everyone is on unless switched off ("mons_off").
+func _on(s: String) -> bool:
+	if _red_mons() and not LC.red_mon(s):
+		return s in cfg.get("mons_extra", [])
+	return not s in cfg.mons_off
+
+func _red_mons() -> bool:
+	return LC.red_part("pokemon")
+
+func _set_on(s: String, on: bool) -> void:
+	if _red_mons() and not LC.red_mon(s):
+		if not cfg.has("mons_extra"):
+			cfg["mons_extra"] = []
+		cfg.mons_extra.erase(s)
+		if on:
+			cfg.mons_extra.append(s)
+		return
+	cfg.mons_off.erase(s)
+	if not on:
+		cfg.mons_off.append(s)
 
 func _mons_summary() -> String:
 	var on: int = 0
@@ -316,7 +482,7 @@ func _mons_summary() -> String:
 	for g in _mons_by_gen:
 		for s in _mons_by_gen[g]:
 			tot += 1
-			if not s in cfg.mons_off:
+			if _on(s):
 				on += 1
 	return "%d of %d Pokémon" % [on, tot]
 
@@ -355,6 +521,8 @@ func _show_mons() -> void:
 	_gen_btns = {}
 	tabs.add_child(_lbl("Gen", SMALL, DIM))
 	for g in range(1, 10):
+		if not _mons_by_gen.has(g):
+			continue
 		var b := _btn(" %d " % g, _pick_gen.bind(g))
 		b.toggle_mode = true
 		tabs.add_child(b)
@@ -420,7 +588,7 @@ var _hover_lbl: Label
 
 func _hover_mon(s: String) -> void:
 	if _hover_lbl:
-		_hover_lbl.text = "#%d %s%s" % [int(s), DB.species[s].name, "" if not s in cfg.mons_off else "  (off)"]
+		_hover_lbl.text = "#%d %s%s" % [int(s), DB.species[s].name, "" if _on(s) else "  (off)"]
 
 func _portrait(s: String) -> Texture2D:
 	if _tex_cache.has(s):
@@ -430,23 +598,17 @@ func _portrait(s: String) -> Texture2D:
 	return t
 
 func _style_mon(b: Button, s: String) -> void:
-	var on: bool = not s in cfg.mons_off
+	var on: bool = _on(s)
 	b.modulate = Color.WHITE if on else OFF_TINT
 
 func _toggle_mon(s: String, b: Button) -> void:
-	if s in cfg.mons_off:
-		cfg.mons_off.erase(s)
-	else:
-		cfg.mons_off.append(s)
+	_set_on(s, not _on(s))
 	_style_mon(b, s)
 	_refresh_mon_counts()
 
 func _set_gen(on: bool) -> void:
 	for s in _mons_by_gen.get(_gen, []):
-		if on:
-			cfg.mons_off.erase(s)
-		elif not s in cfg.mons_off:
-			cfg.mons_off.append(s)
+		_set_on(s, on)
 	for b in _grid.get_children():
 		if b.has_meta("sp"):
 			_style_mon(b, str(b.get_meta("sp")))
@@ -454,19 +616,20 @@ func _set_gen(on: bool) -> void:
 
 func _preset_gens(gens: Array) -> void:
 	cfg.mons_off = []
+	cfg["mons_extra"] = []
 	for g in _mons_by_gen:
-		if not int(g) in gens:
-			cfg.mons_off.append_array(_mons_by_gen[g])
+		for s in _mons_by_gen[g]:
+			_set_on(s, int(g) in gens)
 	_pick_gen(_gen)
 
 func _refresh_mon_counts() -> void:
 	_mon_info.text = _mons_summary()
 	var lst: Array = _mons_by_gen.get(_gen, [])
-	var on: int = lst.filter(func(s): return not s in cfg.mons_off).size()
+	var on: int = lst.filter(func(s): return _on(s)).size()
 	_gen_head.text = "%d / %d on" % [on, lst.size()]
 	for g in _gen_btns:
 		var l2: Array = _mons_by_gen.get(g, [])
-		var o2: int = l2.filter(func(s): return not s in cfg.mons_off).size()
+		var o2: int = l2.filter(func(s): return _on(s)).size()
 		_gen_btns[g].modulate = Color.WHITE if o2 > 0 else OFF_TINT
 
 # ------------------------------------------------------------------ Dungeons

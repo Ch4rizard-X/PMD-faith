@@ -11,10 +11,70 @@ extends RefCounted
 ##   plus <path>.import pointing at it; JSON and every other file are stored as they are.
 ## Loaded by path (no class_name): preload("res://scripts/core/romdata.gd").
 
-const DIR := "user://romdata/"
-const ZIP := "user://romdata/romdata.zip"
-const INFO := "user://romdata/romdata.json"
+## Where the data lives. "--test-setup" keeps everything in user://test_setup/ instead: a first launch from
+## scratch (setup screen, build, pack) next to an existing install, without touching it.
+static var BASE := "user://test_setup/" if OS.get_cmdline_user_args().has("--test-setup") else "user://"
+static var DIR := BASE + "romdata/"
+static var ZIP := BASE + "romdata/romdata.zip"
+static var INFO := BASE + "romdata/romdata.json"
 const VERSION := 1                   # bump when the pack layout changes (forces a rebuild)
+
+## The launcher's ROMs page asked for a new build from other ROMs (e.g. adding Explorers of Sky + Remixed to a
+## Red-only setup): the next start skips mounting the pack and opens the setup screen; the old pack stays in use
+## until the new one is done (Builder writes romdata.zip.part and swaps it in at the end).
+static var REQUEST := BASE + "romdata/change_roms.json"
+
+static func change_wanted() -> bool:
+	return FileAccess.file_exists(REQUEST)
+
+## auto: start the build straight away with the remembered ROMs (the "Rebuild now" of new game data).
+static func request_change(auto := false) -> void:
+	DirAccess.make_dir_recursive_absolute(DIR)
+	var f := FileAccess.open(REQUEST, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify({"auto": auto}))
+
+static func change_auto() -> bool:
+	return bool(_read_json(REQUEST).get("auto", false))
+
+## The game data was built with other setup tools than the ones in this exe (new spawn rules, new content ...).
+static func data_outdated() -> bool:
+	if not ResourceLoader.exists("res://scripts/core/rom_import.gd") or not installed():
+		return false                                 # no in-app setup in this build (only MD-Recomp has it)
+	var I = load("res://scripts/core/rom_import.gd")
+	if not I.available():
+		return false
+	return str(_read_json(INFO).get("tools", "")) != I.tools_hash()
+
+## Shown once per exe: the launcher opens the ROMs page by itself the first time it sees outdated data.
+static func outdated_notice_due() -> bool:
+	if not data_outdated():
+		return false
+	var I = load("res://scripts/core/rom_import.gd")
+	return str(_read_json(DIR + "notice.json").get("seen", "")) != I.tools_hash()
+
+static func outdated_notice_seen() -> void:
+	var I = load("res://scripts/core/rom_import.gd")
+	var f := FileAccess.open(DIR + "notice.json", FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify({"seen": I.tools_hash()}))
+
+static func cancel_change() -> void:
+	if FileAccess.file_exists(REQUEST):
+		DirAccess.remove_absolute(REQUEST)
+
+## Restarts the app (desktop); false where it can't (the player opens it again).
+static func restart() -> bool:
+	if OS.get_name() in ["Windows", "Linux", "macOS"]:
+		var args := Array(OS.get_cmdline_args())
+		var user := OS.get_cmdline_user_args()        # the options after "--" (--test-setup ...) aren't in get_cmdline_args
+		if not user.is_empty() and not args.has("--"):
+			args.append("--")
+			args.append_array(Array(user))
+		OS.set_restart_on_exit(true, PackedStringArray(args))
+		Engine.get_main_loop().quit()
+		return true
+	return false
 
 ## Bundled (dev / private builds) or mounted from romdata: is the game's data there?
 static func present() -> bool:
@@ -65,6 +125,7 @@ static func _walk(root: String, rel: String, out: PackedStringArray) -> void:
 # ------------------------------------------------------------------ building the pack
 ## A builder that works through the files a slice at a time (call step() every frame; progress 0..1).
 class Builder:
+	var _P = load("res://scripts/core/romdata.gd")   # the paths (static vars of the outer script)
 	var src := ""
 	var files: PackedStringArray
 	var i := 0
@@ -72,6 +133,7 @@ class Builder:
 	var error := ""
 	var done := false
 	var stats := {"img": 0, "audio": 0, "font": 0, "raw": 0, "bytes": 0}
+	var tools := ""                       # the setup tools' fingerprint (rom_import.gd tools_hash), kept in romdata.json
 	var _t0 := 0
 
 	func start(source: String) -> String:
@@ -80,12 +142,12 @@ class Builder:
 		if error != "":
 			return error
 		files = _list()
-		DirAccess.make_dir_recursive_absolute(DIR)
-		if FileAccess.file_exists(ZIP + ".part"):
-			DirAccess.remove_absolute(ZIP + ".part")
+		DirAccess.make_dir_recursive_absolute(_P.DIR)
+		if FileAccess.file_exists(_P.ZIP + ".part"):
+			DirAccess.remove_absolute(_P.ZIP + ".part")
 		zip = ZIPPacker.new()
 		zip.compression_level = 0          # textures / audio are compressed already: store
-		if zip.open(ZIP + ".part") != OK:
+		if zip.open(_P.ZIP + ".part") != OK:
 			error = "Couldn't write to the game's storage."
 			return error
 		_t0 = Time.get_ticks_msec()
@@ -169,7 +231,7 @@ class Builder:
 		return ""
 
 	func _save_res(rel: String, res: Resource, importer: String, type: String, kind: String) -> String:
-		var tmp := DIR + "tmp_res.res"
+		var tmp: String = _P.DIR + "tmp_res.res"
 		if ResourceSaver.save(res, tmp) != OK:
 			return "couldn't convert"
 		var to := ".romdata/%s.res" % rel
@@ -242,15 +304,16 @@ class Builder:
 		return {"w": w, "h": h, "fmt": fmt}
 
 	func _finish() -> void:
-		var info := {"version": VERSION, "files": files.size(), "made": Time.get_datetime_string_from_system(), "stats": stats}
+		var info := {"version": VERSION, "files": files.size(), "made": Time.get_datetime_string_from_system(), "stats": stats,
+			"tools": tools}
 		_put(".romdata/info.json", JSON.stringify(info).to_utf8_buffer())
 		zip.close()
-		if FileAccess.file_exists(ZIP):
-			DirAccess.remove_absolute(ZIP)
-		DirAccess.rename_absolute(ZIP + ".part", ZIP)
-		if FileAccess.file_exists(DIR + "tmp_res.res"):
-			DirAccess.remove_absolute(DIR + "tmp_res.res")
-		var fw := FileAccess.open(INFO, FileAccess.WRITE)
+		if FileAccess.file_exists(_P.ZIP):
+			DirAccess.remove_absolute(_P.ZIP)
+		DirAccess.rename_absolute(_P.ZIP + ".part", _P.ZIP)
+		if FileAccess.file_exists(_P.DIR + "tmp_res.res"):
+			DirAccess.remove_absolute(_P.DIR + "tmp_res.res")
+		var fw := FileAccess.open(_P.INFO, FileAccess.WRITE)
 		if fw:
 			fw.store_string(JSON.stringify(info))
 		done = true

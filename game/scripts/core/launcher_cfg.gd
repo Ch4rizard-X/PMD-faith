@@ -4,7 +4,7 @@ extends RefCounted
 ## APK) nothing changes: every Pokémon and dungeon is on and the difficulty is the one in Game Options.
 ## Loaded by path (no class_name): preload("res://scripts/core/launcher_cfg.gd").
 
-const PATH := "user://launcher.json"
+static var PATH := ("user://test_setup/" if OS.get_cmdline_user_args().has("--test-setup") else "user://") + "launcher.json"   # the setup test keeps its own
 const VERSION := 1
 
 ## Difficulty sliders: key -> [label, min, max, step, normal, unit]
@@ -36,7 +36,7 @@ static var _cfg := {}
 static var _loaded := false
 
 static func defaults() -> Dictionary:
-	var d := {"v": VERSION, "mons_off": [], "dungeons_off": [], "hard": false, "preset": "Normal", "d": {}}
+	var d := {"v": VERSION, "parts": {}, "mons_off": [], "mons_extra": [], "dungeons_off": [], "hard": false, "preset": "Normal", "d": {}}
 	for k in SLIDERS:
 		d.d[k] = int(SLIDERS[k][4])
 	return d
@@ -79,27 +79,162 @@ static func save(c: Dictionary) -> void:
 	_cfg = c.duplicate(true)
 	_loaded = true
 	_rebuild_sets()
+	_red_keys = {}
 
 static var _mons_off := {}
+static var _mons_extra := {}
 static var _dun_off := {}
 
 static func _rebuild_sets() -> void:
 	_mons_off = {}
+	_mons_extra = {}
 	_dun_off = {}
 	for s in _cfg.get("mons_off", []):
 		_mons_off[str(s).substr(0, 4)] = true
+	for s in _cfg.get("mons_extra", []):              # Pokémon switched on on top of Red's 386
+		_mons_extra[str(s).substr(0, 4)] = true
 	for k in _cfg.get("dungeons_off", []):
 		_dun_off[str(k)] = true
 
 # ------------------------------------------------------------------ what's in the game
-## A species is in the game (forms and Megas follow their base number).
+static var _red_build := -1
+static var _red_data := -1
+static var _red_keys := {}
+
+## The game data was built from the Red Rescue Team ROM alone (MD-Recomp's Red-only setup): only Red's
+## Pokémon (Gen 1-3) and dungeons, no Explorers of Sky content (data/build_info.json, written by the build).
+static func red_build() -> bool:
+	if _red_build < 0:
+		_red_build = 0
+		if FileAccess.file_exists("res://data/build_info.json"):
+			var v = JSON.parse_string(FileAccess.get_file_as_string("res://data/build_info.json"))
+			if typeof(v) == TYPE_DICTIONARY and bool(v.get("red_only", false)):
+				_red_build = 1
+	return _red_build == 1
+
+## A full build (Red + Explorers of Sky + Remixed) can be played as Red, as everything, or anything between: the
+## build keeps the tables as a Red-only build has them in data/red/ (tools/data/build.py), and the launcher's
+## Game page picks Red's or Explorers of Sky / Remixed's version of each part.
+static func has_parts() -> bool:
+	if _red_data < 0:
+		_red_data = 1 if not red_build() and FileAccess.file_exists("res://data/red/species.json") else 0
+	return _red_data == 1
+
+## The parts of the game that can be Red's own or the remake's additions:
+## [key, name, Red's version, the other version, what it changes, what it needs: "red" = the Red tables a full
+## build keeps (data/red/), "eos" = Explorers of Sky / Remixed data (not a Red-only build), "" = nothing]
+const PARTS := [
+	["pokemon", "Pokémon", "Red's 386", "All", "Red's Gen 1-3 Pokémon, or every generation and form (single ones: the Pokémon page).", "red"],
+	["dungeons", "Dungeons", "Red's", "+ Explorers of Sky", "Red's dungeons, or Explorers of Sky's too (which ones: the Dungeons page).", "red"],
+	["abilities", "Abilities", "Red's", "Remixed", "Red's Pokémon keep Red's abilities, or take the ones Explorers Remixed gave them.", "red"],
+	["moves", "Move data", "Red's", "Remixed", "Power, accuracy and PP of the moves Red doesn't have: estimates, or Explorers Remixed's numbers.", "red"],
+	["anim", "Move animations", "Red's", "Explorers of Sky", "Red Rescue Team's move animations and sounds, or Explorers of Sky's.", "red"],
+	["iq", "IQ skills", "Red's 23", "+ Sky's", "Red's IQ skills, or Explorers of Sky's added to them.", "red"],
+	["items", "Items", "Red's", "+ Explorers of Sky", "Explorers of Sky / Remixed items: floor drops, exclusive items, boxes.", "red"],
+	["growth", "Move Growth", "Off", "On", "Explorers Remixed's Move Growth: moves gain Exp. with use and level up (more power, accuracy, PP).", "eos"],
+	["swapshop", "Swap Shop", "Off", "On", "Croagunk's Swap Shop in Pokémon Square (Explorers Remixed's item recipes).", "eos"],
+	["megas", "Mega Evolution", "Off", "On", "Rescue Team DX's Empowerment Seed: it drops after the story and Mega Evolves (or Primal Reverts) the Pokémon that can.", ""],
+	["fairy", "Fairy type", "Off", "On", "Red has no Fairy type. Off: later Fairy Pokémon and Fairy moves go back to their older types (pure Fairy = Normal, as Clefairy is).", ""],
+	["rules", "Remake rules", "Red's", "Remake", "DX recruiting, Smarter partner AI, burn and poison wearing off. Red's: Red's own rules (and they leave Game Options).", ""],
+	["remakeitems", "Remake items", "Off", "On", "The remake's own items: the Exp. Share (Kecleon stocks one now and then).", ""],
+]
+
+## Parts the launcher's Game page can switch in this build (a Red-only build: the ones that need no Explorers of Sky data).
+static func switchable() -> Array:
+	return PARTS.filter(func(P): return _can_switch(str(P[5])))
+
+static func _can_switch(need: String) -> bool:
+	match need:
+		"red":
+			return has_parts()
+		"eos":
+			return not red_build()
+	return true
+
+## Part <p> is Red's own version. A part this build can't switch is Red's in a Red-only build and the additions in a
+## full build without Red tables (the APK, dev builds); otherwise the Game page decides (unset: Red's in a Red-only
+## build, the additions in a full one).
+static func red_part(p: String) -> bool:
+	var need := ""
+	for P in PARTS:
+		if P[0] == p:
+			need = str(P[5])
+	if not _can_switch(need):
+		return red_build()
+	return bool(cfg().get("parts", {}).get(p, red_build()))
+
+## Which parts are Red's: {key: bool}.
+static func red_parts() -> Dictionary:
+	var out := {}
+	for P in PARTS:
+		out[P[0]] = red_part(P[0])
+	return out
+
+## Every part is Red's: vanilla Red Rescue Team (a Red-only build, or a full build set to Vanilla Red).
+static func red_only() -> bool:
+	return not red_parts().values().has(false)
+
+## The keys of a Red table ("species" / "dungeons") from data/red/.
+static func red_keys(table: String) -> Dictionary:
+	if not _red_keys.has(table):
+		var keys := {}
+		var v = JSON.parse_string(FileAccess.get_file_as_string("res://data/red/%s.json" % table)) if has_parts() else null
+		if typeof(v) == TYPE_DICTIONARY:
+			for k in (v.get("dungeons", {}) if table == "dungeons" else v):
+				keys[str(k)] = true
+		_red_keys[table] = keys
+	return _red_keys[table]
+
+## The path of a data file: when its part is Red's, the Red version (data/red/<name>.json) when there is one,
+## and "" for Explorers of Sky / Remixed-only tables a Red-only build doesn't have.
+const PART_OF := {"iq": "iq", "swap_shop": "swapshop", "move_growth": "growth"}
+const EOS_ONLY := ["swap_shop", "move_growth"]
+static func data_path(name: String) -> String:
+	if has_parts() and red_part(str(PART_OF.get(name, ""))):
+		if name in EOS_ONLY:
+			return ""
+		if FileAccess.file_exists("res://data/red/%s.json" % name):
+			return "res://data/red/%s.json" % name
+	return "res://data/%s.json" % name
+
+## A species is one of Red's: Gen 1-3, no Megas or Primals (and in a full build in Red's table).
+static func red_mon(sp: String) -> bool:
+	if has_parts() and not red_keys("species").has(sp):
+		return false
+	if is_mega(sp):                                       # Megas / Primals: the Mega Evolution switch
+		return false
+	var base := sp.substr(0, 4)
+	return not (base.is_valid_int() and gen_of(int(base)) > 3)
+
+static func is_mega(sp: String) -> bool:
+	return sp.length() > 4 and sp[4] in ["M", "P"]
+
+## Red's rules instead of the remake's (the Game page's Remake rules part): these options take Red's value.
+const RED_RULES := {"qol_statusfade": false, "qol_recruit": 0, "qol_partner_ai": 0}
+
+static func red_rule(k: String) -> bool:
+	return RED_RULES.has(k) and red_part("rules")
+
+## Mega Evolution (and the Empowerment Seed) is on.
+static func megas_on() -> bool:
+	return not red_part("megas")
+
+## A species is in the game (forms follow their base number; Megas / Primals need Mega Evolution on). With Pokémon on
+## Red's 386, a later one is in only when the Pokémon page switched it on ("mons_extra").
 static func mon_on(sp: String) -> bool:
 	_load()
-	return _mons_off.is_empty() or not _mons_off.has(sp.substr(0, 4))
+	var base := sp.substr(0, 4)
+	if is_mega(sp):
+		return megas_on() and mon_on(base)
+	if red_part("pokemon") and not red_mon(sp):
+		return _mons_extra.has(base)                      # Red's 386 plus the ones switched on (the Pokémon page)
+	return _mons_off.is_empty() or not _mons_off.has(base)
 
 ## A dungeon is in the game: Red's always; an Explorers of Sky one unless its chain was switched off.
 static func dungeon_on(k: String) -> bool:
 	_load()
+	if has_parts() and red_part("dungeons") and not red_keys("dungeons").has(k):
+		return false
 	if _dun_off.is_empty():
 		return true
 	return not _dun_off.has(Story.eos_chain_head(k))
@@ -124,9 +259,10 @@ static func gen_of(n: int) -> int:
 	return 9
 
 # ------------------------------------------------------------------ applying it
-## Called once the launcher's Play is pressed (and at boot): spawn lists without the switched-off Pokémon,
+## Called once the launcher's Play is pressed (and at boot): the Game mode's tables, spawn lists without the switched-off Pokémon,
 ## and the hunger option from the Hunger speed slider.
 static func apply() -> void:
+	DB.use_parts(red_parts())                       # the Game page's Red parts over the full tables
 	if not active():
 		return
 	_filter_spawns()

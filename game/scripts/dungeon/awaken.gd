@@ -11,6 +11,8 @@ const PREFER := {"0006": "0006MX", "0150": "0150MY"}
 static var _megas := {}
 
 static func mega_of(sp: String) -> String:
+	if not load("res://scripts/core/launcher_cfg.gd").megas_on():      # the launcher's Mega Evolution switch
+		return ""
 	if _megas.is_empty():
 		for k in DB.species:
 			var b = DB.species[k].get("megaBase")
@@ -166,4 +168,4 @@ static func primal_block(d, t: String) -> String:
 
 ## Empowerment Seeds in the dungeons: only once the story is done (as in DX), rare.
 static func can_drop() -> bool:
-	return RedShops.postgame()
+	return RedShops.postgame() and load("res://scripts/core/launcher_cfg.gd").megas_on()

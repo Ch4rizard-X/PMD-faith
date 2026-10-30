@@ -1,7 +1,7 @@
 class_name MoveGrowth
 extends RefCounted
 ## Explorers Remixed's Move Growth (SkyTemple's patch, the Gates to Infinity system), as a remake option
-## (Game Options -> Dungeon -> Move growth). data/move_growth.json comes from Remixed's BALANCE/mgrowth.bin
+## (the launcher's Game page -> Move Growth). data/move_growth.json comes from Remixed's BALANCE/mgrowth.bin
 ## (tools/eos/gen_move_growth.py): 25 levels of {Exp. to the next level, power, PP, accuracy}, added up
 ## level by level.
 ##   - A move's Exp. belongs to the move, not to one Pokémon: every team member that knows it shares its level
@@ -18,7 +18,8 @@ static var _data: Dictionary = {}
 
 static func data() -> Dictionary:
 	if _data.is_empty():
-		var f := FileAccess.open("res://data/move_growth.json", FileAccess.READ)
+		var path: String = load("res://scripts/core/launcher_cfg.gd").data_path("move_growth")    # "" in Red mode
+		var f := FileAccess.open(path, FileAccess.READ) if path != "" else null
 		if f:
 			var d = JSON.parse_string(f.get_as_text())
 			if d is Dictionary:
@@ -28,7 +29,7 @@ static func data() -> Dictionary:
 	return _data
 
 static func enabled() -> bool:
-	return bool(Game.settings.get("qol_movegrowth", true)) and not (data().table as Array).is_empty()
+	return not load("res://scripts/core/launcher_cfg.gd").red_part("growth") and not (data().table as Array).is_empty()     # the launcher's Game page
 
 ## Damaging moves grow (Remixed's growing list covers the EoS ones; the remake's other damaging moves follow
 ## the same rule), plus Remixed's few growing moves without a fixed power (Beat Up, Bide, Revenge ...).

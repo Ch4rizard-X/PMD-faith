@@ -86,7 +86,10 @@ def main():
 
     for name, script, what in todo:
         n = names.index(name) + 1
-        if name in done:
+        if name == "eos" and common.RED_ONLY:
+            print(f"\n[{n}/{len(STEPS)}] {name}: skipped (Red Rescue Team only, no Explorers of Sky ROMs)", flush=True)
+            continue
+        if name in done and name != "fetch":       # fetch always runs: instant when complete, repairs a stopped download
             print(f"\n[{n}/{len(STEPS)}] {name}: already done, skipping (python build_all.py --fresh redoes everything)")
             continue
         t0 = time.time()

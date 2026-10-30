@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import (EXT, PMDRED, PMDSKY, SPRITECOLLAB, EOS, REMIX, RED_ROM, EOS_ROM, REMIX_ROM, need)
+from common import (EXT, PMDRED, PMDSKY, SPRITECOLLAB, EOS, REMIX, RED_ROM, EOS_ROM, REMIX_ROM, RED_ONLY, need)
 
 REPOS = {
     # folder: (url, sparse patterns or None for everything)
@@ -31,22 +31,93 @@ REPOS = {
 }
 
 
-def git(*args, cwd=None):
-    print("  git", " ".join(args))
-    subprocess.run(["git", *args], cwd=cwd, check=True)
+ABOUT = {
+    "pmd-red": "the Red Rescue Team decompilation (code and data layout)",
+    "pmd-sky": "the Explorers of Sky decompilation (sources)",
+    "pokeapi": "PokeAPI's Pokemon data tables",
+    "skytemple-files": "SkyTemple's script data",
+    "SpriteCollab": "PMD Sprite Collab's sprites and portraits - the biggest download, it can take a while",
+}
+
+
+def _folder_mb(path):
+    total = 0
+    for dp, _, fns in os.walk(path):
+        for fn in fns:
+            try:
+                total += os.path.getsize(os.path.join(dp, fn))
+            except OSError:
+                pass
+    return total / 1048576.0
+
+
+def git(*args, cwd=None, watch=None, label=""):
+    """Runs git, passing its progress lines on (they end in \\r, which a pipe reader wouldn't see) and, while it
+    runs, how much has arrived so far, so a slow download visibly moves."""
+    print("  git", " ".join(a for a in args if not a.startswith("/")), flush=True)
+    import threading
+    import time
+    p = subprocess.Popen(["git", *args], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    stop = threading.Event()
+
+    def tick():
+        t0 = time.time()
+        while not stop.wait(5.0):
+            if watch and os.path.isdir(watch):
+                print(f"  {label}: {_folder_mb(watch):.0f} MB downloaded so far ({int(time.time() - t0)} s)", flush=True)
+    th = threading.Thread(target=tick, daemon=True)
+    th.start()
+    buf, last, t_last = b"", "", 0.0
+    while True:
+        ch = p.stdout.read(1)
+        if not ch:
+            break
+        if ch in (b"\r", b"\n"):
+            ln = buf.decode("utf-8", "replace").strip()
+            buf = b""
+            if ln and ln != last and (ch == b"\n" or time.time() - t_last > 1.0 or ln.endswith("done.")):
+                print("  " + ln, flush=True)
+                last, t_last = ln, time.time()
+        else:
+            buf += ch
+    p.wait()
+    stop.set()
+    if p.returncode != 0:
+        raise subprocess.CalledProcessError(p.returncode, ["git", *args])
 
 
 def fetch_repo(name, url, sparse):
     dst = os.path.join(EXT, name)
-    if os.path.isdir(os.path.join(dst, ".git")):
+    mark = os.path.join(dst, ".mdr_complete")      # written only once the download really finished
+    if os.path.isfile(mark):
         print(f"{name}: already downloaded")
         return
+    if os.path.isdir(os.path.join(dst, ".git")):    # an earlier download that may have stopped part-way: repair it
+        print(f"{name}: checking an earlier download and fetching what's missing", flush=True)
+        try:
+            if sparse:
+                git("sparse-checkout", "set", "--no-cone", *sparse, cwd=dst, watch=dst, label=name)
+            git("checkout", "-f", "HEAD", cwd=dst, watch=dst, label=name)
+            open(mark, "w").write("ok\n")
+            print(f"{name}: done ({_folder_mb(dst):.0f} MB)", flush=True)
+            return
+        except subprocess.CalledProcessError:
+            print(f"{name}: couldn't repair it, downloading it again", flush=True)
+    if os.path.isdir(dst):                         # a download that was stopped part-way: start it again
+        print(f"{name}: an earlier download didn't finish, starting it again", flush=True)
+        def _rw(fn, path, _e):
+            os.chmod(path, 0o666)                  # git's pack files are read-only on Windows
+            fn(path)
+        shutil.rmtree(dst, onerror=_rw)
     os.makedirs(EXT, exist_ok=True)
+    print(f"Downloading {name}: {ABOUT.get(name, url)}", flush=True)
     if sparse:
-        git("clone", "--depth", "1", "--filter=blob:none", "--sparse", url, dst)
-        git("sparse-checkout", "set", "--no-cone", *sparse, cwd=dst)
+        git("clone", "--progress", "--depth", "1", "--filter=blob:none", "--sparse", url, dst, watch=dst, label=name)
+        git("sparse-checkout", "set", "--no-cone", *sparse, cwd=dst, watch=dst, label=name)
     else:
-        git("clone", "--depth", "1", url, dst)
+        git("clone", "--progress", "--depth", "1", url, dst, watch=dst, label=name)
+    open(mark, "w").write("ok\n")
+    print(f"{name}: done ({_folder_mb(dst):.0f} MB)", flush=True)
 
 
 def build_xbrz():
@@ -129,10 +200,10 @@ def check_roms():
     problems = []
     if head(RED_ROM, 0xAC, 4) != b"B24E":
         problems.append(f"red_rom is not the US Red Rescue Team ROM (game code {head(RED_ROM, 0xAC, 4)!r}, expected b'B24E'):\n    {RED_ROM}")
-    for key, path in (("eos_rom", EOS_ROM), ("remix_rom", REMIX_ROM)):
+    for key, path in (() if RED_ONLY else (("eos_rom", EOS_ROM), ("remix_rom", REMIX_ROM))):
         if head(path, 0x0C, 4) != b"C2SE":
             problems.append(f"{key} is not a US Explorers of Sky ROM (game code {head(path, 0x0C, 4)!r}, expected b'C2SE'):\n    {path}")
-    if not problems:
+    if not problems and not RED_ONLY:
         same = os.path.getsize(EOS_ROM) == os.path.getsize(REMIX_ROM) and head(EOS_ROM, 0, 1 << 20) == head(REMIX_ROM, 0, 1 << 20)
         if same:
             problems.append("eos_rom and remix_rom are the same file. remix_rom must be Explorers of Sky with the "
@@ -143,20 +214,32 @@ def check_roms():
     if problems:
         sys.exit("\nThere is a problem with your ROM files:\n\n  - " + "\n  - ".join(problems) +
                  "\n\nFix the paths in build_config.json (or run the Windows setup again) and start the build again.")
-    print("ROMs: Red Rescue Team (US), Explorers of Sky (US) and Explorers Remixed look right")
+    print("ROMs: Red Rescue Team (US) looks right (Red only: no Explorers of Sky content)" if RED_ONLY else
+          "ROMs: Red Rescue Team (US), Explorers of Sky (US) and Explorers Remixed look right")
 
 
 def main():
     need(RED_ROM, "Red Rescue Team ROM (red_rom)")
-    need(EOS_ROM, "Explorers of Sky ROM (eos_rom)")
-    need(REMIX_ROM, "Explorers Remixed ROM (remix_rom)")
+    if not RED_ONLY:
+        need(EOS_ROM, "Explorers of Sky ROM (eos_rom)")
+        need(REMIX_ROM, "Explorers Remixed ROM (remix_rom)")
     check_roms()
     for name, (url, sparse) in REPOS.items():
+        if RED_ONLY and name in ("pmd-sky", "skytemple-files"):      # only the Explorers of Sky parts use these
+            continue
         fetch_repo(name, url, sparse)
     build_xbrz()
+    print("Reading your Red Rescue Team ROM", flush=True)
     shutil.copyfile(RED_ROM, os.path.join(PMDRED, "baserom.gba"))
-    extract_nds(EOS_ROM, EOS)
-    extract_nds(REMIX_ROM, REMIX)
+    if not RED_ONLY:
+        for rom, out, nm in ((EOS_ROM, EOS, "Explorers of Sky"), (REMIX_ROM, REMIX, "Explorers Remixed")):
+            mark = os.path.join(out, ".mdr_complete")
+            if os.path.isfile(mark) and open(mark).read().strip() == "%d" % os.path.getsize(rom):
+                print(f"{nm} ROM: already unpacked")
+                continue
+            print(f"Unpacking your {nm} ROM", flush=True)
+            extract_nds(rom, out)
+            open(mark, "w").write("%d\n" % os.path.getsize(rom))
     print("fetch: done")
 
 

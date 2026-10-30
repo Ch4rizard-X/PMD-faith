@@ -32,6 +32,87 @@ func _ready() -> void:
 	evo = _json("evo")
 	dungeons = _json("dungeons")
 
+## The launcher's Game page (scripts/core/launcher_cfg.gd PARTS) on a full build: for each part set to Red's, the
+## tables as a Red-only build has them (data/red/, kept by the build) replace the full ones' entries.
+##   pokemon    Red dungeons' spawn lists (the launcher's checks hide the later Pokémon and Megas)
+##   abilities  Red's abilities for Red's Pokémon
+##   moves      Red's numbers for every move
+##   items      Red's items; the others stay (saves that hold them still load) without their Explorers of Sky
+##              drop / exclusive data, so nothing hands them out
+## Entries only the full game has always stay, so saves made with any choice still load.
+var red_parts: Dictionary = {}
+
+func use_parts(red: Dictionary) -> void:
+	var on := {}
+	for k in red:
+		if red[k]:
+			on[k] = true
+	if on == red_parts:
+		return
+	red_parts = on
+	species = _json("species")
+	moves = _json("moves")
+	items = _json("items")
+	dungeons = _json("dungeons")
+	_overlay_red(on)
+	if on.has("fairy"):
+		_no_fairy()                                  # last: also over the Red tables (their later moves have Fairy)
+
+func _overlay_red(on: Dictionary) -> void:
+	if not FileAccess.file_exists("res://data/red/species.json"):
+		return                                       # a Red-only build: its tables are Red's already
+	if on.has("abilities"):
+		var RS := _json("red/species")
+		for k in RS:
+			if species.has(k):
+				species[k]["ab"] = RS[k].get("ab", [])
+	if on.has("moves"):
+		var RM := _json("red/moves")
+		for k in RM:
+			moves[k] = RM[k]
+	if on.has("items"):
+		var RI := _json("red/items")
+		for k in RI:
+			items[k] = RI[k]
+		for k in items:
+			if not RI.has(k):
+				items[k].erase("eos_added")
+				items[k].erase("excl")
+	if on.has("pokemon") or on.has("items"):
+		var RD := _json("red/dungeons")
+		for k in RD.get("dungeons", {}):
+			var ff: Array = dungeons.dungeons.get(k, {}).get("floors", [])
+			var rf: Array = RD.dungeons[k].get("floors", [])
+			for i in mini(ff.size(), rf.size()):
+				for f in rf[i]:
+					var take: bool = on.has("pokemon") if f == "pk" else on.has("items")     # spawns / the rest
+					if take:
+						ff[i][f] = rf[i][f]
+		if on.has("items"):
+			for lk in ["item_tables", "trap_tables"]:
+				var rl: Array = RD.get(lk, [])
+				var fl: Array = dungeons.get(lk, [])
+				for i in mini(rl.size(), fl.size()):
+					fl[i] = rl[i]
+
+## Fairy type off (Red has none): Pokémon get their types from before Fairy (a Fairy first type becomes Normal, as
+## Clefairy and Togekiss were; a Fairy second type goes, as Whimsicott and Mr. Mime) and Fairy moves become Normal.
+func _no_fairy() -> void:
+	for k in species:
+		var t: Array = species[k].get("types", []).duplicate()
+		if "Fairy" in t:                             # as before Fairy: first type -> Normal, second type dropped
+			if t[0] == "Fairy":
+				t[0] = "Normal"
+			t = t.filter(func(x): return x != "Fairy")
+			var out: Array = []
+			for x in t:
+				if not x in out:
+					out.append(x)
+			species[k]["types"] = out
+	for k in moves:
+		if str(moves[k].get("t", "")) == "Fairy":
+			moves[k]["t"] = "Normal"
+
 ## Red dungeon id (DUNGEON_*) -> our key ("" if none). dungeons.json keeps Red's order.
 func dungeon_key(did: int) -> String:
 	var dd: Dictionary = dungeons.get("dungeons", {})

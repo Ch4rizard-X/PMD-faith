@@ -266,7 +266,8 @@ def apply(items, species, moves, E, raw_desc=None):
             it['desc'] = it['desc'].replace(*BOX_DESC)
         if it.get('kind') == 'exclusive' and raw_desc is not None:
             it['rarity'] = rarity_of(raw_desc[it['eos_id']])
-    if 'empowerseed' in items:              # Rescue Team DX's Empowerment Seed (see gen_megas_dx.py)
+    items.pop('megastone', None)            # the old prototype's Mega Stone: unused (Megas come from the Empowerment Seed)
+    if 'empowerseed' in items:              # Rescue Team DX's Empowerment Seed (see gen_megas_dx.py; also set by data/build.py)
         items['empowerseed'].update(EMPOWER_SEED)
     items['expshare'] = dict(EXP_SHARE)
     return items, added, excl

@@ -90,63 +90,14 @@ for n, d in enumerate(order):
                 'recruit': meta.get('recruitingEnabled', True), 'max_items': meta.get('maxItemsAllowed', 20),
                 'party': meta.get('maxPartyMembers', 4), 'turn_limit': meta.get('turnLimit', 1000)}
 
-# ---- spread the extra Pokemon (not in Red) through dungeons whose Pokemon share their types, at levels fitting their evolution stage
+# ---- spread the Pokemon Red doesn't have through Red's dungeons (gen_extra_spread.py: type, strength and level fit;
+# legendaries / Ultra Beasts / Paradox Pokemon rare and deep in late-game dungeons). The eos step spreads again over
+# Red's and Explorers of Sky's dungeons together.
+import gen_extra_spread  # noqa: E402
 evo = J(G + '/evo.json')
-pre_of, evo_lv = {}, {}
-for a, lst in evo.items():
-    for e in lst:
-        pre_of[e[0]] = a
-        evo_lv[(a, e[0])] = e[1] if isinstance(e[1], int) and e[1] > 0 else None
-def stage_range(k):
-    lo = 1
-    p = pre_of.get(k)
-    if p:
-        lv = evo_lv.get((p, k)) or 25
-        lo = lv
-        if pre_of.get(p): lo = max(lo, 30)
-    nxt = [e for e in evo.get(k, [])]
-    hi = 100
-    if nxt:
-        lvs = [e[1] for e in nxt if isinstance(e[1], int) and e[1] > 0]
-        hi = (min(lvs) if lvs else 35) + 12
-    return lo, hi
+gr = J(G + '/growth.json')
 HAS_SPRITE = set(proto.build_all()['DEX'])   # species with a SpriteCollab sprite (data/sprites.json is made later)
-SKIP = re.compile(r'^(D\d+|Boss\d+|Autopilot|DojoRegistration)$')
-extras = [k for k, v in species.items() if not v.get('red') and not v.get('megaBase') and not v.get('legend') and len(k) == 4 and k in HAS_SPRITE]
-cands = []   # (dungeon, floor index, avg level, type profile)
-for key, dd in out.items():
-    if SKIP.match(dd['dir']): continue
-    for fi, fl in enumerate(dd['floors']):
-        if not fl['pk']: continue
-        prof = {}
-        for sp, lv, w in fl['pk']:
-            for t in species.get(str(sp), {}).get('types', []): prof[t] = prof.get(t, 0) + w
-        lvs = sorted(int(x[1]) for x in fl['pk'])
-        cands.append((key, fi, lvs[len(lvs) // 2], prof))
-placed = {}
-for k in extras:
-    lo, hi = stage_range(k)
-    ty = species[k]['types']
-    scored = {}
-    for key, fi, lv, prof in cands:
-        if not (lo - 3 <= lv <= hi): continue
-        sc = sum(prof.get(t, 0) for t in ty)
-        if sc <= 0: continue
-        scored.setdefault(key, []).append((sc, fi, lv))
-    best = sorted(scored.items(), key=lambda kv: -max(x[0] for x in kv[1]))[:3]
-    for key, fl in best:
-        for sc, fi, lv in fl:
-            placed.setdefault((key, fi), []).append((k, lv, sc))
-added = 0
-for (key, fi), lst in placed.items():
-    lst = sorted(lst, key=lambda x: -x[2])[:6]          # at most 6 extra species per floor, the best type fits
-    fl = out[key]['floors'][fi]
-    tot = sum(int(x[2]) for x in fl['pk']) or 10000
-    share = min(int(tot * 0.25), 1200 * len(lst))      # extras take at most a quarter of the spawns
-    w = max(1, share // len(lst))
-    for k, lv, _sc in lst:
-        fl['pk'].append([k, lv, w, 1]); added += 1
-print('extras placed', len({fe[0] for d in out.values() for f in d['floors'] for fe in f['pk'] if len(fe) > 3}), 'of', len(extras), 'entries', added)
+gen_extra_spread.apply({'dungeons': out}, species, HAS_SPRITE, gr['mon'], evo, curve=gr['curve'])
 with open(common.p(G, 'dungeons.json'), 'w') as f:
     json.dump({'dungeons': out, 'item_tables': item_tables, 'trap_tables': trap_tables}, f, separators=(',', ':'))
 print(len(out), 'dungeons;', len(item_tables), 'item tables;', len(trap_tables), 'trap tables')

@@ -41,6 +41,9 @@ RED_ROM = setting("red_rom")
 EOS_ROM = setting("eos_rom")
 REMIX_ROM = setting("remix_rom")
 WORK = setting("work_dir", "build_work")
+# Red only: no Explorers of Sky ROMs given. The Explorers of Sky / Remixed parts of the build are skipped and the
+# game gets only Red Rescue Team's content (data/build_info.json tells it).
+RED_ONLY = not (EOS_ROM and REMIX_ROM)
 
 EXT = os.path.join(WORK, "ext")
 PMDRED = os.path.join(EXT, "pmd-red")

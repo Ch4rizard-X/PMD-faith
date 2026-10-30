@@ -997,7 +997,10 @@ func _ready() -> void:
 			Game.flags.move_exp[mvn] = 99999
 			MoveGrowth.sync_all(dungeon)
 			print("MGTEST maxed: info=%s slot pp=%d/%d" % [str(MoveGrowth.info(mvn)), int(L.moves[mi].pp), int(L.moves[mi].max_pp)])
-			Game.settings.qol_movegrowth = false
+			var LCm = load("res://scripts/core/launcher_cfg.gd")
+			var cm: Dictionary = LCm.cfg().duplicate(true)
+			cm["parts"] = {"growth": true}                 # the launcher's Game page: Move Growth off
+			LCm.save(cm)
 			MoveGrowth.sync_all(dungeon)
 			print("MGTEST off: slot pp=%d/%d applied p=%d" % [int(L.moves[mi].pp), int(L.moves[mi].max_pp), int(MoveGrowth.apply(L, mvn, base).p)])
 			get_tree().quit()).call_deferred()
@@ -2897,11 +2900,20 @@ func _ready() -> void:
 				get_viewport().get_texture().get_image().save_png("user://arena_%s.png" % ak)
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--setupview"):
+		add_child(load("res://tests/test_setupview.gd").new())
+		return
 	if OS.get_cmdline_user_args().has("--resizetest"):
 		add_child(load("res://tests/test_resize.gd").new())
 		return
 	if OS.get_cmdline_user_args().has("--vfx3d"):
 		add_child(load("res://tests/test_vfx3d.gd").new())
+		return
+	if OS.get_cmdline_user_args().has("--romsview"):
+		add_child(load("res://tests/test_romsview.gd").new())
+		return
+	if OS.get_cmdline_user_args().has("--redmode"):
+		add_child(load("res://tests/test_redmode.gd").new())
 		return
 	if OS.get_cmdline_user_args().has("--voxelshot"):
 		add_child(load("res://tests/test_voxelshot_fx.gd" if OS.get_cmdline_user_args().has("--fx") else "res://tests/test_voxelshot.gd").new())
@@ -5216,7 +5228,7 @@ func _qoltest() -> void:
 	Game.settings.qol_pickup = 0
 	# ---- the options page
 	d.menu_open = true
-	d._option_page("Others", ["touch"] + DungeonQoL.KEYS)
+	d._option_page("Others", ["touch"] + DungeonQoL.shown_keys())
 	await get_tree().create_timer(0.4).timeout
 	for i in 6:
 		await _mt_press("ui_down")

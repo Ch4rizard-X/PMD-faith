@@ -37,7 +37,7 @@ static var rng := RandomNumberGenerator.new()
 
 static func data() -> Dictionary:
 	if _d.is_empty():
-		var f := FileAccess.open(DATA_PATH, FileAccess.READ)
+		var f := FileAccess.open(load("res://scripts/core/launcher_cfg.gd").data_path("iq"), FileAccess.READ)    # Red mode: Red's skills
 		if f:
 			var v = JSON.parse_string(f.get_as_text())
 			if v is Dictionary:
