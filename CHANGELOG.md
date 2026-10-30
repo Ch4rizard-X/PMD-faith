@@ -3,6 +3,10 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.22 (30 Oct 2026)
+
+- **3D view, Friend Areas:** Pokémon stand on soft oval shadows (they were flat grey rectangles), and the figures are sized like in the dungeons (keeping their proportions), so a partner walking right behind the leader isn't hidden behind it.
+
 ## v0.8.21 (30 Oct 2026)
 
 - **3D view, Pokémon by walls:** a wall between the camera and a Pokémon turns see-through in a soft window around it, so Pokémon in corridors and beside walls stay in sight while the walls keep their full height.

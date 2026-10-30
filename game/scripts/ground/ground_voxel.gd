@@ -481,10 +481,11 @@ func _sync_figures() -> void:
 			_figs[s] = mi
 			var sh := MeshInstance3D.new()
 			var pm := PlaneMesh.new()
-			pm.size = Vector2(14, 7)
+			pm.size = Vector2(18, 8)
 			sh.mesh = pm
 			var smat := StandardMaterial3D.new()
-			smat.albedo_color = Color(0, 0, 0, 0.4)
+			smat.albedo_color = Color(0, 0, 0, 0.45)
+			smat.albedo_texture = _blob()                # a soft oval, not a flat grey rectangle
 			smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			sh.material_override = smat
@@ -496,10 +497,16 @@ func _sync_figures() -> void:
 		var dst: Rect2 = vx.dst
 		var gnd: float = float(vx.ground)
 		var p: Vector2 = s.position
-		var tilt := Basis(Vector3.RIGHT, deg_to_rad(-(90.0 - pitch) * 0.7))
+		var lean := (90.0 - pitch) * 0.7
+		var tilt := Basis(Vector3.RIGHT, deg_to_rad(-lean))
+		# a standing figure is taller on screen than its 2D sprite on the tilted ground: scaled down (keeping its
+		# proportions) halfway to the ground's squash, as in the dungeon view, so a partner right behind the
+		# leader isn't swallowed by it
+		var k := minf(1.0, sqrt(sin(deg_to_rad(pitch)) / cos(deg_to_rad(pitch - lean))))
 		# tilted about the feet (the shadow row), so leaning doesn't lift the figure off its shadow
 		var lift := dst.end.y - gnd
-		mi.transform = Transform3D(tilt, Vector3(p.x + dst.position.x, 0.0, p.y + gnd)) * Transform3D(Basis(), Vector3(0, -lift, 0))
+		mi.transform = Transform3D(tilt.scaled(Vector3(k, k, k)), Vector3(p.x, 0.0, p.y + gnd)) \
+			* Transform3D(Basis(), Vector3(dst.position.x, -lift, 0))
 		var a: float = s.modulate.a * s.self_modulate.a
 		var fm2 := mi.material_override as StandardMaterial3D
 		fm2.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if a < 0.99 else BaseMaterial3D.TRANSPARENCY_DISABLED
@@ -514,6 +521,18 @@ func _sync_figures() -> void:
 				if is_instance_valid(d[k]):
 					d[k].queue_free()
 				d.erase(k)
+
+static var _blob_tex: ImageTexture
+
+static func _blob() -> ImageTexture:
+	if _blob_tex == null:
+		var img := Image.create(32, 16, false, Image.FORMAT_RGBA8)
+		for y in 16:
+			for x in 32:
+				var d := Vector2((x + 0.5 - 16.0) / 16.0, (y + 0.5 - 8.0) / 8.0).length()
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(1.0 - d, 0.0, 1.0) ** 0.6))
+		_blob_tex = ImageTexture.create_from_image(img)
+	return _blob_tex
 
 func _exit_tree() -> void:
 	_clear()
