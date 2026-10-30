@@ -3,6 +3,12 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.21 (30 Oct 2026)
+
+- **3D view, Pokémon by walls:** a wall between the camera and a Pokémon turns see-through in a soft window around it, so Pokémon in corridors and beside walls stay in sight while the walls keep their full height.
+- **3D view, stairs:** the stairs are an opening in the floor with a stone rim and steps going down, darker toward the back (they were a raised block in v0.8.20).
+- **3D view:** the item glint is softer.
+
 ## v0.8.20 (30 Oct 2026)
 
 - **Wrong letters fixed (Windows):** once a dungeon's message log had shown text, capitals all over the game could turn into other letters ("Tyait", "Aelly", "Mhunderwave"). The message log's freely scaling copy of the font shared its letter images with the normal font, and the two drew over each other's letters; it's now a separate font.

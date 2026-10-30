@@ -12,6 +12,7 @@ const WH := 15.0                   # wall height
 const WT_D := 3.0                  # water: bed at -WT_D, surface at -1.5
 const LV_Y := -0.5                 # lava surface
 const CH_D := 40.0                 # chasm depth
+const STAIRS := 5                  # terrain value of the stairs tile in the 3D view (floor everywhere else)
 const BORDER := 6                  # wall tiles added around the map (no black edges)
 
 ## Material of the walls from their top colours (and corrections for tilesets the test misreads).
@@ -50,6 +51,8 @@ static func prepare(dg) -> Dictionary:
 	for y in fs.h:
 		for x in fs.w:
 			terr[(y + BORDER) * EW + x + BORDER] = fs.terrain[y * fs.w + x]
+	if fs.stairs.x >= 0 and fs.terrain[fs.stairs.y * fs.w + fs.stairs.x] == 1:
+		terr[(fs.stairs.y + BORDER) * EW + fs.stairs.x + BORDER] = STAIRS     # an opening with steps going down
 	var d := {"img": img, "data": img.get_data(), "EW": EW, "EH": EH, "terr": terr, "sec": str(fs.secondary)}
 	_material(d, dg)
 	return d
@@ -132,6 +135,50 @@ static func _material(d: Dictionary, dg) -> void:
 	d["mat"] = mat
 	d["pal"] = pal
 	dg.set_meta("vox_material", mat)
+
+## The stairs: the floor picture around a stone-rimmed opening, steps going down away from the camera and
+## darker the deeper they are, the opening's inner sides and back wall in shadow.
+static func _stairs(S, wx0: float, wz0: float, uv0: Vector2, uv1: Vector2) -> void:
+	var I := 4.0                                   # rim width
+	var xa := wx0 + I
+	var xb := wx0 + TW - I
+	var za := wz0 + I
+	var zb := wz0 + TW - I
+	var fuv := func(x: float, z: float) -> Vector2:
+		return Vector2(lerpf(uv0.x, uv1.x, (x - wx0) / TW), lerpf(uv0.y, uv1.y, (z - wz0) / TW))
+	var fq := func(x0: float, z0: float, x1: float, z1: float) -> void:   # a piece of floor at y = 1
+		S.quad(Vector3(x0, 1, z0), Vector3(x1, 1, z0), Vector3(x1, 1, z1), Vector3(x0, 1, z1), Vector3.UP, Color(1, 1, 1, 1),
+			fuv.call(x0, z0), fuv.call(x1, z0), fuv.call(x1, z1), fuv.call(x0, z1))
+	fq.call(wx0, wz0, wx0 + TW, za)
+	fq.call(wx0, zb, wx0 + TW, wz0 + TW)
+	fq.call(wx0, za, xa, zb)
+	fq.call(xb, za, wx0 + TW, zb)
+	var rim := Color(0.62, 0.6, 0.58, 1)
+	var n := 5
+	var rise := 1.1                                # gentler than the lowest camera (35 deg), so every step shows
+	var dd := (zb - za) / n
+	var bottom := 1.0 - (n + 1) * rise
+	for k in n:
+		var z1 := zb - k * dd
+		var z0 := z1 - dd
+		var y := 1.0 - (k + 1) * rise
+		var sh := 1.0 - 0.11 * k
+		var stone := Color(0.74 * sh, 0.72 * sh, 0.7 * sh, 1)
+		S.quad(Vector3(xa, y, z0), Vector3(xb, y, z0), Vector3(xb, y, z1), Vector3(xa, y, z1), Vector3.UP, stone, Vector2(-1, -1))
+		# the step's front edge, a little lighter
+		S.quad(Vector3(xa, y + 0.01, z1 - 0.8), Vector3(xb, y + 0.01, z1 - 0.8), Vector3(xb, y + 0.01, z1), Vector3(xa, y + 0.01, z1),
+			Vector3.UP, stone.lightened(0.18), Vector2(-1, -1))
+		# under the step down to the next one (seen only from above at the back)
+		S.quad(Vector3(xa, y - rise, z0), Vector3(xb, y - rise, z0), Vector3(xb, y, z0), Vector3(xa, y, z0), Vector3.BACK,
+			stone.darkened(0.35), Vector2(-1, -1))
+	# inner sides and back wall of the opening, in shadow, darker toward the bottom
+	for side in [[xa, Vector3.RIGHT], [xb, Vector3.LEFT]]:
+		var x: float = side[0]
+		S.quad(Vector3(x, bottom, za), Vector3(x, bottom, zb), Vector3(x, 1, zb), Vector3(x, 1, za), side[1], Color(0.42, 0.4, 0.38, 1), Vector2(-1, -1))
+	S.quad(Vector3(xa, bottom, za), Vector3(xb, bottom, za), Vector3(xb, 1, za), Vector3(xa, 1, za), Vector3.BACK, Color(0.2, 0.19, 0.19, 1), Vector2(-1, -1))
+	# the stone rim around the opening
+	for r in [[xa - 1, za - 1, xb + 1, za], [xa - 1, zb, xb + 1, zb + 1], [xa - 1, za, xa, zb], [xb, za, xb + 1, zb]]:
+		S.quad(Vector3(r[0], 1.05, r[1]), Vector3(r[2], 1.05, r[1]), Vector3(r[2], 1.05, r[3]), Vector3(r[0], 1.05, r[3]), Vector3.UP, rim, Vector2(-1, -1))
 
 static func _hsh(a: int, b: int, c: int) -> float:
 	var n := (a * 73856093) ^ (b * 19349663) ^ (c * 83492791)
@@ -253,7 +300,7 @@ static func build_chunk(d: Dictionary, cx: int, cy: int, opts: Dictionary) -> Di
 					if ed < RR:
 						top = WH - RR + sqrt(maxf(0.0, RR * RR - (RR - ed) * (RR - ed)))
 					HT[i] = roundf(top)
-				1:
+				1, STAIRS:
 					HT[i] = 1.0
 				2:
 					HT[i] = LV_Y if sec == "lava" else -WT_D
@@ -297,6 +344,9 @@ static func build_chunk(d: Dictionary, cx: int, cy: int, opts: Dictionary) -> Di
 				else:
 					S.quad(Vector3(wx0, -WT_D, wz0), Vector3(wx0 + TW, -WT_D, wz0), Vector3(wx0 + TW, -WT_D, wz0 + TW), Vector3(wx0, -WT_D, wz0 + TW), Vector3.UP, bed, uv0, Vector2(uv1.x, uv0.y), uv1, Vector2(uv0.x, uv1.y))
 					WA.quad(Vector3(wx0, -1.5, wz0), Vector3(wx0 + TW, -1.5, wz0), Vector3(wx0 + TW, -1.5, wz0 + TW), Vector3(wx0, -1.5, wz0 + TW), Vector3.UP, col, uv0, Vector2(uv1.x, uv0.y), uv1, Vector2(uv0.x, uv1.y))
+				continue
+			elif t == STAIRS:
+				_stairs(S, wx0, wz0, uv0, uv1)
 				continue
 			elif t == 3:
 				var cc := Color(0.55, 0.55, 0.6, 1)
@@ -434,7 +484,7 @@ static func build_chunk(d: Dictionary, cx: int, cy: int, opts: Dictionary) -> Di
 								var ln := 1 + int(_hsh(gx, gy, 51) * 4.0)
 								S.box(Vector3(wx, face_top - ln, wz) + nrm, Vector3(1, ln, 1), Color(0.8, 0.92, 1.0, 1), 31)
 							z = z1
-					elif t == 1 and nt >= 2:
+					elif t == 1 and nt >= 2 and nt != STAIRS:
 						# a bank down to the water bed / lava / chasm bottom
 						var depth := nh
 						var z2 := 1.0

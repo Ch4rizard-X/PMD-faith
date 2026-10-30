@@ -19,11 +19,32 @@ float wnoise(vec2 p) {
 	f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(whash(i), whash(i + vec2(1, 0)), f.x), mix(whash(i + vec2(0, 1)), whash(i + vec2(1, 1)), f.x), f.y);
 }
+uniform vec4 xray[12];             // Pokémon the walls open up in front of: xyz centre, w radius (voxel_view)
+uniform int xray_n = 0;
+uniform vec3 view_fwd = vec3(0.0, -0.7, -0.7);
+// A wall (or plant on it) between the camera and a Pokémon is see-through in a soft-edged window around it,
+// so Pokémon in corridors and by walls stay visible while the walls keep their height.
+void xray_cut(vec3 p, vec2 frag) {
+	if (p.y < 2.0) return;
+	for (int i = 0; i < xray_n; i++) {
+		vec3 d = p - xray[i].xyz;
+		float al = dot(d, view_fwd);
+		if (al < -1.0) {
+			float pd = length(d - al * view_fwd);
+			float rad = xray[i].w;
+			if (pd < rad) {
+				float edge = smoothstep(rad * 0.6, rad, pd);
+				if (fract(sin(dot(floor(frag), vec2(12.9898, 78.233))) * 43758.5453) > edge) discard;
+			}
+		}
+	}
+}
 vec3 to_lin(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 void fragment() {
+	xray_cut(wpos, FRAGCOORD.xy);
 	vec3 c = UV.x < 0.0 ? to_lin(COLOR.rgb) : texture(map, UV).rgb * to_lin(COLOR.rgb);
 	c *= mix(1.0, COLOR.a, ao);
 	if (torch > 0.0) {

@@ -58,7 +58,8 @@ func _ready() -> void:
 		for k in [["oran", Vector2i(-1, 1)], ["apple", Vector2i(0, 1)], ["goldribbon", Vector2i(1, 2)], ["reviver", Vector2i(-2, 2)], ["poke", Vector2i(0, 2)]]:
 			if fs.walkable(spot + k[1]):
 				fs.items[spot + k[1]] = {"id": k[0], "n": 1}
-		fs.stairs = spot + Vector2i(1, 1)
+		fs.stairs = spot + Vector2i(-1, 2)
+		d.voxel.rebuild()
 	d._snap_visuals()
 	d.cam.position = d._px(spot)
 	await get_tree().create_timer(1.0).timeout

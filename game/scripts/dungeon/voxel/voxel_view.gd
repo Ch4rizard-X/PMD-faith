@@ -444,6 +444,33 @@ func _fig_push(sm: ShaderMaterial) -> void:
 		for n in ["push_c", "push_k", "push_floor"]:
 			(sm.next_pass as ShaderMaterial).set_shader_parameter(n, sm.get_shader_parameter(n))
 
+## Walls open up in front of the Pokémon on screen (terrain / blade shaders' xray_cut).
+func _sync_xray(fwd: Vector3) -> void:
+	var arr: Array = []
+	var fs_ := fig_s()
+	var near := Vector2(dg.cam.position)
+	var list: Array = []
+	for m in _figs:
+		var mi: MeshInstance3D = _figs[m]
+		if is_instance_valid(mi) and mi.visible and m.visual:
+			list.append([Vector2(m.visual.position).distance_squared_to(near), m])
+	list.sort_custom(func(a, b): return a[0] < b[0])
+	for e in list.slice(0, 12):
+		var v = e[1].visual
+		var h := 26.0
+		if not v.vx.is_empty():
+			h = maxf(16.0, float(v.vx.ground) - (v.vx.dst as Rect2).position.y)
+		var feet := Vector3(v.position.x, 1.0, v.position.y + float(v.vx.get("ground", 4.0)))
+		var up := Basis(Vector3.RIGHT, deg_to_rad(-lean())) * Vector3.UP
+		arr.append(Vector4(feet.x + up.x * h * 0.5 * fs_, feet.y + up.y * h * 0.5 * fs_, feet.z + up.z * h * 0.5 * fs_, maxf(13.0, h * 0.62 * fs_)))
+	while arr.size() < 12:
+		arr.append(Vector4.ZERO)
+	for k in ["terrain", "blade"]:
+		if _mats.has(k):
+			_mats[k].set_shader_parameter("xray", arr)
+			_mats[k].set_shader_parameter("xray_n", mini(list.size(), 12))
+			_mats[k].set_shader_parameter("view_fwd", fwd)
+
 func _sync_figures() -> void:
 	var alive := {}
 	for m in dg.fs.mons:
@@ -705,6 +732,7 @@ func _process(_dt: float) -> void:
 	_sync_figures()
 	_sync_objects()
 	_tick_items()
+	_sync_xray(fwd)
 
 # ------------------------------------------------------------------ floor objects
 ## The stairs, traps, items and the Kecleon Shop floor (Dungeon.floor_objects) as flat tiles on the 3D floor,
@@ -729,11 +757,10 @@ func _sync_objects() -> void:
 	_items.clear()
 	for o in list:
 		var r: Rect2 = o[1]
+		if o[0] != null and o[0] == dg._stairs_tex and _data.get("terr") != null:
+			continue                                  # the stairs are part of the 3D floor (vox_terrain._stairs)
 		if o[0] != null and o[0] == dg._icon_tex:
 			_add_item(r, o[2])
-			continue
-		if o[0] != null and o[0] == dg._stairs_tex:
-			_add_stairs(r)
 			continue
 		var mi := MeshInstance3D.new()
 		var pm := PlaneMesh.new()
@@ -803,59 +830,7 @@ func _tick_items() -> void:
 		n.position = it[1] + Vector3(0, 1.2 + 1.2 * sin(t * 2.2 + ph), 0)
 		var glint := maxf(0.0, sin(t * 1.3 + ph * 2.0)) ** 24
 		var sm := (it[3] as MeshInstance3D).material_override as ShaderMaterial
-		sm.set_shader_parameter("glow_col", Vector3(1.0, 0.95, 0.8) * glint * 0.8)
-
-## The stairs as a short flight of steps rising toward the back of the tile, the stairs picture laid over the
-## treads and risers (so it still reads as Red's stairs).
-func _add_stairs(r: Rect2) -> void:
-	var tex: Texture2D = dg._stairs_tex
-	var ts := tex.get_size()
-	var n := 4
-	var step_h := 1.6
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var x0 := r.position.x
-	var x1 := r.end.x
-	var z0 := r.position.y
-	var z1 := r.end.y
-	var d := (z1 - z0) / n
-	var uv := func(x: float, z: float) -> Vector2:
-		return Vector2((x - x0) / (x1 - x0) * r.size.x / ts.x, (z - z0) / (z1 - z0) * r.size.y / ts.y)
-	var quad := func(a: Vector3, b: Vector3, c: Vector3, e: Vector3, nrm: Vector3, ua: Vector2, ub: Vector2, uc: Vector2, ue: Vector2, shade: float) -> void:
-		var col := Color(shade, shade, shade)
-		for v in [[a, ua], [b, ub], [c, uc], [a, ua], [c, uc], [e, ue]]:
-			st.set_normal(nrm)
-			st.set_color(col)
-			st.set_uv(v[1])
-			st.add_vertex(v[0])
-	for j in n:
-		# step j counted from the back of the tile (highest) to the front (lowest)
-		var zf := z0 + j * d
-		var zb := zf + d
-		var top := OBJ_Y + (n - j) * step_h
-		var yb := OBJ_Y
-		quad.call(Vector3(x0, top, zf), Vector3(x1, top, zf), Vector3(x1, top, zb), Vector3(x0, top, zb), Vector3.UP,
-			uv.call(x0, zf), uv.call(x1, zf), uv.call(x1, zb), uv.call(x0, zb), 1.0)
-		# riser (front face), the picture's row at this edge, darker
-		quad.call(Vector3(x0, yb, zb), Vector3(x1, yb, zb), Vector3(x1, top, zb), Vector3(x0, top, zb), Vector3.BACK,
-			uv.call(x0, zb), uv.call(x1, zb), uv.call(x1, zb - 0.01), uv.call(x0, zb - 0.01), 0.7)
-		# sides
-		quad.call(Vector3(x0, yb, zf), Vector3(x0, yb, zb), Vector3(x0, top, zb), Vector3(x0, top, zf), Vector3.LEFT,
-			uv.call(x0, zf), uv.call(x0, zb), uv.call(x0, zb), uv.call(x0, zf), 0.6)
-		quad.call(Vector3(x1, yb, zb), Vector3(x1, yb, zf), Vector3(x1, top, zf), Vector3(x1, top, zb), Vector3.RIGHT,
-			uv.call(x1, zb), uv.call(x1, zf), uv.call(x1, zf), uv.call(x1, zb), 0.6)
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = tex
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	m.vertex_color_use_as_albedo = true
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.roughness = 1.0
-	m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	mi.material_override = m
-	_objs.add_child(mi)
+		sm.set_shader_parameter("glow_col", Vector3(1.0, 0.95, 0.8) * glint * 0.3)
 
 func _obj_mat(tex: Texture2D, src: Rect2, col: Color) -> StandardMaterial3D:
 	var key := "%s|%s|%s" % [str(tex.get_rid()) if tex else "", str(src), str(col)]
