@@ -51,7 +51,17 @@ static func font_free_scale() -> Font:
 	if _font_free == null:
 		var f = font()
 		if f is FontFile:
-			var c: FontFile = f.duplicate()
+			# a separate font from the same TTF bytes, not f.duplicate(): a duplicate shares the glyph cache's
+			# images with the normal font, and both drawing their letters into them garbled capitals on Windows
+			# (A as 7, B as A, W as Ty on the dungeon buttons once the message log had drawn text)
+			var c := FontFile.new()
+			c.data = f.data
+			c.disable_embedded_bitmaps = true
+			c.allow_system_fallback = false
+			c.antialiasing = f.antialiasing
+			c.hinting = f.hinting
+			c.subpixel_positioning = f.subpixel_positioning
+			c.fixed_size = f.fixed_size
 			c.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_ENABLED
 			_font_free = c
 			ResourceSaver.save(c, FONT_FREE_PATH)       # for BBCode [font=...] (the message log)
@@ -261,6 +271,30 @@ static func ui_scale_index() -> int:
 static func set_ui_scale_index(i: int) -> void:
 	Game.settings["ui_scale"] = snappedf(UI_SCALE_MIN + UI_SCALE_STEP * clampi(i, 0, UI_SCALE_STEPS), 0.01)
 	apply_ui_scale()
+
+## Keeps a window placed when the game window changes size or shape: layout(vs) positions / sizes `c` for the
+## visible screen size vs. Called now (once `c` has its size) and again on every resize while `c` exists.
+static func fit(c: Control, layout: Callable) -> void:
+	c.set_meta("ui_fit", layout)
+	c.add_to_group("ui_fit")
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	if not tree.root.size_changed.is_connected(_refit_all):
+		tree.root.size_changed.connect(_refit_all)
+	if c.is_inside_tree():
+		layout.call(c.get_viewport_rect().size)
+
+static func _refit_all() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	for pass_i in 2:                       # again a frame later, once containers have their new sizes
+		for c in tree.get_nodes_in_group("ui_fit"):
+			if is_instance_valid(c) and c.is_inside_tree() and c.has_meta("ui_fit"):
+				(c.get_meta("ui_fit") as Callable).call(c.get_viewport_rect().size)
+		if pass_i == 0:
+			await tree.process_frame
 
 static func apply_ui_scale() -> void:
 	var tree := Engine.get_main_loop() as SceneTree

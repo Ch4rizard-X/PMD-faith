@@ -13,6 +13,11 @@ func _ready() -> void:
 	Game.settings.vox_view = 1
 	Game.settings.vox_cam = cam
 	Game.settings.zoom = 2.0
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--pack="):
+			Game.settings.vox_pack = int(a.substr(7))
+		if a == "--perf2":
+			Game.settings.vox_perf = 2
 	await m.start_dungeon("tiny_woods", 0)
 	await get_tree().create_timer(2.0).timeout
 	var d = m.dungeon
@@ -23,7 +28,12 @@ func _ready() -> void:
 	for y in range(2, fs.h - 2):
 		for x in range(2, fs.w - 2):
 			var p := Vector2i(x, y)
-			if fs.walkable(p) and fs.is_wall(p + Vector2i(0, -1)) and fs.walkable(p + Vector2i(1, 0)) and fs.walkable(p + Vector2i(-1, 0)) and fs.walkable(p + Vector2i(0, 1)):
+			var corr := OS.get_cmdline_user_args().has("--corridor")
+			if corr and not fs.is_wall(p + Vector2i(0, 1)):
+				continue
+			if not corr and not fs.walkable(p + Vector2i(0, 1)):
+				continue
+			if fs.walkable(p) and fs.is_wall(p + Vector2i(0, -1)) and fs.walkable(p + Vector2i(1, 0)) and fs.walkable(p + Vector2i(-1, 0)):
 				spot = p
 				break
 		if spot.x >= 0:
@@ -43,6 +53,12 @@ func _ready() -> void:
 		foe.pos = spot
 		foe.facing = 0
 	L.facing = 2
+	if OS.get_cmdline_user_args().has("--items"):
+		fs.items.clear()
+		for k in [["oran", Vector2i(-1, 1)], ["apple", Vector2i(0, 1)], ["goldribbon", Vector2i(1, 2)], ["reviver", Vector2i(-2, 2)], ["poke", Vector2i(0, 2)]]:
+			if fs.walkable(spot + k[1]):
+				fs.items[spot + k[1]] = {"id": k[0], "n": 1}
+		fs.stairs = spot + Vector2i(1, 1)
 	d._snap_visuals()
 	d.cam.position = d._px(spot)
 	await get_tree().create_timer(1.0).timeout

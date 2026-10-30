@@ -3,6 +3,14 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.20 (30 Oct 2026)
+
+- **Wrong letters fixed (Windows):** once a dungeon's message log had shown text, capitals all over the game could turn into other letters ("Tyait", "Aelly", "Mhunderwave"). The message log's freely scaling copy of the font shared its letter images with the normal font, and the two drew over each other's letters; it's now a separate font.
+- **3D view, Pokémon lit again:** with shadows on, Pokémon were shaded by their own shadow and looked almost black (a side effect of drawing them in front of walls in v0.8.19). A hidden copy now casts each Pokémon's shadow.
+- **3D view, Pokémon fit their corridors:** figures are a little smaller (more so with the low camera), keeping their proportions, so they stand inside corridors instead of reaching over the wall above.
+- **3D view, items on the floor** are small rounded 3D objects made from their icons, with a soft shadow, a gentle bob and a glint now and then. The **stairs** are a short flight of 3D steps. Traps stay flat.
+- **Resizing the window:** menus and windows follow the new size and shape. The dungeon menu's team and money window stays at the bottom, windows stay inside the screen, and the move info box, the town / cutscene Yes-No box and the Adventure Log re-place themselves.
+
 ## v0.8.19 (30 Oct 2026)
 
 - **3D view only in the Friend Areas:** Pokémon Square (with Makuhita Dojo, Whiscash Pond and the Post Office) and the team base are back to the 2D view; the Friend Areas keep their dioramas.

@@ -3197,6 +3197,9 @@ func _leader_info() -> Array:
 	nb.add_child(nl)
 	nb.position = Vector2(TeamScreens.WIN_X + 112, TeamScreens.WIN_Y)
 	nb.custom_minimum_size.x = minf(272, vs.x - nb.position.x - 16)
+	UITheme.fit(nb, func(v: Vector2):
+		nb.custom_minimum_size.x = minf(272, v.x - nb.position.x - 16)
+		nb.reset_size())
 	var ib := _info_panel()
 	var sb: StyleBoxFlat = UITheme.box().duplicate()
 	sb.content_margin_top = 2 * UITheme.PX
@@ -3235,6 +3238,10 @@ func _leader_info() -> Array:
 	var h := 4 * 22 + 4 * UITheme.PX + 2 * UITheme.PX
 	ib.custom_minimum_size.x = minf(448, vs.x - 2 * TeamScreens.WIN_X)
 	ib.position = Vector2(TeamScreens.WIN_X, vs.y - h - 4)
+	UITheme.fit(ib, func(v: Vector2):           # stays at the bottom when the window changes size
+		ib.custom_minimum_size.x = minf(448, v.x - 2 * TeamScreens.WIN_X)
+		ib.reset_size()
+		ib.position = Vector2(TeamScreens.WIN_X, v.y - h - 4))
 	return [nb, ib]
 
 # ------------------------------------------------------------------ moves (linked moves)

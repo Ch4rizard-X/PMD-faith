@@ -193,8 +193,9 @@ static func open(root: Control) -> void:
 		rows.append(l)
 	panel.size = Vector2(26 * 8, 14 + 8 * 12) * UITheme.PX
 	root.add_child(panel)
-	var vs := root.get_viewport_rect().size / UITheme.PX
-	panel.position = Vector2(floorf((vs.x - 240) / 2) + 16, floorf((vs.y - 135) / 2) + 12) * UITheme.PX
+	UITheme.fit(panel, func(v: Vector2):
+		var vs := v / UITheme.PX
+		panel.position = Vector2(floorf((vs.x - 240) / 2) + 16, floorf((vs.y - 135) / 2) + 12) * UITheme.PX)
 	var refresh := func(pg: int):
 		panel.page = pg
 		panel.queue_redraw()

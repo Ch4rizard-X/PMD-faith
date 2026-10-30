@@ -2897,6 +2897,9 @@ func _ready() -> void:
 				get_viewport().get_texture().get_image().save_png("user://arena_%s.png" % ak)
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--resizetest"):
+		add_child(load("res://tests/test_resize.gd").new())
+		return
 	if OS.get_cmdline_user_args().has("--vfx3d"):
 		add_child(load("res://tests/test_vfx3d.gd").new())
 		return

@@ -900,13 +900,14 @@ static func _drop(c: Node) -> void:
 		c.queue_free()
 
 static func _clamp_into(root: Control, c: Control) -> void:
+	var at := c.position                   # where it asked to be; resizing the window re-fits from here
 	await root.get_tree().process_frame
 	if not is_instance_valid(c):
 		return
-	var vs := root.get_viewport_rect().size
-	c.reset_size()
-	c.position.x = clampf(c.position.x, 2, maxf(2, vs.x - c.size.x - 2))
-	c.position.y = clampf(c.position.y, 2, maxf(2, vs.y - c.size.y - 2))
+	UITheme.fit(c, func(vs: Vector2):
+		c.reset_size()
+		c.position.x = clampf(at.x, 2, maxf(2, vs.x - c.size.x - 2))
+		c.position.y = clampf(at.y, 2, maxf(2, vs.y - c.size.y - 2)))
 
 static func run_menu(root: Control, m: RedMenu, at: Vector2) -> Dictionary:
 	var bd := _backdrop(root, m)
@@ -1432,6 +1433,7 @@ static func _preview_box(root: Control, m: RedMenu, who, moves: Array, in_dungeo
 		pc.custom_minimum_size.x = w
 		r.custom_minimum_size.x = w - 12 * P
 		pc.reset_size()
+	UITheme.fit(pc, func(_vs): place.call())
 	m.on_select = func(i: int):
 		if not is_instance_valid(pc) or i < 0 or i >= moves.size():
 			return

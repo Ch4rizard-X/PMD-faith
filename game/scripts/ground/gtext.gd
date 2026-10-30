@@ -449,8 +449,9 @@ func _open_menu(opts: Array, cancel_val: int, can_cancel: bool) -> void:
 	await get_tree().process_frame
 	if _menu == null or not is_instance_valid(_menu):
 		return
-	var vs := get_viewport_rect().size
-	_menu.position = Vector2(vs.x - _menu.size.x - 8, (panel.position.y if panel.visible else vs.y) - _menu.size.y - 4)
+	var mn := _menu
+	UITheme.fit(mn, func(vs: Vector2):
+		mn.position = Vector2(vs.x - mn.size.x - 8, (panel.position.y if panel.visible else vs.y) - mn.size.y - 4))
 	var i: int = await _menu.choose()
 	_menu = null
 	_value = (i + 1) if i >= 0 else cancel_val
