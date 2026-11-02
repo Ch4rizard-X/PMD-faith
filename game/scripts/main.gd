@@ -2872,6 +2872,9 @@ func _ready() -> void:
 						k += 1
 				for a1 in OS.get_cmdline_user_args():
 					if a1.begins_with("--zoom="): ground.set_ground_zoom(float(a1.substr(7)))
+					if a1.begins_with("--e8="):               # a backdrop's drift speed (special command 0x36)
+						var ev := a1.substr(5).split(",")
+						ground.scroll.e8 = Vector2i(int(ev[0]), int(ev[1]))
 				for a1 in OS.get_cmdline_user_args():
 					if a1.begins_with("--shotdelay="): await get_tree().create_timer(float(a1.substr(12))).timeout
 				for i in 3:
@@ -5495,6 +5498,16 @@ func _storytest() -> void:
 	while t < secs:
 		await get_tree().create_timer(1.0).timeout
 		t += 1
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--pk="):           # tests: PLAYER_KIND (a post-game save holds 2)
+				GVars.set_val(null, GVars.PLAYER_KIND, int(a.substr(5)))
+			if a.begins_with("--shots="):        # tests: --shots=from,to,dir: 4 viewport shots a second
+				var sv := a.substr(8).split(",")
+				if t >= int(sv[0]) and t <= int(sv[1]):
+					(func():
+						for q in 4:
+							get_viewport().get_texture().get_image().save_png("%s/t%03d_%d.png" % [sv[2], t, q])
+							await get_tree().create_timer(0.25).timeout).call()
 		if is_instance_valid(ground):
 			ground.text.auto = true
 			for a in OS.get_cmdline_user_args():
@@ -5565,7 +5578,7 @@ func _storytest() -> void:
 			if OS.get_cmdline_user_args().has("--lives"):
 				for L in ground.lives:
 					if L.kind_id != -1:
-						print("    L%d kind=%d g%d s%d pos=%s flags=%x ctrl=%s" % [L.id, L.kind_id, L.group, L.sector, L.p144 / 2048, L.flags, L.ctrl])
+						print("    L%d kind=%d g%d s%d pos=%s flags=%x anim=%x %s" % [L.id, L.kind_id, L.group, L.sector, L.p144 / 2048, L.flags, L.anim, (L.sprite._anim_name(L.sprite.anim_group) + ("" if L.sprite.loop else "/once")) if L.sprite else "-"])
 		elif is_instance_valid(dungeon):
 			if not dungeon.autoplay:
 				dungeon.set_autoplay(true)

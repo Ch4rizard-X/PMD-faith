@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(HERE, "red"))
 sys.path.insert(0, os.path.dirname(HERE))
 import common  # noqa: E402
 import make  # noqa: E402  (tools/music/red/make.py)
+import jobs  # noqa: E402
 
 MP3 = "200 204 210 301 302 303 304 305 332 333 336 341 342 343 463 606 607 608 610 ev455 ev463 ev468 ev470 ev473"
 OGG = ("201 203 205 206 212 213 330 348 400 450 451 453 454 455 457 458 459 460 464 465 466 468 469 470 471 472 473 "
@@ -43,15 +44,43 @@ def files():
     return sorted(out)
 
 
-def main():
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
     outdir = os.path.join(common.ASSETS, "sfx")
     os.makedirs(outdir, exist_ok=True)
+    fl = files()
+
+    def one(i):
+        name, fn, sr = fl[i]
+        return {"len": make.se(int(name.replace("ev", "")), os.path.join(outdir, fn), sr=sr, gain=GAIN)}
+
+    if "--worker" in argv:                     # jobs.py
+        jobs.worker_loop(one)
+        return
     t0 = time.time()
-    for name, fn, sr in files():
-        num = int(name.replace("ev", ""))
-        d = make.se(num, os.path.join(outdir, fn), sr=sr, gain=GAIN)
-        print("%-10s song %3d  %.2fs" % (fn, num, d), flush=True)
-    print("sfx: %d files (%.0fs)" % (len(files()), time.time() - t0))
+    idx = list(range(len(fl)))
+    failed = []
+
+    def got(i, r):
+        if "error" in r:
+            failed.append(fl[i][1])
+
+    left = idx
+    if jobs.count(len(idx)) > 1:
+        _, left = jobs.run(os.path.abspath(__file__), idx, "sound effects", lambda i: fl[i][1], on_result=got,
+                           word="Sounds")
+    for i in left:
+        try:
+            r = one(i)
+        except Exception as e:                 # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            r = {"error": repr(e)}
+        got(i, r)
+        print("%-10s %s" % (fl[i][1], "FAILED" if "error" in r else "%.2fs" % r["len"]), flush=True)
+    print("sfx: %d files (%.0fs)" % (len(fl), time.time() - t0))
+    if failed:
+        sys.exit("sound effects that failed: " + ", ".join(failed))
 
 
 if __name__ == "__main__":

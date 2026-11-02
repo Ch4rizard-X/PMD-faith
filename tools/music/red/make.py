@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 import common  # noqa: E402
 import render  # noqa: E402
 from audio_util import resample, encode  # noqa: E402
+import jobs  # noqa: E402
 
 SR_OUT = 24000
 # BGM ids the game ships (Red's song table 1-127 that have music; 128 = Monster House)
@@ -111,17 +112,45 @@ def se(num, path, sr=None, target_db=None, max_s=12.0, gain=1.0):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    worker = "--worker" in argv
+    argv = [a for a in argv if a != "--worker"]
     kind = argv[0] if argv else "bgm"
     ids = [int(x) for x in argv[1].split(",")] if len(argv) > 1 else None
     if kind == "bgm":
         outdir = os.path.join(common.ASSETS, "music")
         os.makedirs(outdir, exist_ok=True)
+        if worker:                                      # jobs.py: songs from stdin, results to the parent
+            jobs.worker_loop(lambda n: bgm(n, outdir))
+            return
         stats = common.load_json(STATS) if os.path.exists(STATS) else {}
-        for num in ids or BGM_IDS:
-            t0 = time.time()
-            stats["%03d" % num] = bgm(num, outdir)
-            print("%03d %s %.1fs" % (num, stats["%03d" % num], time.time() - t0), flush=True)
+        want = ids or BGM_IDS
+        failed = []
+
+        def got(num, r):
+            if "error" in r:
+                failed.append(num)
+                return
+            stats["%03d" % num] = r
             common.save_json(STATS, stats, pretty=True)
+
+        left = want
+        if jobs.count(len(want)) > 1:
+            _, left = jobs.run(os.path.abspath(__file__), want, "Red Rescue Team", lambda n: "song %03d" % n,
+                               extra=["bgm"], on_result=got)
+        for i, num in enumerate(left):
+            t0 = time.time()
+            try:
+                r = bgm(num, outdir)
+            except Exception as e:                      # noqa: BLE001
+                import traceback
+                traceback.print_exc()
+                r = {"error": repr(e)}
+            got(num, r)
+            print("Music %d/%d (Red Rescue Team) - song %03d %s in %.0fs" % (
+                len(want) - len(left) + i + 1, len(want), num, "FAILED" if "error" in r else "done",
+                time.time() - t0), flush=True)
+        if failed:
+            sys.exit("songs that failed: " + ", ".join("%03d" % n for n in failed))
     else:
         sys.exit("SE rendering is driven by tools/music/sfx.py")
 

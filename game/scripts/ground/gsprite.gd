@@ -109,8 +109,17 @@ func set_ornament(name: String) -> void:
 func has_pokemon() -> bool:
 	return not man.is_empty()
 
+## Red's 15 starters have their own animation tables (src/data/ax/<starter>.h): from group 20 on they don't
+## follow the EoS order. Matched by frame timings: 20 sits down (3 x 8 frames), 23 is a single held pose,
+## 26 is lying limp while Gengar drags them (one pose, slow sway; EoS 26 "Trip" would fall over and over).
+const STARTER_GROUPS := {20: "Sit", 23: "Head", 26: "Float"}
+const STARTER_KEYS := ["0001", "0004", "0007", "0025", "0052", "0066", "0104", "0133", "0152", "0155", "0158",
+	"0252", "0255", "0258", "0300"]
+
 func _anim_name(g: int) -> String:
 	var n: String = ANIM_NAMES[g] if g >= 0 and g < ANIM_NAMES.size() else "Idle"
+	if STARTER_GROUPS.has(g) and species.substr(0, 4) in STARTER_KEYS:
+		n = STARTER_GROUPS[g]
 	var anims: Dictionary = man.get("anims", {})
 	var guard := 0
 	while not anims.has(n) and guard < 4:
@@ -142,7 +151,8 @@ func play(a1: int, d: int) -> void:
 	loop = (a1 & 0x800) != 0
 	_track = []
 	_track_total = 0
-	if not man.is_empty() and g >= 0 and g < ANIM_NAMES.size() and _anim_name(g) != ANIM_NAMES[g]:
+	if not man.is_empty() and g >= 0 and g < ANIM_NAMES.size() and _anim_name(g) != ANIM_NAMES[g] \
+			and not (STARTER_GROUPS.has(g) and species.substr(0, 4) in STARTER_KEYS):
 		_track = red_track(species, g, new_dir)
 		for fr in _track:
 			_track_total += int(fr[0])

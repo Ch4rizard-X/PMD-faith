@@ -264,7 +264,9 @@ func say_on_bg(text, auto_close: bool) -> bool:
 		return false
 	_on_bg = true
 	_bg_auto = auto_close
-	_bg_auto_t = 0
+	_bg_auto_t = 0              # auto: 0 fade in, 1 hold, 2 fade out (textbox.c #[I] WAIT 0x20 WAIT_PRESS #[O] WAIT 0x20)
+	if auto_close and G != null and G.has_method("fade_in_b"):
+		G.fade_in_b(30)
 	panel.visible = false
 	port_frame.visible = false
 	_pages = _paginate(format(text))
@@ -367,9 +369,15 @@ func press() -> void:
 		Audio.sfx("text")
 		_start_page()
 		return
-	_open = false
 	if _on_bg and _bg_auto:
-		bg_label.visible = false
+		if _bg_auto_t != 1:
+			return              # still fading in / out
+		_bg_auto_t = 2
+		_auto_t = 0
+		if G.has_method("fade_out_b"):
+			G.fade_out_b(30)
+		return
+	_open = false
 	G.lock_jump_zero(0)
 
 ## Called once per game frame by the ground loop.
@@ -388,8 +396,21 @@ func tick() -> void:
 		else:
 			_auto_t += 1
 			var last := _page + 1 >= _pages.size()
-			if _on_bg and _bg_auto and _auto_t >= 32:
-				press()
+			if _on_bg and _bg_auto:
+				var fading: bool = int(G.fadeB.state) != 0 if "fadeB" in G else false
+				if _bg_auto_t == 0:
+					if _auto_t >= 32 and not fading:
+						_bg_auto_t = 1
+						_auto_t = 0
+				elif _bg_auto_t == 1:
+					if (_auto_end >= 0 and last and _auto_t >= _auto_end) or (_auto_mid >= 0 and not last and _auto_t >= _auto_mid) \
+							or (auto and _auto_t >= auto_delay):
+						press()
+				elif _auto_t >= 32 and not fading:
+					_open = false
+					bg_label.visible = false
+					_on_bg = false
+					G.lock_jump_zero(0)
 			elif _overheard_t > 0 and _auto_t >= _overheard_t:
 				press()
 			elif _auto_end >= 0 and last and _auto_t >= _auto_end:

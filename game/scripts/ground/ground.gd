@@ -1361,6 +1361,8 @@ func _scroll_update() -> void:
 			spr.region_enabled = true
 			spr.region_rect = Rect2(float(posmod(-int(scroll.f8.x), ww)) * k, 0, spr.texture.get_width(), spr.texture.get_height())
 		return
+	if _scroll_red(nm):
+		return
 	if not nm.begins_with("personality_test"):
 		return
 	scroll.f4 = int(scroll.f4) + 2
@@ -1370,6 +1372,58 @@ func _scroll_update() -> void:
 	var y := posmod(int(scroll.f8.y), maxi(hh, 1))
 	_scroll_layer(map_lo, y)
 	_scroll_layer(map_hi, -y)
+
+## sub_80A59DC's other maps: layers that drift on their own (the script sets the speed, special command 0x36:
+## scroll.e8, in 1/8 px a frame), so a scene can stand still while the backdrop moves past (the fugitives' snow
+## roads, the dark world Gengar drags the partner through, the night skies of the ending). Red's layer 0 is our
+## "_hi" layer (or the only one), layer 1 "_lo" (gen_ground_bg.py writes them in that order).
+func _scroll_red(nm: String) -> bool:
+	var two: bool = (map_info.get("layers", []) as Array).size() >= 2
+	var l0: Sprite2D = map_hi if two else map_lo
+	var l1: Sprite2D = map_lo if two else null
+	match nm:
+		"fugitives_snow_road", "fugitives_blizzard_road", "nightmare":
+			_scroll_step_x()
+			_scroll_offset(l0, Vector2i(scroll.f8.x, 0))
+			if nm == "nightmare":
+				_scroll_offset(l1, Vector2i(scroll.f8.x, 0))
+		"night_sky_1":
+			_scroll_step_xy()
+			_scroll_offset(l1, scroll.f8)
+		"night_sky_2":
+			_scroll_step_xy()
+			_scroll_offset(l0, scroll.f8)
+		"pelipper_post_office", "title_screen":
+			scroll.f0 = int(scroll.f0) + 1
+			scroll.f8 = Vector2i(scroll.f8.x + int(scroll.f0) / 8, 0)
+			scroll.f0 = int(scroll.f0) & 7
+			_scroll_offset(l1, Vector2i(scroll.f8.x, 0))
+		_:
+			return false
+	return true
+
+func _scroll_step_x() -> void:
+	scroll.f0 = int(scroll.f0) + int(scroll.e8.x)
+	scroll.f8 = Vector2i(scroll.f8.x + int(scroll.f0) / 8, scroll.f8.y)
+	scroll.f0 = int(scroll.f0) % 8
+
+func _scroll_step_xy() -> void:
+	scroll.f0 = int(scroll.f0) + int(scroll.e8.x)
+	scroll.f4 = int(scroll.f4) + int(scroll.e8.y)
+	scroll.f8 = Vector2i(scroll.f8.x + int(scroll.f0) / 8, scroll.f8.y + int(scroll.f4) / 8)
+	scroll.f0 = int(scroll.f0) % 8
+	scroll.f4 = int(scroll.f4) % 8
+
+## The layer's picture moved by off map pixels (wrapping around the map), the sprite itself where it was.
+func _scroll_offset(spr: Sprite2D, off: Vector2i) -> void:
+	if spr == null or spr.texture == null:
+		return
+	var w := maxi(int(map_info.get("w", 1)), 1)
+	var h := maxi(int(map_info.get("h", 1)), 1)
+	var k := float(spr.texture.get_width()) / float(w)
+	spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	spr.region_enabled = true
+	spr.region_rect = Rect2(float(posmod(off.x, w)) * k, float(posmod(off.y, h)) * k, spr.texture.get_width(), spr.texture.get_height())
 
 func _scroll_layer(spr: Sprite2D, dy: int) -> void:
 	if spr == null or spr.texture == null:

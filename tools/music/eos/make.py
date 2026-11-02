@@ -24,6 +24,7 @@ import common  # noqa: E402
 from audio_util import resample  # noqa: E402
 from samples import load_bank  # noqa: E402
 from render import Song  # noqa: E402
+import jobs  # noqa: E402
 
 BGM = os.path.join(common.EOS, 'fs', 'SOUND', 'BGM')
 CACHE = os.path.join(common.TMP, 'eos_bgm_cache')
@@ -99,7 +100,8 @@ def render_one(num, bank, gain, outdir, keep_wav=False):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     keep = '--wav' in argv
-    args = [a for a in argv if a not in ('--wav', '--resume')]
+    worker = '--worker' in argv
+    args = [a for a in argv if a not in ('--wav', '--resume', '--worker')]
     outdir = os.path.join(common.ASSETS, 'music')
     if args and not args[0][0].isdigit() and not args[0].startswith('--'):
         outdir = args.pop(0)
@@ -114,31 +116,42 @@ def main(argv=None):
         ids = [int(x) for x in args[0].split(',')]
     else:
         ids = sorted(int(f[3:7]) for f in os.listdir(BGM) if f.endswith('.smd'))
-    bank = load_bank(os.path.join(BGM, 'bgm.swd'), CACHE)
+    bank = load_bank(os.path.join(BGM, 'bgm.swd'), CACHE)       # (also fills the cache before any workers)
+    if worker:                                     # jobs.py: song ids from stdin, results to the parent
+        jobs.worker_loop(lambda n: render_one(n, bank, gain, outdir, keep))
+        return
     statf = os.path.join(CACHE, '_stats.json')
     stats = json.load(open(statf)) if os.path.exists(statf) else {}
-    skip_done = '--resume' in argv
-    for num in ids:
+    if '--resume' in argv:
+        ids = [n for n in ids if not ('length' in stats.get('%04d' % n, {})
+                                      and os.path.exists(os.path.join(outdir, 'eos_%04d.ogg' % n)))]
+
+    def got(num, r):
+        stats['%04d' % num] = r
+        if 'error' in r:
+            print('%04d FAILED %s' % (num, r['error']), flush=True)
+        elif 'length' in r and r.get('warnings'):
+            print('%04d %s' % (num, '; '.join(r['warnings'])), flush=True)
+        json.dump(stats, open(statf, 'w'), indent=1)
+
+    wargs = ([outdir] if outdir != os.path.join(common.ASSETS, 'music') else []) + ['--gain', str(gain)] + \
+        (['--wav'] if keep else [])
+    left = ids
+    if jobs.count(len(ids)) > 1:
+        _, left = jobs.run(os.path.abspath(__file__), ids, 'Explorers of Sky', lambda n: 'bgm %04d' % n,
+                           extra=wargs, on_result=got)
+    for i, num in enumerate(left):
         t0 = time.time()
-        if skip_done and 'length' in stats.get('%04d' % num, {}) and os.path.exists(os.path.join(outdir, 'eos_%04d.ogg' % num)):
-            continue
         try:
-            r = render_one(num, bank, gain, outdir, keep)
-        except Exception as e:
+            r = render_one(num, bank, gain, outdir, keep) or {'skipped': 'no notes'}
+        except Exception as e:                     # noqa: BLE001
             import traceback
             traceback.print_exc()
-            stats['%04d' % num] = {'error': repr(e)}
-            print('%04d FAILED %r' % (num, e), flush=True)
-            continue
-        if r is None:
-            stats['%04d' % num] = {'skipped': 'no notes'}
-            print('%04d no notes' % num, flush=True)
-            continue
-        stats['%04d' % num] = r
-        print('%04d len=%.1fs loop=%s peak=%.3f rms=%.4f clip=%d voices=%d %.1fs %s' % (
-            num, r['length'], None if r['loop_start'] is None else round(r['loop_start'], 2), r['peak'], r['rms'],
-            r['clipped'], r['voices'], time.time() - t0, '; '.join(r['warnings'])), flush=True)
-        json.dump(stats, open(statf, 'w'), indent=1)
+            r = {'error': repr(e)}
+        got(num, r)
+        print('Music %d/%d (Explorers of Sky) - bgm %04d %s in %.0fs' % (
+            len(ids) - len(left) + i + 1, len(ids), num, 'FAILED' if 'error' in r else 'done', time.time() - t0),
+            flush=True)
     write_loops(stats)
 
 

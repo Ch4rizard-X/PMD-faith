@@ -248,6 +248,18 @@ class VoiceBank:
         return self.asm.data[off + key]
 
 
+_voice_bank = None
+
+
+def voice_bank():
+    """One VoiceBank per process: assembling every voicegroup takes seconds, and a jobs.py worker renders many
+    songs (tones and waves are read-only once built)."""
+    global _voice_bank
+    if _voice_bank is None:
+        _voice_bank = VoiceBank()
+    return _voice_bank
+
+
 class Song:
     def __init__(self, num):
         self.num = num
@@ -450,7 +462,7 @@ class Chan:
 class Player:
     def __init__(self, num, loops=2, tail=1.0):
         self.song = Song(num)
-        self.bank = VoiceBank()
+        self.bank = voice_bank()
         self.group = self.bank.asm.labels[self.song.group]
         self.tracks = [Track(i, p) for i, p in enumerate(self.song.tracks)]
         self.pcm = [Chan() for _ in range(MAX_PCM)]

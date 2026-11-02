@@ -3,6 +3,14 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.30 (2 Nov 2026)
+
+- **Text on a black screen shows again:** Red's "message on the background" (the centred lines on a dark screen, like "Thus began ...'s cruel and arduous journey", "I don't want to leave..." and "Your friend is heartbroken..." before the credits) was drawn but never faded in, so none of it could be seen anywhere in the game. It now fades in, waits and fades out as in Red (textbox.c).
+- **Moving backgrounds:** the fugitive roads in the snow and the blizzard, the nightmare clouds, the night skies of the ending, the title screen and Pelipper's post office scroll the way Red's maps do (each map's own drift, ground_map.c), so the Pokémon no longer seem to walk on the spot.
+- **The starter Pokémon's own animations:** Red's starters number some of their animations differently from everyone else. Being dragged by Gengar played a looping trip-and-fall (so they kept falling over and getting up), and sitting down at the end of the story played a flop onto the back. Now the one being dragged lies limp, and they sit down and hold a pose where Red does.
+- **Buried Relic:** the Pokémon News about the Buried Relic now opens it as in Red. Check the mailbox in front of your base once the letter has come; after that Pokémon Square talks about the relic and Shiftry tells you where it is. The letter used to arrive, but the town stayed silent and the relic stayed shut. The Lucario Rank letter's scene at your base plays too.
+- **Faster music build (Android and PC):** the music and sound effects step renders several songs at once (one per free core, as memory allows), shows each finished song with the time left ("Music 57/196 (Explorers of Sky) ... about 12 min left"), and reuses Red's instrument bank between songs. The songs come out the same as before.
+
 ## v0.8.29 (2 Nov 2026)
 
 - **Monster Houses fill up when you walk in:** as in Red (dungeon_monster_house.c), stepping into a Monster House drops 8 to 12 of the floor's Pokémon from the ceiling around you (on free floor inside the house, within 4 tiles). Only floors made as one big Monster House had Pokémon in theirs; an ordinary house had the message and the music but stayed empty. Partners with the House Avoider IQ skill also stop avoiding the room once it has gone off.

@@ -509,8 +509,12 @@ static func special_func(G, act: GAction, idx: int, r2: int, r3: int) -> int:
 			return 0
 		3:
 			return 0
-		4, 8, 15:
+		4:
 			return 0
+		8:      # sub_80964B4: the Buried Relic news (0x35) has come (mailbox or News List) -> the base mailbox
+			return 1 if PokemonNews._has(0x35) else 0       # shows it once and opens the relic sub-scenario (49,2)
+		15:     # sub_80964E4: the Lucario Rank news (0x36) has come
+			return 1 if PokemonNews._has(0x36) else 0
 		5, 6, 7:
 			return 0
 		9:
