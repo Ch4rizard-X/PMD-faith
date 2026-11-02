@@ -32,6 +32,7 @@ PMD-faith stands on the work of many people. Thank you all.
 - **[Godot Engine](https://godotengine.org)** (MIT) and its contributors.
 - **xBRZ** by Zenju (GPL-3.0), through the [xbrz.py](https://github.com/ioistired/xbrz.py) binding by ioistired: the HD upscaling of tiles and maps.
 - **Pillow**, **NumPy** and **FFmpeg**, used by the build tools.
+- **Git** and **GCC** where installed; without them, **[libvorbis / libogg](https://xiph.org)** (Xiph.Org), **[LAME](https://lame.sourceforge.io)**, the **[SoX Resampler library](https://sourceforge.net/projects/soxr/)** and **[TinyCC](https://bellard.org/tcc/)** (Fabrice Bellard and contributors) do the same jobs. Scale2x/3x (the fallback HD scaling) is the algorithm by Andrea Mazzoleni.
 
 ## This project
 

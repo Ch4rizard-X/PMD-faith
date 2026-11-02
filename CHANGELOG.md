@@ -13,6 +13,7 @@ Everything listed here is code; the game's graphics, music and data are built fr
 - **Friend Bow (Game page):** Red's one recruitment roll, or the remake's two. Vanilla Red sets it to one roll.
 - **Launcher on Android:** the Play / Game / Pokémon / Dungeons / Difficulty pages also open on the APK, and the phone's Back button returns to the previous page.
 - **Build tools without git, a C compiler or ffmpeg** (for builds on machines that have none of them): downloads use git's own protocol over HTTPS (tools/http_fetch.py, SpriteCollab in large batches instead of tens of thousands of single files), the decompilation's small data dumpers compile into a shared library with any C compiler including TinyCC (tools/cdump.py), music and sounds encode through libvorbis, LAME and the SoX resampler directly (tools/music/audio_libs.py), and the HD scaling falls back to Scale2x/3x when xBRZ can't be built (tools/scalex.py). A stopped build of the maps, music and sounds step carries on after the parts that finished.
+- **Docs:** README, SETUP and CREDITS describe building without git, FFmpeg or a compiler, and credit libvorbis, LAME, the SoX Resampler, TinyCC and Scale2x.
 
 ## v0.8.23 (31 Oct 2026)
 

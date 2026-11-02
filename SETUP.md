@@ -49,6 +49,8 @@ A black window opens and installs four free programs with Windows' own installer
 
 It also installs two small Python add-ons (Pillow and NumPy).
 
+Git, FFmpeg and GCC make the build faster and are what the steps below expect, but the build also runs without them: it then downloads over plain HTTPS (git's own protocol, so only the files the game uses), encodes the music with the libvorbis, LAME and SoX resampler libraries, compiles the helpers with any C compiler including TinyCC, and scales graphics with Scale2x/3x if xBRZ can't be built.
+
 - Windows may ask *"Do you want to allow this app to make changes to your device?"* for each one. Click **Yes**.
 - If Windows shows a blue *"Windows protected your PC"* box when you double-click the file, click **More info**, then **Run anyway**. It's a plain text script; you can open it in Notepad to see exactly what it does.
 - Tools you already have are skipped.
