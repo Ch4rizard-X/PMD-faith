@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.25 (2 Nov 2026)
+
+- **Dungeon walking at Red's pace:** a step took about 0.13 s whatever the Speed option, about 3x faster than *Red Rescue Team* (24 frames a tile at its default Speed: Slow, 12 at Fast; from the decompilation's dungeon_entity_movement.c). The dungeon **Speed** option (Game Options -> Dungeon) now sets the walking pace too: **Slow** is Red's Slow (0.4 s a tile, Red's default), **Normal** is Red's Fast (0.2 s), **Fast** keeps the quicker step (0.13 s). A Pokémon that moves twice in a turn still covers both tiles in one step's time, as in Red. Running (B / Run mode) is unchanged.
+- **Vanilla Red preset** also sets Speed to Slow, so a full Red setup walks at Red's speed.
+
 ## v0.8.24 (2 Nov 2026)
 
 - **Cutscenes can't hang any more:** if a cutscene stands completely still for about 10 seconds with no text on screen (one Pokémon took its cue a moment too early, so the cue the scene waits for never comes again), the scene's own script carries on. Fixes the hang in Pokémon Square after Mt. Freeze, right after Gengar runs off, where only the music kept playing (reported on the Android build).

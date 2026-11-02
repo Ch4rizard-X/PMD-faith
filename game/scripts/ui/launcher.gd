@@ -128,6 +128,9 @@ func _set_parts(red: bool) -> void:
 	for P in LC.switchable():
 		parts[P[0]] = red
 	cfg["parts"] = parts
+	if red:                                  # Vanilla Red: Red's dungeon Speed (Slow, Red's default: walking at Red's pace)
+		Game.settings["msg_speed"] = 0
+		Game._save_settings_only()
 	_parts_changed()
 
 func _parts_changed() -> void:

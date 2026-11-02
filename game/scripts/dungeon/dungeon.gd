@@ -8,8 +8,15 @@ signal finished(result: String)        # "cleared" | "defeated" | "quit"
 
 const LCFG := preload("res://scripts/core/launcher_cfg.gd")   # the launcher's choices (Pokémon, dungeons, difficulty)
 const T := 24
-const WALK_TIME := 0.13
+## One tile of walking, by the dungeon Speed option (Game Options): Slow is Red's Slow (its default), 24 frames;
+## Normal is Red's Fast, 12 frames (dungeon_entity_movement.c: walkAnimFramesLeft = 24 / sSpeedMultiplier);
+## Fast is the remake's own quicker step. A Pokémon that moves twice in a turn covers both tiles in one step's
+## time, as Red divides the frames by the number of tiles.
+const WALK_TIMES := [0.4, 0.2, 0.13]
 const RUN_TIME := 0.045
+
+static func walk_time() -> float:
+	return WALK_TIMES[clampi(int(Game.settings.get("msg_speed", 1)), 0, 2)]
 const LINE_RANGE := 10
 
 var dkey := ""
@@ -1842,7 +1849,7 @@ func _flush_walks() -> void:
 func _start_walks() -> void:
 	if _pending_walks.is_empty():
 		return
-	var t := RUN_TIME if _running else WALK_TIME
+	var t := RUN_TIME if _running else walk_time()
 	for m in _pending_walks:
 		if m.visual == null or not is_instance_valid(m.visual):
 			continue

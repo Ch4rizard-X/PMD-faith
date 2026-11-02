@@ -2,7 +2,8 @@ class_name GameOptions
 extends RefCounted
 ## Red's Game Options (options_menu2.c + dungeon_strings.c option rows, game_options.c defaults), opened from
 ## the base menu's Others. All of Red's rows, stored in Game.settings (other screens read these keys):
-##   msg_speed   0 Slow / 1 Normal / 2 Fast   (Red: Speed Slow / Fast; the remake keeps its middle step)
+##   msg_speed   0 Slow / 1 Normal / 2 Fast   (Red: Speed Slow / Fast; the remake keeps its middle step). Also the
+##               dungeon walking pace: Slow = Red's Slow, Normal = Red's Fast, Fast = quicker (Dungeon.walk_time)
 ##   far_off_pals 0 Self / 1 Look            damage_turn  bool (No / Yes)
 ##   grids       bool (Off / On)              map_mode     0 Off / 1 Clear / 2 Shade
 ##   window_color 0 Blue / 1 Red / 2 Green
