@@ -210,7 +210,7 @@ func build_floor() -> void:
 		ts_key = "t14"
 	if arena_key != "":
 		ts_key = arena_key
-	terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain}, ts_key)
+	terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain, "flags": fs.flags}, ts_key)
 	_ts_key = ts_key
 	voxel_floor()
 	fs.set_meta("fixed_floor", fixed_no != 0)
@@ -726,7 +726,7 @@ var _ts_key := "t14"
 
 ## Drought / One-Room / Fill-In Orbs changed the terrain: redraw it.
 func _redraw_terrain() -> void:
-	terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain}, _ts_key)
+	terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain, "flags": fs.flags}, _ts_key)
 	voxel_floor()
 
 ## Transfer Orb changed a Pokémon's species: new sprite.
@@ -764,6 +764,73 @@ func rescue_beam(ms: Array) -> void:
 		last = n
 	if last:
 		await last.done
+
+## Red's ground shaking (dungeon_cutscene.c sub_8086854, dungeon_tilemap.c sub_80400D4): the floor (BG3) moves up
+## and down by a table while the Pokémon stay; in some cutscenes every Pokémon also trembles sideways.
+const QUAKE_CS := [0, -1, 1, -2, 2, -3, 3, -4, 4, -4, 4, -4, 4, -4, 4, -4, 4]           # gUnknown_8107314
+const QUAKE_MOVE := [0, -1, 1, -1, 1, -1, 1, -2, 1, -2, 2, -2, 2, -2, 2, -3, 3, -3, 3, -3, 4, -4, 4, -4, 4, -5,
+	4, -5, 4, -5, 4, -5]                                                                  # gUnknown_80F6568
+var quake := {"on": false, "long": false, "sound": false, "t4": 0, "t5": 0}      # gUnknown_202F3D0
+var quake_move := {"n": 0, "rep": 0}                                                   # unk18200 / unk18204
+var quake_jitter := false                                                              # sub_80868F4 on everyone
+var _quake_acc := 0.0
+var _quake_frame := 0
+
+## sub_8086838 + sub_808680C (on) / sub_808682C (off). long: 80-frame rumbles (Groudon), else short random jolts.
+func quake_set(on: bool, long := false, sound := false) -> void:
+	if Dialog.auto_view or Dialog.auto:
+		print("  QUAKE ", "on" if on else "off", " long=", long, " jitter=", quake_jitter)
+	quake.on = on
+	if on:
+		quake.long = long
+		quake.sound = sound
+		quake.t4 = 0
+		if sound:
+			Audio.sfx("505")
+
+## Earthquake / Magnitude (EarthquakeMoveAction, MagnitudeMoveAction): frames of shaking; rep > 0 repeats it.
+func quake_move_start(frames: int, rep := 0) -> void:
+	quake_move.n = frames
+	quake_move.rep = rep
+
+func _quake_tick(dt: float) -> void:
+	if terrain_view == null:
+		return
+	_quake_acc += dt * 60.0
+	var s := int(terrain_view.position.y)
+	while _quake_acc >= 1.0:
+		_quake_acc -= 1.0
+		_quake_frame += 1
+		s = _quake_step()
+	terrain_view.position.y = s
+	if OS.get_cmdline_user_args().has("--quakelog") and s != 0:
+		print("  QY ", s, " jit=", quake_jitter)
+	obj_layer.position.y = s
+	mon_layer.position.x = (1 if (_quake_frame & 4) else -1) if quake_jitter else 0
+
+func _quake_step() -> int:
+	var s := 0
+	if quake.on:
+		if int(quake.t4) == 0:
+			if quake.long:
+				quake.t4 = 80
+				quake.t5 = 16
+			else:
+				quake.t4 = randi_range(0, 5) + 2
+				quake.t5 = randi_range(0, 5) + 2
+			if quake.sound:
+				Audio.sfx("505")
+		else:
+			quake.t4 -= 1
+		if int(quake.t5) != 0:
+			quake.t5 -= 1
+		s = QUAKE_CS[int(quake.t5)]
+	elif int(quake_move.n) > 0:
+		s = QUAKE_MOVE[mini(int(quake_move.n), 31)]
+		quake_move.n -= 1
+		if int(quake_move.n) == 0:
+			quake_move.n = quake_move.rep
+	return s
 
 var cs_cam_lock := false          # a boss cutscene moves the camera itself (BossScene: camera_at / camera)
 var cs_cam_pos := Vector2.ZERO
@@ -943,6 +1010,8 @@ func _process(dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_stick_zoom(dt)
 	_process_main(dt)
+	if quake.on or int(quake_move.n) > 0 or quake_jitter or (terrain_view and terrain_view.position.y != 0):
+		_quake_tick(dt)
 	_advance_walkers(dt)      # after input, so a step chosen this frame continues the motion with no pause
 	if perf_log:
 		var now := Time.get_ticks_usec()
@@ -2172,7 +2241,12 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 			MoveGrowth.sync_all(self)
 			_msg("[color=#7fe0ff]%s[/color] grew to Lv. %d!" % [move_name, mg_lv])
 	if (move_name != "" or MoveFx.red_on()) and not _quiet:
+		var shake: int = 12 if move_name == "Earthquake" else ([6, 12, 18, 20, 24, 30, 30][randi_range(0, 6)] if move_name == "Magnitude" else 0)
+		if shake > 0:
+			quake_move_start(shake, shake)           # code_8040094_1.c: the floor shakes for the whole animation
 		await MoveFx.play(self, m, move_name, mv, d, targets)
+		if shake > 0:
+			quake_move.rep = 0                       # dungeon_8041AD0.c: the last shake runs out, then stops
 	var hits := maxi(1, int(mv.get("hits", 1)))
 	if int(mv.get("hits", 1)) == 0:
 		hits = AbilityFx.multi_hits(m, fs.rng)          # 2-5 hits (Skill Link: 5)
@@ -3775,6 +3849,9 @@ func _use_item_id(m: Mon, id: String, announce := true) -> void:
 		_msg("%s used the %s." % [_nm(m), I.get("name", id)])
 		await _item_effect(m, m, id, false)
 		return
+	if id == "key":
+		await _use_key(m)
+		return
 	var verb := TeamScreens.item_verb(id)
 	if cat in ["other", "link_box", "tms_hms", "used_tm", "held_items", "exclusive"] or verb == "":
 		_msg("The %s can't be used here." % I.get("name", id))
@@ -3792,6 +3869,48 @@ func _use_item_id(m: Mon, id: String, announce := true) -> void:
 		_msg(USE_VERB_MSG.get(verb if verb != "" else "Use", "%s used the %s.") % [_nm(m), I.get("name", id)])
 	await get_tree().create_timer(0.3).timeout
 	await _item_effect(m, m, id, false)
+
+## The Key (KeyItemAction -> sub_8051E7C): used with a vault's locked door right above the user, it opens the
+## vault: its walls give way to the room inside, with its items, and the door becomes floor. Anywhere else:
+## "It can't be used here!" (the Key is kept).
+func _use_key(m: Mon) -> void:
+	var door := m.pos + Vector2i(0, -1)
+	var V: Dictionary = fs.vault
+	if V.is_empty() or bool(V.get("open", false)) or not fs.inb(door) \
+			or not (fs.flags[fs.idx(door)] & DungeonGen.FLAG_KEY_DOOR):
+		_msg("It can't be used here!")
+		Game.bag_add("key")
+		return
+	_msg("%s used the Key." % _nm(m))
+	var r: Rect2i = V.rect
+	var rid := fs.room_at(m.pos)
+	var k := 0
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var i := y * fs.w + x
+			fs.terrain[i] = int(V.terrain[k])
+			fs.flags[i] = int(V.flags[k]) | (fs.flags[i] & ~(DungeonGen.FLAG_IMPASSABLE | DungeonGen.FLAG_UNBREAKABLE
+				| DungeonGen.FLAG_KEY_DOOR | DungeonGen.FLAG_JUNCTION | DungeonGen.FLAG_STAIRS))
+			fs.room[i] = rid if rid != 255 else int(V.room[k])
+			fs.explored[i] = 1
+			k += 1
+	var di := fs.idx(door)
+	fs.flags[di] &= ~(DungeonGen.FLAG_IMPASSABLE | DungeonGen.FLAG_KEY_DOOR)
+	for t in V.get("traps", []):
+		fs.traps[t.pos] = {"id": str(t.id), "seen": true}
+	for it in V.get("items", []):
+		fs.items[it.pos] = {"id": str(it.id), "n": maxi(1, int(it.qty)), "price": 0}
+	if not (V.get("mons", []) as Array).is_empty():
+		_spawn_fixed({"fixed_mons": V.mons})
+	V["open"] = true
+	fs.red_reset_cache()
+	_redraw_terrain()
+	_reveal()
+	obj_layer.queue_redraw()
+	Audio.sfx("307")
+	_msg("The closed corridor was opened!")
+	await get_tree().create_timer(20 / 60.0).timeout
+	_update_hud()
 
 ## What a Red item does to target (dungeon_item_action.c, item_effects): eaten / used (thrown = false), or
 ## thrown at a Pokémon (thrown = true: seeds and berries act on whoever they hit; a thrown Blast Seed does

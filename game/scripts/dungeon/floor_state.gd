@@ -22,6 +22,7 @@ var turn := 0
 var floor_no := 1
 var dungeon_key := ""
 var monster_house_room := -1
+var vault := {}                      # DungeonGen "vault": a closed vault a Key opens ({} = none)
 var rng := RandomNumberGenerator.new()
 
 func setup(gen: Dictionary) -> void:
@@ -33,6 +34,7 @@ func setup(gen: Dictionary) -> void:
 	rooms = gen.get("rooms", [])
 	stairs = gen.stairs
 	monster_house_room = gen.get("monster_house_room", -1)
+	vault = gen.get("vault", {})
 	set_meta("forced_monster_house", bool(gen.get("forced_monster_house", false)))
 	explored = PackedByteArray()
 	explored.resize(w * h)
@@ -60,9 +62,13 @@ func is_wall(p: Vector2i) -> bool:
 ## Can mon m stand on p (terrain only; ignores other Pokémon)? Water/lava need the right type/ability.
 func walkable(p: Vector2i, m: Mon = null) -> bool:
 	var t := terrain_at(p)
+	if not vault.is_empty() and inb(p) and (flags[idx(p)] & DungeonGen.FLAG_KEY_DOOR):
+		return false                  # a vault's locked door (TERRAIN_TYPE_IMPASSABLE_WALL): no one passes
 	if t == 1:
 		return true
 	if m != null and is_mobile(m):
+		if not vault.is_empty() and inb(p) and (flags[idx(p)] & DungeonGen.FLAG_IMPASSABLE):
+			return false              # a closed vault's solid middle
 		return p.x >= 1 and p.y >= 1 and p.x < w - 1 and p.y < h - 1     # Mobile: walls, water, lava (not the edge)
 	if t == 0:
 		return false

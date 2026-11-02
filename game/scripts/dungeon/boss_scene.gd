@@ -329,6 +329,42 @@ const FLASH_ORDER := {
 	"CUTSCENE_WESTERN_CAVE_ATTEMPT2": ["sub_8086794", "MewtwoScreenFlash", "MewtwoScreenFlash"],
 	"CUTSCENE_WESTERN_CAVE_POSTSTORY": ["sub_8086794", "MewtwoScreenFlash", "MewtwoScreenFlash"],
 }
+## Red's ground shaking in boss scenes (dungeon_cutscene_*.c sub_8086838 / sub_808680C / sub_808682C, dropped by the
+## scene data): each entry is one shake, started at the scene's n-th "gUnknown_202F3D0.unk3" step (where the
+## data kept only its sound) and stopped after `off` = [dialogue it follows ("" = the shake's start), waits after].
+## long: Groudon's 80-frame rumbles with their sound; jitter: every Pokémon trembles too; sfx: sound stopped at the end.
+const QUAKES := {
+	"CUTSCENE_MAGMA_CAVERN_MID": [{"long": false, "jitter": true, "off": ["MagmaCavernMidDialogue_3", 1], "sfx": 453}],
+	"CUTSCENE_MAGMA_CAVERN_MID_POSTSTORY": [{"long": false, "jitter": true, "off": ["MagmaCavernMidDialogue_3", 1], "sfx": 453}],
+	"CUTSCENE_MAGMA_CAVERN_PIT_ATTEMPT1": [{"long": true, "off": ["", 1]}, {"long": true, "off": ["GroudonPreFightDialogue_7", 1]},
+		{"long": true, "off": ["GroudonPreFightDialogue_13", 2]}],
+	"CUTSCENE_MAGMA_CAVERN_PIT_ATTEMPT2": [{"long": true, "off": ["gGroudonReFightDialogue_3", 1]}],
+	"CUTSCENE_MT_FARAWAY": [{"long": false, "jitter": true, "off": ["", 1], "sfx": 453}],
+	"CUTSCENE_MT_FARAWAY_POSTSTORY": [{"long": false, "jitter": true, "off": ["", 1]}],
+}
+var _quake_i := 0
+var _quake_off = null                  # {"say": name, "waits": n, "armed": bool, "sfx": id}
+
+func _quake_start(visual: bool) -> void:
+	var list: Array = QUAKES.get(cutscene, [])
+	if _quake_i >= list.size():
+		return
+	var q: Dictionary = list[_quake_i]
+	_quake_i += 1
+	if visual and dg.has_method("quake_set"):
+		dg.quake_set(true, bool(q.get("long", false)), bool(q.get("long", false)))
+		dg.quake_jitter = bool(q.get("jitter", false))
+	var off: Array = q.get("off", ["", 1])
+	_quake_off = {"say": str(off[0]), "waits": int(off[1]), "armed": str(off[0]) == "", "sfx": int(q.get("sfx", -1))}
+
+func _quake_stop() -> void:
+	if _quake_off != null and int(_quake_off.sfx) > 0 and Audio.has_method("stop_sfx"):
+		Audio.call("stop_sfx", "%03d" % int(_quake_off.sfx))
+	_quake_off = null
+	if dg.has_method("quake_set"):
+		dg.quake_set(false)
+		dg.quake_jitter = false
+
 const INTRO_WALK := ["CUTSCENE_FROSTY_GROTTO_ATTEMPT1", "CUTSCENE_FROSTY_GROTTO_POSTSTORY", "CUTSCENE_HOWLING_FOREST", "CUTSCENE_HOWLING_FOREST_POSTSTORY", "CUTSCENE_JIRACHI", "CUTSCENE_JIRACHI_POSTSTORY", "CUTSCENE_MAGMA_CAVERN_MID", "CUTSCENE_MAGMA_CAVERN_MID_POSTSTORY", "CUTSCENE_MAGMA_CAVERN_PIT_ATTEMPT1", "CUTSCENE_MAGMA_CAVERN_PIT_POSTSTORY", "CUTSCENE_METEOR_CAVE", "CUTSCENE_MT_FREEZE_PEAK_POSTSTORY", "CUTSCENE_MT_STEEL_ATTEMPT1", "CUTSCENE_MT_STEEL_ATTEMPT2", "CUTSCENE_MT_THUNDER_PEAK_ATTEMPT1", "CUTSCENE_MT_THUNDER_PEAK_ATTEMPT2", "CUTSCENE_MT_THUNDER_PEAK_POSTSTORY", "CUTSCENE_NORTHERN_RANGE_ATTEMPT1", "CUTSCENE_NORTHERN_RANGE_ATTEMPT2", "CUTSCENE_NORTHERN_RANGE_POSTSTORY", "CUTSCENE_NORTHWIND_FIELD_ATTEMPT1", "CUTSCENE_SILVER_TRENCH", "CUTSCENE_SINISTER_WOODS_ATTEMPT1", "CUTSCENE_SINISTER_WOODS_ATTEMPT2", "CUTSCENE_SINISTER_WOODS_POSTSTORY", "CUTSCENE_SKY_TOWER_SUMMIT_ATTEMPT1", "CUTSCENE_SKY_TOWER_SUMMIT_ATTEMPT2", "CUTSCENE_SKY_TOWER_SUMMIT_POSTSTORY", "CUTSCENE_UPROAR_FOREST_ATTEMPT1", "CUTSCENE_UPROAR_FOREST_ATTEMPT2", "CUTSCENE_UPROAR_FOREST_POSTSTORY", "CUTSCENE_WESTERN_CAVE_ATTEMPT1", "CUTSCENE_WESTERN_CAVE_ATTEMPT2", "CUTSCENE_WESTERN_CAVE_POSTSTORY"]
 
 # ------------------------------------------------------------------ running steps
@@ -339,6 +375,8 @@ func run_prefight() -> void:
 	if cutscene in INTRO_WALK:
 		await _intro_walk()
 	await _run(scene.get("prefight", []), true)
+	if _quake_off != null or (dg.get("quake") is Dictionary and dg.quake.on):
+		_quake_stop()
 	if not floor_over:                       # (a scene that ends the floor keeps its view until the next floor)
 		await _release_camera()
 	_set_bg(0, 0, 0)
@@ -374,6 +412,9 @@ func _wait(frames: int) -> void:
 func _step(st: Array, visual: bool) -> void:
 	match str(st[0]):
 		"if":
+			if st[1] is Array and (st[1] as Array).size() > 1 and str(st[1][1]).begins_with("gUnknown_202F3D0.unk3"):
+				_quake_start(visual)                 # sub_808680C: the shake starts here (its sound: _quake_start)
+				return
 			if _cond(st[1]):
 				await _run(st[2], visual)
 			else:
@@ -382,9 +423,15 @@ func _step(st: Array, visual: bool) -> void:
 			await _before_say(str(st[1]))
 			await say(str(st[1]))
 			await _after_say(str(st[1]), visual)
+			if _quake_off != null and not _quake_off.armed and str(_quake_off.say) == str(st[1]):
+				_quake_off.armed = true
 		"wait":
 			if visual:
-				await _wait(mini(int(st[1]), 90))
+				await _wait(mini(int(st[1]), 90) if _quake_off == null else int(st[1]))
+			if _quake_off != null and _quake_off.armed:
+				_quake_off.waits -= 1
+				if int(_quake_off.waits) <= 0:
+					_quake_stop()
 		"bgm":
 			var id := int(st[1]) if (st[1] is int or st[1] is float or str(st[1]).is_valid_int()) else -1   # JSON numbers arrive as floats
 			if id == 999 or id < 0:

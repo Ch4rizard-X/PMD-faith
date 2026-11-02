@@ -2288,6 +2288,11 @@ func effects_add(slot: int, d: Dictionary, grp: int, sec: int) -> int:
 	if d.get("script") != null:
 		T.action.set_predefined(0, GData.ptr(d.script))
 		T.action.execute_predefined(0)
+	elif int(td[0]) == 1:
+		# GroundEffect_Add: a camera-type effect with no script of its own runs NORMAL_CAMERA (CAMERA_END_PAN,
+		# WAIT 1, END_DELETE): the scene's view starts on that spot (the night sky's ball of light, THE END ...)
+		T.action.set_predefined(0, GData.fn_script(GData.fn_id("NORMAL_CAMERA")))
+		T.action.execute_predefined(0)
 	return slot
 
 func _thing_delete(T: GThing) -> void:

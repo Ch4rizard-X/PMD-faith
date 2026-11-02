@@ -3,6 +3,14 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.31 (2 Nov 2026)
+
+- **Cutscenes start where Red points the camera:** many of Red's scenes place an invisible camera marker that the view starts on (ground_effect.c: a camera-type marker with no script runs NORMAL_CAMERA). These were ignored, so in those scenes the view sat in the map's top-left corner, for example on the trees north of your base at the start of the Latias and Latios story, and in Spinda's scene in your base. Fixed everywhere Red uses one (about 150 maps): the ending's ball of light is now in the middle of the sky above the text box, and THE END is centred.
+- **Locked vaults and the Key:** some floors (Solar Cave, Wyvern Hill, Buried Relic, Northwind Field, Western Cave, Far-Off Sea, Mt. Faraway) have a vault behind a locked door, as in Red (dungeon_generation.c sub_8051438). The vault used to be placed already open, without its door. It is now solid with the keyhole door until you stand below the door and use a **Key** from the bag: "The closed corridor was opened!", and the room inside, with its item, appears. Anywhere else the Key "can't be used here" and is kept.
+- **The ground shakes:** the quake in Magma Cavern ("Qu-quake!"), Groudon's rumbling before the fight and Ho-Oh's arrival shake the floor as in Red (dungeon_cutscene.c), with everyone trembling where Red does it. Earthquake and Magnitude shake the floor while they play (a bigger Magnitude shakes longer).
+- **Morning mail:** when new letters arrive in the morning, Pelipper's delivery scene at your base plays ("Flap! Flap!"), as in Red. The Lucario Rank letter's scene follows it.
+- **Rank gift and the rare Gonbe day:** the base visitor event that raises your rescue rank now really raises it ("The rescue rank went up from ... to ...!"), and the rare Pokémon Square event after the main story (a 1-in-256 chance each day) can happen.
+
 ## v0.8.30 (2 Nov 2026)
 
 - **Text on a black screen shows again:** Red's "message on the background" (the centred lines on a dark screen, like "Thus began ...'s cruel and arduous journey", "I don't want to leave..." and "Your friend is heartbroken..." before the credits) was drawn but never faded in, so none of it could be seen anywhere in the game. It now fades in, waits and fades out as in Red (textbox.c).

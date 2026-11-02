@@ -312,7 +312,7 @@ static func _apply(d, st: Dictionary) -> void:
 	var ts_key := str(st.get("ts_key", "t14"))
 	if not DB.tilesets.has(ts_key) and not DungeonGfx.is_arena(ts_key):
 		ts_key = "t14"
-	d.terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain}, ts_key)
+	d.terrain_view.build({"w": fs.w, "h": fs.h, "terrain": fs.terrain, "flags": fs.flags}, ts_key)
 	d.voxel_floor()
 	for m in fs.mons:
 		d._add_sprite(m)

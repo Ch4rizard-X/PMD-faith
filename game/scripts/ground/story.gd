@@ -509,8 +509,11 @@ static func special_func(G, act: GAction, idx: int, r2: int, r3: int) -> int:
 			return 0
 		3:
 			return 0
-		4:
-			return 0
+		4:      # sub_80961D8: the day's mail is delivered; 1 when anything came (EVENT_WAKEUP: Pelipper's "Flap! Flap!")
+			var jobs_came := Missions.refresh_mailbox_if_new_day()
+			var n_news := PokemonNews.letters().size()
+			PokemonNews.refresh_if_new_day(Missions.mailbox().size())
+			return 1 if jobs_came or PokemonNews.letters().size() > n_news else 0
 		8:      # sub_80964B4: the Buried Relic news (0x35) has come (mailbox or News List) -> the base mailbox
 			return 1 if PokemonNews._has(0x35) else 0       # shows it once and opens the relic sub-scenario (49,2)
 		15:     # sub_80964E4: the Lucario Rank news (0x36) has come
@@ -623,10 +626,16 @@ static func special_func(G, act: GAction, idx: int, r2: int, r3: int) -> int:
 				return 0
 			AdventureLog.add("joined")
 			return 1
-		0x2D:
-			return 0
-		0x2E:
-			return 0
+		0x2D:   # GetPtsToNextRank() > 0: the team isn't at the top rank yet
+			return 1 if Missions.pts_to_next_rank(Game.rank_points) > 0 else 0
+		0x2E:   # the free rank-up: exactly the points for the next rank, and Red's notice
+			var before := Missions.rank_title(Game.rank_points)
+			var need := Missions.pts_to_next_rank(Game.rank_points)
+			if need <= 0:
+				return 0
+			Missions.add_rank_points(need)
+			var msg := "{CENTER_ALIGN}The rescue rank went up from\n{CENTER_ALIGN}%s to %s!" % [before, Missions.rank_title(Game.rank_points)]
+			return 1 if G.text.say(G.text.T_INSTANT, -1, msg) else 0
 		0x2F:
 			Game.money += 10000
 			return 0
@@ -634,7 +643,13 @@ static func special_func(G, act: GAction, idx: int, r2: int, r3: int) -> int:
 			return 0
 		0x32:
 			return _recruit_story(G, "0282", G.text.name_buffer, 5, ["Confusion", "Double Team", "Teleport", "Growl"], -1)
-		0x33:
+		0x33:   # the rare Gonbe day: after the main story, a 1-in-256 roll once a day (EVENT_GONBE)
+			if GVars.after(GVars.SCENARIO_MAIN, 0x12, -1) and GVars.get_val(null, GVars.GROUND_GETOUT) != 4 \
+					and GVars.get_arr(null, GVars.EVENT_GONBE, 0) <= 0:
+				if randi() % 256 == 0:
+					GVars.set_arr(null, GVars.EVENT_GONBE, 0, 4)
+					return 1
+				GVars.set_arr(null, GVars.EVENT_GONBE, 0, 1)
 			return 0
 		0x34:
 			for i in 3:

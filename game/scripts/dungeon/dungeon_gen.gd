@@ -36,6 +36,9 @@
 ##               512 FLAG_DIVIDER_HALF first half of a "divider" room (TERRAIN_TYPE_UNK_7)
 ##              1024 FLAG_KECLEON      Kecleon shopkeeper position
 ##              2048 FLAG_UNBREAKABLE  TERRAIN_TYPE_UNBREAKABLE (fixed-room tiles): walkable, not counted for spawns
+##              4096 FLAG_KEY_DOOR     a vault's locked door (TERRAIN_TYPE_UNK_x1000): a Key opens it
+##   "vault":   {} or a closed vault (sub_8051438, fixed room flags & 1): {rect: Rect2i, door: [Vector2i],
+##              terrain / flags / room: the opened tiles row by row, items / traps / mons: what appears inside}
 ##   "stairs": Vector2i, "player": Vector2i (leader spawn, gDungeon->playerSpawn)
 ##   "items": Array of {pos: Vector2i, kind: "normal"|"shop"|"house"|"buried"}
 ##            (items flagged on the stairs tile are skipped, as Red's item spawner does)
@@ -73,6 +76,7 @@ const FLAG_ISLAND_MOAT := 128
 const FLAG_SS_ROOM := 256
 const FLAG_DIVIDER_HALF := 512
 const FLAG_KECLEON := 1024
+const FLAG_KEY_DOOR := 4096
 
 const FIELD_NAMES := [
 	"layout", "roomDensity", "tileset", "bgMusic", "weather", "floorConnectivity",
@@ -142,6 +146,7 @@ class _Gen:
 	const TF_UNK_7 := 128
 	const TF_UNBREAKABLE := 256
 	const TF_STAIRS := 512
+	const TF_KEY_DOOR := 4096      # TERRAIN_TYPE_UNK_x1000
 	# --- Spawn flags ---
 	const SP_STAIRS := 1
 	const SP_ITEM := 2
@@ -2614,6 +2619,7 @@ class _Gen:
 	var team_slots := {}      # FixedRoomEntitiesInfo.unk4 -> gDungeon->unkE220: team member i stands at slot i+1
 	var fixed_items := []     # {pos, id, qty}
 	var fixed_traps := []     # {pos, id, visible}
+	var vault := {}           # a closed vault and what opening it gives (see the header)
 	const FIRST_NON_FLOORWIDE_FIXED_ROOM := 51
 
 	func _tt_set(i: int, t: int) -> void:
@@ -2628,6 +2634,7 @@ class _Gen:
 		fixed_items.clear()
 		fixed_traps.clear()
 		team_slots.clear()
+		vault = {}
 		if sx == 0 or sy == 0:
 			generate_one_room_monster_house_floor()
 			return false
@@ -2760,9 +2767,12 @@ class _Gen:
 			assign_grid_cell_connections(grid, gx, gy, cx, cy)
 			create_grid_cell_connections(grid, gx, gy, list_x, list_y, true)
 			ensure_connected_grid(grid, gx, gy, list_x, list_y)
-		# sub_8051438 (the "closed corridor" vault variant, flags & 1, is placed already opened)
+		# sub_8051438
 		var c2 := cell(grid, cx, cy)
 		var tiles: Array = fx.room.tiles
+		if int(fx.room.get("flags", 0)) & 1:
+			_closed_vault(fx, c2, tiles)
+			return
 		var k := 0
 		for y in range(c2.start_y, c2.end_y):
 			for x in range(c2.start_x, c2.end_x):
@@ -2774,6 +2784,83 @@ class _Gen:
 				place_fixed_tile(x, y, int(tiles[k]), true, fx)
 				rm[i] = rid
 				k += 1
+
+	## sub_8051438, fixed room flags & 1: a vault behind a locked door. Its tiles go down without their items
+	## (sub_805124C, spawnTrapOrItem FALSE) and its middle is solid wall until a Key opens the door
+	## (sub_8051E7C, which places the room again with its items). The opened tiles and contents are worked
+	## out here (no random numbers are used for either) and kept in `vault` for the dungeon.
+	func _closed_vault(fx: Dictionary, c2, tiles: Array) -> void:
+		var x0: int = c2.start_x
+		var y0: int = c2.start_y
+		var x1: int = c2.end_x
+		var y1: int = c2.end_y
+		var keep := [player_spawn, stairs_spawn, gUnknown_202F1A8]
+		var base_tf := PackedInt32Array()
+		var base_sp := PackedInt32Array()
+		var base_rm := PackedInt32Array()
+		var ni := fixed_items.size()
+		var nt := fixed_traps.size()
+		var nm := fixed_mons.size()
+		var k := 0
+		for y in range(y0, y1):
+			for x in range(x0, x1):
+				var i := y * W + x
+				base_tf.append(tf[i])
+				base_sp.append(sp[i])
+				base_rm.append(rm[i])
+		# opened: what sub_8051E7C puts down (PlaceFixedRoomTile ..., TRUE)
+		var o_terr := PackedByteArray()
+		var o_flags := PackedInt32Array()
+		var o_room := PackedByteArray()
+		var doors := []
+		k = 0
+		for y in range(y0, y1):
+			for x in range(x0, x1):
+				var i := y * W + x
+				var rid := rm[i]
+				tf[i] |= TF_UNBREAKABLE
+				if k < tiles.size():
+					place_fixed_tile(x, y, int(tiles[k]), true, fx)
+					if int(tiles[k]) == 12:
+						doors.append(Vector2i(x, y))
+				rm[i] = rid
+				o_terr.append(tf[i] & 3)
+				o_flags.append(_out_flag(tf[i]))
+				o_room.append(rm[i] & 0xFF)
+				k += 1
+		vault = {"rect": Rect2i(x0, y0, x1 - x0, y1 - y0), "door": doors, "terrain": o_terr, "flags": o_flags,
+			"room": o_room, "items": fixed_items.slice(ni), "traps": fixed_traps.slice(nt), "mons": fixed_mons.slice(nm)}
+		fixed_items.resize(ni)
+		fixed_traps.resize(nt)
+		fixed_mons.resize(nm)
+		player_spawn = keep[0]
+		stairs_spawn = keep[1]
+		gUnknown_202F1A8 = keep[2]
+		# closed: the same tiles with no contents, the middle solid
+		k = 0
+		for y in range(y0, y1):
+			for x in range(x0, x1):
+				var i := y * W + x
+				tf[i] = base_tf[k]
+				sp[i] = base_sp[k]
+				rm[i] = base_rm[k]
+				var rid := rm[i]
+				tf[i] |= TF_UNBREAKABLE
+				if k < tiles.size():
+					place_fixed_tile(x, y, int(tiles[k]), false, fx)
+				if x >= x0 + 2 and x < x1 - 2 and y >= y0 + 2 and y < y1 - 2:
+					tf[i] = TF_IMPASSABLE | TF_UNBREAKABLE
+				rm[i] = rid
+				k += 1
+
+	func _out_flag(t: int) -> int:
+		var f := 0
+		if t & TF_IMPASSABLE: f |= FLAG_IMPASSABLE
+		if t & TF_UNBREAKABLE: f |= FLAG_UNBREAKABLE
+		if t & TF_JUNCTION: f |= FLAG_JUNCTION
+		if t & TF_STAIRS: f |= FLAG_STAIRS
+		if t & TF_KEY_DOOR: f |= FLAG_KEY_DOOR
+		return f
 
 	# C: PlaceFixedRoomTile
 	func place_fixed_tile(x: int, y: int, a: int, spawn_trap_item: bool, fx: Dictionary) -> void:
@@ -2825,7 +2912,7 @@ class _Gen:
 				rm[i] = 0
 			12:
 				_tt_set(i, TT_NORMAL)
-				tf[i] |= TF_IMPASSABLE
+				tf[i] |= TF_IMPASSABLE | TF_KEY_DOOR
 				rm[i] = 0
 			2, 13, 14:
 				_tt_set(i, TT_WALL)
@@ -2874,6 +2961,7 @@ class _Gen:
 				var f := 0
 				if t & TF_IMPASSABLE: f |= FLAG_IMPASSABLE
 				if t & TF_UNBREAKABLE: f |= FLAG_UNBREAKABLE
+				if t & TF_KEY_DOOR: f |= FLAG_KEY_DOOR
 				if t & TF_JUNCTION: f |= FLAG_JUNCTION
 				if t & TF_SHOP:
 					f |= FLAG_SHOP
@@ -2957,4 +3045,5 @@ class _Gen:
 			"team_slots": team_slots,
 			"fixed_items": fixed_items,
 			"fixed_traps": fixed_traps,
+			"vault": vault,
 		}

@@ -80,6 +80,22 @@ func build(fl: Dictionary, ts_key: String) -> void:
 			_blit(out, src, block, cols, B, dst, me == 2)
 			if iout:
 				_blit(iout, isrc, block, cols, T, Vector2i(x * T, y * T), me == 2)
+	# a vault's locked door: Red draws trappat block 26 there (dungeon_map_access.c, TERRAIN_TYPE_UNK_x1000)
+	var fl_flags = fl.get("flags", null)
+	if fl_flags != null and ResourceLoader.exists("res://assets/ui/traps_red.png"):
+		var door: Image = null
+		for y in h:
+			for x in w:
+				if int(fl_flags[y * w + x]) & DungeonGen.FLAG_KEY_DOOR:
+					if door == null:
+						var ti: Image = (load("res://assets/ui/traps_red.png") as Texture2D).get_image()
+						if ti.is_compressed():
+							ti.decompress()
+						ti.convert(Image.FORMAT_RGBA8)
+						door = ti.get_region(Rect2i(26 * T, 0, T, T))
+						if hd_k != 1:
+							door.resize(B, B, Image.INTERPOLATE_NEAREST)
+					out.blend_rect(door, Rect2i(0, 0, B, B), Vector2i(x * B, y * B))
 	# past the map's edge: solid wall tiles instead of black (zoomed out / wide screens)
 	var wall_img := Image.create(B, B, false, Image.FORMAT_RGBA8)
 	_blit(wall_img, src, int(rules[0 + 255 * 3]), cols, B, Vector2i.ZERO, false)

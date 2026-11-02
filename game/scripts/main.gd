@@ -2539,6 +2539,42 @@ func _ready() -> void:
 						break
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--keytest"):      # vaults: a closed vault, its locked door, and the Key opening it
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			Dungeon.test_invincible = true
+			for kf in [["solar_cave", 9], ["wyvern_hill", 19], ["buried_relic", 44]]:
+				start_dungeon(str(kf[0]), int(kf[1]))
+				for i in 60:
+					await get_tree().create_timer(0.1).timeout
+					if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy:
+						break
+				var d := dungeon
+				var V: Dictionary = d.fs.vault
+				print("KEYTEST ", kf, " vault=", not V.is_empty(), " rect=", V.get("rect"), " door=", V.get("door"), " items=", (V.get("items", []) as Array).size())
+				if V.is_empty() or (V.door as Array).is_empty():
+					continue
+				var door: Vector2i = V.door[0]
+				var below := door + Vector2i(0, 1)
+				print("  walkable door=", d.fs.walkable(door, d.fs.leader), " below=", d.fs.walkable(below, d.fs.leader))
+				for e in d.fs.mons:
+					if e != d.fs.leader and e.pos == below:
+						e.pos = d.fs.free_tile_near(below, e, 4)
+				d.fs.leader.pos = below
+				d._snap_visuals()
+				await get_tree().create_timer(0.5).timeout
+				get_viewport().get_texture().get_image().save_png("user://keytest_%s_closed.png" % kf[0])
+				Game.bag_add("key")
+				var n_items := d.fs.items.size()
+				await d._use_key(d.fs.leader)
+				print("  opened=", V.get("open", false), " door walkable=", d.fs.walkable(door, d.fs.leader), " items ", n_items, " -> ", d.fs.items.size(), " key left=", Game.bag.filter(func(b): return b.id == "key").size())
+				await get_tree().create_timer(0.5).timeout
+				get_viewport().get_texture().get_image().save_png("user://keytest_%s_open.png" % kf[0])
+				Game.bag_add("key")
+				await d._use_key(d.fs.leader)
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--mhtest"):        # Monster House: entering drops Pokémon in (TriggerMonsterHouse)
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
@@ -5501,6 +5537,14 @@ func _storytest() -> void:
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--pk="):           # tests: PLAYER_KIND (a post-game save holds 2)
 				GVars.set_val(null, GVars.PLAYER_KIND, int(a.substr(5)))
+			if a == "--newmail" and t == 2:          # tests: today's mail not delivered yet
+				Game.flags["mailbox_day"] = -1
+				Game.flags["news_day"] = -1
+			if a.begins_with("--runevent=") and t == 3 and is_instance_valid(ground):   # tests: --runevent=EVENT_X
+				ground.map_execute_event(GData.fn_id(a.substr(11)), false)
+			if a.begins_with("--substation=") and t == 3 and is_instance_valid(ground):   # tests: --substation=map,group
+				var mg := a.substr(13).split(",")
+				ground.map_execute_station(int(mg[0]), int(mg[1]), 0, false)
 			if a.begins_with("--shots="):        # tests: --shots=from,to,dir: 4 viewport shots a second
 				var sv := a.substr(8).split(",")
 				if t >= int(sv[0]) and t <= int(sv[1]):
