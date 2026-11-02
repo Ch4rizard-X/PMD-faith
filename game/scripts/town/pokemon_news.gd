@@ -13,12 +13,31 @@ static func news() -> Array:
 static func received() -> Array:
 	if not Game.flags.get("news_received", null) is Array:
 		Game.flags["news_received"] = []
-	return Game.flags["news_received"]
+	return _ints("news_received")
 
 static func letters() -> Array:
 	if not Game.flags.get("news_mail", null) is Array:
 		Game.flags["news_mail"] = [0]                 # sub_8096488: the welcome letter waits from the start
-	return Game.flags["news_mail"]
+	return _ints("news_mail")
+
+## A loaded save gives the numbers back as floats (JSON), and [50.0].has(50) is false in Godot: "Store" then
+## couldn't take a letter out of the mailbox, and a stored letter (A Letter from Pelipper) came again. Whole
+## numbers, once per list, in place, without duplicates.
+static func _ints(key: String) -> Array:
+	var a: Array = Game.flags[key]
+	var clean := true
+	for v in a:
+		if typeof(v) != TYPE_INT:
+			clean = false
+			break
+	if not clean:
+		var out: Array = []
+		for v in a:
+			if not int(v) in out:
+				out.append(int(v))
+		a.clear()
+		a.append_array(out)
+	return a
 
 static func headline(i: int) -> String:
 	var n := news()
