@@ -2539,6 +2539,40 @@ func _ready() -> void:
 						break
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--mhtest"):        # Monster House: entering drops Pokémon in (TriggerMonsterHouse)
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			Dungeon.test_invincible = true
+			DungeonGen.test_mh_chance = 100
+			var tries := 0
+			for key in ["silent_chasm", "great_canyon", "mt_blaze", "frosty_forest", "lapis_cave", "uproar_forest", "howling_forest", "magma_cavern", "sky_tower", "western_cave"]:
+				for fl in range(2, 10):
+					tries += 1
+					start_dungeon(key, fl)
+					for i in 40:
+						await get_tree().create_timer(0.1).timeout
+						if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy:
+							break
+					var d := dungeon
+					print("MHTRY ", key, " ", fl, " mh=", d.fs.monster_house_room if d.fs else -9)
+					if d.fs == null or d.fs.monster_house_room < 0:
+						continue
+					var spot := Vector2i(-1, -1)
+					for y in d.fs.h:
+						for x in d.fs.w:
+							var q := Vector2i(x, y)
+							if spot.x < 0 and d.fs.room_at(q) == d.fs.monster_house_room and d.fs.terrain_at(q) == 1 and d.fs.mon_at(q) == null:
+								spot = q
+					var before := d.fs.mons.size()
+					d.fs.leader.pos = spot
+					await d._after_leader_step_i()
+					print("MHTEST %s F%d tries=%d forced=%s mons %d -> %d triggered=%s" % [key, fl + 1, tries, d.fs.get_meta("forced_monster_house", false), before, d.fs.mons.size(), d.fs.get_meta("monster_house_triggered", false)])
+					get_tree().quit()
+					return
+			print("MHTEST no house found in ", tries)
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--bossfight"):
 		(func():
 			var key := "sinister_woods"

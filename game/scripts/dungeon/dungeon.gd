@@ -1884,6 +1884,47 @@ func _after_leader_step() -> void:
 	if perf_log and Engine.get_process_frames() == f0:
 		pacc("after_leader_step", Time.get_ticks_usec() - t0)
 
+## TriggerMonsterHouse_Async (dungeon_monster_house.c): stepping into the house drops 8-12 of the floor's Pokémon
+## from the ceiling onto free floor tiles within 4 of the team member (inside the house; anywhere near for a floor
+## made as one big Monster House). Only the house's own spawns were placed: an ordinary house stayed empty.
+func _trigger_monster_house(who: Mon) -> void:
+	if fs.get_meta("monster_house_triggered", false) or fs.monster_house_room < 0:
+		return
+	fs.set_meta("monster_house_triggered", true)
+	var forced: bool = fs.get_meta("forced_monster_house", false)
+	var spots: Array = []
+	for y in range(who.pos.y - 4, who.pos.y + 5):
+		for x in range(who.pos.x - 4, who.pos.x + 5):
+			var q := Vector2i(x, y)
+			if not fs.inb(q) or fs.terrain_at(q) != 1 or fs.mon_at(q) != null:
+				continue
+			if not forced and not (fs.flags.size() == fs.w * fs.h and (int(fs.flags[fs.idx(q)]) & 8)):
+				continue
+			spots.append(q)
+	var n := mini(rng.randi_range(8, 12), spots.size())     # gMonsterHouseMinMons .. gMonsterHouseMaxMons
+	var dropped: Array = []
+	for k in n:
+		var q: Vector2i = spots.pop_at(rng.randi_range(0, spots.size() - 1))
+		var m := _spawn_wild(q)
+		if m and m.visual:
+			dropped.append(m)
+	if dropped.is_empty():
+		return
+	Pokedex.see_visible(self)
+	# they fall in from above (elevation 200, x0.665 a frame until it's under 1)
+	if Dialog.auto or (autoplay and auto_answer):
+		return
+	var h := 200.0
+	while h >= 1.0:
+		for m in dropped:
+			if m.visual and is_instance_valid(m.visual):
+				m.visual.position = _px(m.pos) + Vector2(0, -h)
+		h *= 0.665
+		await get_tree().process_frame
+	for m in dropped:
+		if m.visual and is_instance_valid(m.visual):
+			m.visual.position = _px(m.pos)
+
 func _after_leader_step_i() -> void:
 	var L := fs.leader
 	# Monster House: entering its room switches to Red's Monster House theme for the rest of the floor
@@ -1891,6 +1932,7 @@ func _after_leader_step_i() -> void:
 		house_seen = true
 		_msg("It's a [color=#ff8070]Monster House[/color]!")
 		Audio.play_music("128")
+		await _trigger_monster_house(L)
 	# items (the Auto-pickup option can leave some on the ground: Ground menu picks them up)
 	if fs.items.has(L.pos) and int(fs.items[L.pos].get("price", 0)) > 0 and fs.items[L.pos].id != "poke":
 		# a Kecleon ware is never picked up by walking onto it: its name and price show, and the Ground menu

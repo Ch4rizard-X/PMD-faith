@@ -3,6 +3,10 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.29 (2 Nov 2026)
+
+- **Monster Houses fill up when you walk in:** as in Red (dungeon_monster_house.c), stepping into a Monster House drops 8 to 12 of the floor's Pokémon from the ceiling around you (on free floor inside the house, within 4 tiles). Only floors made as one big Monster House had Pokémon in theirs; an ordinary house had the message and the music but stayed empty. Partners with the House Avoider IQ skill also stop avoiding the room once it has gone off.
+
 ## v0.8.28 (2 Nov 2026)
 
 - **No end-of-dungeon screens where Red has none:** Red shows its end window (The Last Outing) after a cleared dungeon only where the leader can be switched (the later dungeons) or on rescues, and never for the first part of Mt. Thunder, Mt. Blaze, Frosty Forest, Mt. Freeze, Magma Cavern and Sky Tower (dungeon_exit.c, from each dungeon's data). Clearing those, or a story dungeon, now goes straight on into the next scene or part, without The Last Outing and the summary box (Magma Cavern to Magma Cavern Pit, Mt. Thunder to Mt. Thunder Peak, a clear right before a cutscene). Defeats, escapes, rescues and Explorers of Sky dungeons keep them.

@@ -53,6 +53,7 @@ extends RefCounted
 
 @warning_ignore_start("integer_division", "unused_variable", "shadowed_variable")
 
+static var test_mh_chance := -1        # tests: a Monster House on every floor that can have one (--mhtest)
 const W := 56
 const H := 32
 const N := W * H
@@ -366,7 +367,7 @@ class _Gen:
 		sStairsRoomIndex = 0xFF
 		sFloorSize = 0
 		sKecleonShopChance = p("kecleonShopChance")
-		sMonsterHouseChance = p("monsterHouseChance")
+		sMonsterHouseChance = p("monsterHouseChance") if DungeonGen.test_mh_chance < 0 else DungeonGen.test_mh_chance
 		sSecondSpawn = true
 		shop_min_x = -1
 		shop_max_x = -1
@@ -2941,6 +2942,7 @@ class _Gen:
 			"traps": traps,
 			"enemies": enemies,
 			"monster_house_room": monster_house_room if (any_mh and monster_house_room != 0xFF) else -1,
+			"forced_monster_house": force_monster_house,
 			"shop": shop,
 			"kecleon": kecleon_mid,
 			"rooms": rooms,

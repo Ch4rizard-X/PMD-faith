@@ -33,6 +33,7 @@ func setup(gen: Dictionary) -> void:
 	rooms = gen.get("rooms", [])
 	stairs = gen.stairs
 	monster_house_room = gen.get("monster_house_room", -1)
+	set_meta("forced_monster_house", bool(gen.get("forced_monster_house", false)))
 	explored = PackedByteArray()
 	explored.resize(w * h)
 
