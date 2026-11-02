@@ -283,6 +283,7 @@ func build_floor() -> void:
 		fs.traps[t.pos] = {"id": str(t.id), "seen": bool(t.visible)}
 	for it in gen.get("fixed_items", []):
 		fs.items[it.pos] = {"id": str(it.id), "n": maxi(1, int(it.qty)), "price": 0}
+	cs_cam_lock = false
 	if fixed_no != 0:
 		boss = BossScene.make(self, fixed_no)
 		if boss:
@@ -381,13 +382,15 @@ func _spawn_fixed(gen: Dictionary) -> void:
 		_add_sprite(m)
 
 ## sub_8086A3C / sub_8086A54: a story Pokémon hidden until its entrance (can't act or be hit meanwhile).
-func cs_hide(m: Mon, on: bool) -> void:
+## A story Pokémon held for a cutscene (Red's sub_8086A3C: standing still, out of the fight). It stays in view, as
+## in Red (unk15C / unk15E only stop its animation and status icons); invisible = true hides it as well.
+func cs_hide(m: Mon, on: bool, invisible := false) -> void:
 	if on:
 		if not m.get_meta("cs_hidden", false):
 			m.set_meta("cs_hidden", true)
 			m.set_meta("cs_side", m.side)
 			m.side = "client"
-		if m.visual:
+		if m.visual and invisible:
 			m.visual.visible = false
 	else:
 		if m.get_meta("cs_hidden", false):
@@ -718,8 +721,6 @@ func _add_sprite(m: Mon) -> void:
 	mon_layer.add_child(s)
 	s.setup(m)
 	s.position = _px(m.pos)
-	if m.get_meta("cs_hidden", false):
-		s.visible = false
 
 var _ts_key := "t14"
 
@@ -764,6 +765,9 @@ func rescue_beam(ms: Array) -> void:
 	if last:
 		await last.done
 
+var cs_cam_lock := false          # a boss cutscene moves the camera itself (BossScene: camera_at / camera)
+var cs_cam_pos := Vector2.ZERO
+
 func _px(p: Vector2i) -> Vector2:
 	return Vector2(p.x * T + T / 2.0, p.y * T + T / 2.0)
 
@@ -772,7 +776,9 @@ func _snap_visuals() -> void:
 		if m.visual:
 			m.visual.position = _px(m.pos)
 			_walkers.erase(m.visual)
-	if fs.leader and fs.leader.visual:
+	if cs_cam_lock:
+		cam.position = cs_cam_pos
+	elif fs.leader and fs.leader.visual:
 		cam.position = fs.leader.visual.position
 
 func _pick_weighted(pairs: Array) -> Variant:
@@ -984,7 +990,10 @@ func _process_main(dt: float) -> void:
 	if _lmoves != null and (menu_open or result_sent or not Input.is_action_pressed("gp_l")):
 		_show_l_moves(false)
 	if fs.leader and fs.leader.visual:
-		cam.position = cam.position.lerp(fs.leader.visual.position, minf(1.0, dt * 14.0))
+		if cs_cam_lock:
+			cam.position = cs_cam_pos            # a cutscene holds the camera (BossScene)
+		else:
+			cam.position = cam.position.lerp(fs.leader.visual.position, minf(1.0, dt * 14.0))
 	var dg_now := _diag_held()
 	if dg_now and not _diag_was:
 		_arrow_t0 = Time.get_ticks_msec()

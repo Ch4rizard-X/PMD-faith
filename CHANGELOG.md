@@ -3,6 +3,16 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.27 (2 Nov 2026)
+
+- **Boss floor cutscenes closer to Red** (from the decompilation's dungeon_cutscene*.c), in every story and legendary boss scene:
+  - **The camera** goes where Red's does: it starts on the spot the scene opens on (usually a few tiles above your team, so the boss is in view), glides to what the scene points at and back to your leader before the fight. It used to stay on the leader the whole time.
+  - **The team walks in** from below as the scene starts, where Red does that (34 scenes).
+  - **The bosses stand in view** during the dialogue, as in Red. They were hidden until the fight began (Groudon, for one, only appeared when the battle started).
+  - **Screen effects:** each legendary's own coloured flashes (Groudon red and orange, Rayquaza green, Kyogre blue ...), and Red's fade to white and back where a Pokémon vanishes (Alakazam teleporting away before Groudon).
+- **Magma Cavern Pit (before Groudon):** Charizard and Tyranitar lie hurt in view; the camera shows them when your partner spots them and your team walks up to them; at the end your team runs off up the passage before the next floor.
+- **Pokédex:** lists every Pokémon in your game (the launcher's Pokémon choice), not only Red's 386, so later generations show up.
+
 ## v0.8.26 (2 Nov 2026)
 
 - **Pokémon News letters in the mailbox:** after loading a save, **Store** did nothing (the letter just stayed in the mailbox), and a letter you had already stored could arrive again (A Letter from Pelipper came a second time). The save gives the letter numbers back in a form the lists didn't recognise; they're now read correctly, duplicates are dropped, and every letter can be stored once into the News List, as in Red.

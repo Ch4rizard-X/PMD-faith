@@ -11,6 +11,7 @@ extends Control
 signal _advance
 
 static var auto := false          # automated tests: text boxes advance by themselves
+static var auto_view := false     # tests: text boxes advance by themselves, cutscenes still play out (--bossview)
 
 var panel: PanelContainer
 var text: RichTextLabel
@@ -153,6 +154,10 @@ func _say(msg: String, speaker: String, emotion: String, speaker_name: String) -
 	if auto:
 		print("  DIALOG ", msg.replace("\n", " | ").left(160))
 		await get_tree().create_timer(0.15).timeout
+		return
+	if auto_view:
+		print("  VIEW ", msg.replace("\n", " | ").left(100))
+		await get_tree().create_timer(0.7).timeout
 		return
 	await _advance
 

@@ -262,12 +262,86 @@ func _hostile_bosses_left() -> int:
 			n += 1
 	return n
 
+
+# ------------------------------------------------------------------ Red's screen colour effects and camera
+## From the decomp's dungeon_cutscene*.c (written out here: the cutscene data only says "flash"). Each program is
+## SetDungeonBGColorRGB loops ["l", from, to, step, [r, g, b]] (1 = the loop value, n = value / n, 0 = zero), one
+## per frame, waits ["w", frames] and the restore ["r"] (sub_8085EB0). FLASH_ORDER: which one each "flash" of a
+## cutscene is, in order. sub_8086738 fades the dungeon to white (and stays), sub_8086764 fades it back.
+## INTRO_WALK: the cutscenes whose dialogue starts with sub_8086448 (the team walks in from below while the
+## camera scrolls 56 px).
+const FLASH_PROGRAMS := {
+	"ArticunoScreenFlash": [["l", 250, 150, -10, [2, 1, 1]], ["w", 4], ["l", 250, 200, -10, [0, 1, 1]], ["w", 4], ["l", 250, 0, -10, [2, 1, 1]], ["w", 4], ["r"]],
+	"DeoxysScreenFlash": [["l", 250, 150, -10, [1, 0, 0]], ["w", 10], ["l", 250, 200, -10, [1, 1, 0]], ["w", 10], ["l", 250, 0, -10, [1, 0, 0]], ["w", 10], ["r"]],
+	"EnteiScreenFlash": [["l", 250, 150, -10, [1, 2, 2]], ["w", 10], ["l", 250, 200, -10, [1, 0, 0]], ["w", 10], ["l", 250, 0, -10, [1, 2, 2]], ["w", 10], ["r"]],
+	"GroudonScreenFlash": [["l", 250, 150, -10, [1, 2, 2]], ["w", 10], ["l", 250, 200, -10, [1, 2, 0]], ["w", 10], ["l", 250, 0, -10, [1, 2, 2]], ["w", 10], ["r"]],
+	"GroudonScreenFlash2": [["l", 250, 150, -10, [1, 2, 2]], ["w", 10], ["l", 250, 200, -10, [1, 2, 0]], ["w", 10], ["l", 250, 0, -10, [1, 2, 2]], ["w", 10], ["r"]],
+	"HoOhScreenFlash": [["l", 250, 150, -10, [1, 1, 1]], ["w", 10], ["l", 250, 200, -10, [1, 1, 1]], ["w", 10], ["l", 250, 0, -10, [1, 1, 1]], ["w", 10], ["r"]],
+	"KyogreScreenFlash": [["l", 250, 150, -10, [0, 0, 1]], ["w", 10], ["l", 250, 200, -10, [0, 1, 1]], ["w", 10], ["l", 250, 0, -10, [0, 0, 1]], ["w", 10], ["r"]],
+	"LatiosScreenFlash": [["l", 250, 150, -10, [1, 1, 1]], ["w", 10], ["l", 250, 0, -10, [1, 1, 1]], ["w", 10], ["r"]],
+	"LugiaScreenFlash": [["l", 250, 150, -10, [0, 0, 1]], ["w", 10], ["l", 250, 200, -10, [0, 1, 1]], ["w", 10], ["l", 250, 0, -10, [0, 0, 1]], ["w", 10], ["r"]],
+	"LugiaScreenFlash2": [["l", 0, 199, 100, [1, 1, 1]], ["l", 200, 0, -100, [1, 1, 1]], ["w", 4], ["l", 0, 199, 100, [1, 1, 1]], ["l", 200, 0, -100, [1, 1, 1]], ["w", 10], ["r"]],
+	"MewtwoScreenFlash": [["l", 250, 150, -10, [1, 1, 1]], ["w", 10], ["l", 250, 200, -10, [1, 1, 0]], ["w", 10], ["l", 250, 0, -10, [1, 1, 1]], ["w", 10], ["r"]],
+	"MoltresScreenFlash1": [],
+	"MoltresScreenFlash2": [["l", 250, 20, -10, [1, 0, 0]], ["w", 10], ["l", 250, 0, -10, [1, 0, 0]], ["w", 10], ["r"]],
+	"MoltresScreenFlash3": [["l", 250, 10, -10, [1, 1, 2]], ["w", 30], ["l", 250, 0, -10, [1, 1, 2]], ["w", 30], ["r"]],
+	"RaikouScreenFlash": [["l", 250, 150, -10, [1, 1, 1]], ["w", 10], ["l", 250, 200, -10, [1, 1, 1]], ["w", 10], ["l", 250, 0, -10, [1, 1, 1]], ["w", 10], ["r"]],
+	"RayquazaScreenFlash": [["l", 250, 150, -10, [2, 1, 2]], ["w", 10], ["l", 250, 200, -10, [2, 1, 0]], ["w", 10], ["l", 250, 0, -10, [2, 1, 2]], ["w", 10], ["r"]],
+	"SuicuneScreenFlash": [["l", 250, 150, -10, [1, 1, 1]], ["w", 10], ["l", 250, 200, -10, [1, 1, 1]], ["w", 10], ["l", 250, 0, -10, [1, 1, 1]], ["w", 10], ["r"]],
+	"ZapdosScreenFlash": [["l", 250, 200, -10, [1, 1, 2]], ["l", 250, 200, -10, [1, 1, 2]], ["l", 250, 0, -10, [1, 1, 4]], ["r"]],
+	"sub_8086738": [["l", 0, 249, 10, [1, 1, 1]]],
+	"sub_8086764": [["l", 250, 0, -5, [1, 1, 1]], ["r"]],
+	"sub_8086794": [["l", 0, 199, 1, [0, 0, 0]]],
+}
+const FLASH_ORDER := {
+	"CUTSCENE_FIERY_FIELD_ATTEMPT1": ["EnteiScreenFlash", "EnteiScreenFlash", "EnteiScreenFlash"],
+	"CUTSCENE_FIERY_FIELD_ATTEMPT2": ["EnteiScreenFlash", "EnteiScreenFlash", "EnteiScreenFlash"],
+	"CUTSCENE_FIERY_FIELD_POSTSTORY": ["EnteiScreenFlash", "EnteiScreenFlash", "EnteiScreenFlash"],
+	"CUTSCENE_FROSTY_GROTTO_ATTEMPT1": ["ArticunoScreenFlash", "sub_8086738", "ArticunoScreenFlash", "ArticunoScreenFlash", "ArticunoScreenFlash"],
+	"CUTSCENE_FROSTY_GROTTO_ATTEMPT2": ["ArticunoScreenFlash", "ArticunoScreenFlash"],
+	"CUTSCENE_FROSTY_GROTTO_POSTSTORY": ["ArticunoScreenFlash", "sub_8086738", "ArticunoScreenFlash", "ArticunoScreenFlash", "ArticunoScreenFlash", "ArticunoScreenFlash"],
+	"CUTSCENE_LIGHTNING_FIELD_ATTEMPT1": ["RaikouScreenFlash", "RaikouScreenFlash", "RaikouScreenFlash", "RaikouScreenFlash"],
+	"CUTSCENE_LIGHTNING_FIELD_ATTEMPT2": ["RaikouScreenFlash", "RaikouScreenFlash", "RaikouScreenFlash"],
+	"CUTSCENE_LIGHTNING_FIELD_POSTSTORY": ["RaikouScreenFlash", "RaikouScreenFlash"],
+	"CUTSCENE_MAGMA_CAVERN_PIT_ATTEMPT1": ["GroudonScreenFlash", "sub_8086738", "sub_8086764", "GroudonScreenFlash2", "sub_8086738", "sub_8086764"],
+	"CUTSCENE_MAGMA_CAVERN_PIT_ATTEMPT2": ["GroudonScreenFlash", "sub_8086738", "sub_8086764"],
+	"CUTSCENE_MAGMA_CAVERN_PIT_POSTSTORY": ["GroudonScreenFlash", "GroudonScreenFlash"],
+	"CUTSCENE_METEOR_CAVE": ["DeoxysScreenFlash", "DeoxysScreenFlash"],
+	"CUTSCENE_MT_BLAZE_PEAK_ATTEMPT1": ["MoltresScreenFlash1", "MoltresScreenFlash1", "MoltresScreenFlash2", "MoltresScreenFlash3", "MoltresScreenFlash1", "MoltresScreenFlash2", "MoltresScreenFlash1", "MoltresScreenFlash2", "MoltresScreenFlash3", "MoltresScreenFlash2"],
+	"CUTSCENE_MT_BLAZE_PEAK_ATTEMPT2": ["MoltresScreenFlash1", "MoltresScreenFlash3", "MoltresScreenFlash2"],
+	"CUTSCENE_MT_BLAZE_PEAK_POSTSTORY": ["MoltresScreenFlash1", "MoltresScreenFlash1", "MoltresScreenFlash2", "MoltresScreenFlash3", "MoltresScreenFlash2"],
+	"CUTSCENE_MT_FARAWAY": ["HoOhScreenFlash", "HoOhScreenFlash", "HoOhScreenFlash"],
+	"CUTSCENE_MT_FARAWAY_POSTSTORY": ["HoOhScreenFlash", "HoOhScreenFlash", "HoOhScreenFlash"],
+	"CUTSCENE_MT_THUNDER_PEAK_ATTEMPT1": ["ZapdosScreenFlash", "ZapdosScreenFlash", "ZapdosScreenFlash", "ZapdosScreenFlash"],
+	"CUTSCENE_MT_THUNDER_PEAK_ATTEMPT2": ["ZapdosScreenFlash", "ZapdosScreenFlash"],
+	"CUTSCENE_MT_THUNDER_PEAK_POSTSTORY": ["ZapdosScreenFlash", "ZapdosScreenFlash", "ZapdosScreenFlash", "ZapdosScreenFlash"],
+	"CUTSCENE_NORTHERN_RANGE_ATTEMPT1": ["LatiosScreenFlash", "LatiosScreenFlash"],
+	"CUTSCENE_NORTHERN_RANGE_ATTEMPT2": ["LatiosScreenFlash", "LatiosScreenFlash"],
+	"CUTSCENE_NORTHWIND_FIELD_ATTEMPT1": ["SuicuneScreenFlash", "SuicuneScreenFlash"],
+	"CUTSCENE_NORTHWIND_FIELD_ATTEMPT2": ["SuicuneScreenFlash", "SuicuneScreenFlash"],
+	"CUTSCENE_NORTHWIND_FIELD_POSTSTORY": ["SuicuneScreenFlash", "SuicuneScreenFlash"],
+	"CUTSCENE_SILVER_TRENCH": ["LugiaScreenFlash", "LugiaScreenFlash", "LugiaScreenFlash2", "SetDungeonBGColorRGB", "LugiaScreenFlash"],
+	"CUTSCENE_SKY_TOWER_SUMMIT_ATTEMPT1": ["RayquazaScreenFlash", "RayquazaScreenFlash", "RayquazaScreenFlash", "RayquazaScreenFlash", "RayquazaScreenFlash"],
+	"CUTSCENE_SKY_TOWER_SUMMIT_ATTEMPT2": ["RayquazaScreenFlash", "RayquazaScreenFlash", "RayquazaScreenFlash", "RayquazaScreenFlash"],
+	"CUTSCENE_SKY_TOWER_SUMMIT_POSTSTORY": ["RayquazaScreenFlash", "RayquazaScreenFlash", "RayquazaScreenFlash"],
+	"CUTSCENE_STORMY_SEA": ["KyogreScreenFlash", "KyogreScreenFlash", "KyogreScreenFlash"],
+	"CUTSCENE_WESTERN_CAVE_ATTEMPT1": ["sub_8086794", "MewtwoScreenFlash", "MewtwoScreenFlash"],
+	"CUTSCENE_WESTERN_CAVE_ATTEMPT2": ["sub_8086794", "MewtwoScreenFlash", "MewtwoScreenFlash"],
+	"CUTSCENE_WESTERN_CAVE_POSTSTORY": ["sub_8086794", "MewtwoScreenFlash", "MewtwoScreenFlash"],
+}
+const INTRO_WALK := ["CUTSCENE_FROSTY_GROTTO_ATTEMPT1", "CUTSCENE_FROSTY_GROTTO_POSTSTORY", "CUTSCENE_HOWLING_FOREST", "CUTSCENE_HOWLING_FOREST_POSTSTORY", "CUTSCENE_JIRACHI", "CUTSCENE_JIRACHI_POSTSTORY", "CUTSCENE_MAGMA_CAVERN_MID", "CUTSCENE_MAGMA_CAVERN_MID_POSTSTORY", "CUTSCENE_MAGMA_CAVERN_PIT_ATTEMPT1", "CUTSCENE_MAGMA_CAVERN_PIT_POSTSTORY", "CUTSCENE_METEOR_CAVE", "CUTSCENE_MT_FREEZE_PEAK_POSTSTORY", "CUTSCENE_MT_STEEL_ATTEMPT1", "CUTSCENE_MT_STEEL_ATTEMPT2", "CUTSCENE_MT_THUNDER_PEAK_ATTEMPT1", "CUTSCENE_MT_THUNDER_PEAK_ATTEMPT2", "CUTSCENE_MT_THUNDER_PEAK_POSTSTORY", "CUTSCENE_NORTHERN_RANGE_ATTEMPT1", "CUTSCENE_NORTHERN_RANGE_ATTEMPT2", "CUTSCENE_NORTHERN_RANGE_POSTSTORY", "CUTSCENE_NORTHWIND_FIELD_ATTEMPT1", "CUTSCENE_SILVER_TRENCH", "CUTSCENE_SINISTER_WOODS_ATTEMPT1", "CUTSCENE_SINISTER_WOODS_ATTEMPT2", "CUTSCENE_SINISTER_WOODS_POSTSTORY", "CUTSCENE_SKY_TOWER_SUMMIT_ATTEMPT1", "CUTSCENE_SKY_TOWER_SUMMIT_ATTEMPT2", "CUTSCENE_SKY_TOWER_SUMMIT_POSTSTORY", "CUTSCENE_UPROAR_FOREST_ATTEMPT1", "CUTSCENE_UPROAR_FOREST_ATTEMPT2", "CUTSCENE_UPROAR_FOREST_POSTSTORY", "CUTSCENE_WESTERN_CAVE_ATTEMPT1", "CUTSCENE_WESTERN_CAVE_ATTEMPT2", "CUTSCENE_WESTERN_CAVE_POSTSTORY"]
+
 # ------------------------------------------------------------------ running steps
 func run_setup() -> void:
 	await _run(scene.get("setup", []), false)
 
 func run_prefight() -> void:
+	if cutscene in INTRO_WALK:
+		await _intro_walk()
 	await _run(scene.get("prefight", []), true)
+	if not floor_over:                       # (a scene that ends the floor keeps its view until the next floor)
+		await _release_camera()
+	_set_bg(0, 0, 0)
 
 ## HandleBossFaint_Async: a Pokémon with a story behaviour fainted (or was recruited: joined = true).
 func on_faint(m: Mon, joined := false) -> void:
@@ -305,7 +379,9 @@ func _step(st: Array, visual: bool) -> void:
 			else:
 				await _run(st[3], visual)
 		"say":
+			await _before_say(str(st[1]))
 			await say(str(st[1]))
+			await _after_say(str(st[1]), visual)
 		"wait":
 			if visual:
 				await _wait(mini(int(st[1]), 90))
@@ -320,8 +396,25 @@ func _step(st: Array, visual: bool) -> void:
 		"sfx":
 			Audio.sfx("%03d" % int(st[1]))
 		"flash":
-			if visual:
+			var order: Array = FLASH_ORDER.get(cutscene, [])
+			var fname: String = str(order[_flash_i]) if _flash_i < order.size() else ""
+			_flash_i += 1
+			if FLASH_PROGRAMS.has(fname) and not (FLASH_PROGRAMS[fname] as Array).is_empty():
+				await _run_flash(FLASH_PROGRAMS[fname], visual)
+			elif visual:
 				await _flash()
+		"camera_at":
+			var tp = _cam_expr(st[1], st[2] if st.size() > 2 else "0")
+			if tp != null:
+				dg.cs_cam_lock = true
+				dg.cs_cam_pos = tp
+				dg.cam.position = tp
+		"camera":
+			var target = _cam_target(str(st[1]))
+			if target != null:
+				await _move_camera(target, 32 if str(st[1]) == "&pos" else 16, visual)
+			if str(st[1]).contains("leaderEntity"):
+				dg.cs_cam_lock = false
 		"emote":
 			var m := _mon_of(st[1])
 			if m and m.visual:
@@ -356,6 +449,8 @@ func _step(st: Array, visual: bool) -> void:
 			var m5 := _mon_of(st[1])
 			if m5:
 				dg.cs_hide(m5, true)
+				if cutscene.begins_with("CUTSCENE_MAGMA_CAVERN_MID") and m5.visual and m5.visual.has_method("play"):
+					m5.visual.play("Laying" if m5.visual.man and m5.visual.man.anims.has("Laying") else "Sleep")   # pose 0xE: lying hurt
 		"show":
 			var m6 := _mon_of(st[1])
 			if m6:
@@ -396,6 +491,167 @@ func _step(st: Array, visual: bool) -> void:
 			names[int(st[1])] = str(load_data().get("monsters", {}).get(str(st[2]), ""))
 		_:
 			pass
+
+var _flash_i := 0
+var _bg_layer: CanvasLayer
+var _bg: ColorRect
+var _cam_pos = null                      # "&pos" of the current scene (ShiftCameraToPosition(&pos, ...))
+
+## SetDungeonBGColorRGB(r, g, b): Red brightens the dungeon's palettes toward the colour; an additive layer over the
+## dungeon (under the text windows) does the same.
+func _set_bg(r: int, g: int, b: int) -> void:
+	if _bg == null:
+		if r == 0 and g == 0 and b == 0:
+			return
+		_bg_layer = CanvasLayer.new()
+		_bg_layer.layer = 3
+		dg.add_child(_bg_layer)
+		_bg = ColorRect.new()
+		_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		_bg.material = mat
+		_bg_layer.add_child(_bg)
+	_bg.color = Color(clampi(r, 0, 255) / 255.0, clampi(g, 0, 255) / 255.0, clampi(b, 0, 255) / 255.0, 1.0)
+	_bg.visible = r > 0 or g > 0 or b > 0
+
+func _frame(visual: bool) -> void:
+	if visual and not Dialog.auto and not (dg.autoplay and dg.auto_answer):
+		await dg.get_tree().process_frame
+
+func _run_flash(prog: Array, visual: bool) -> void:
+	for seg in prog:
+		match str(seg[0]):
+			"l":
+				var v := int(seg[1])
+				var to := int(seg[2])
+				var step := int(seg[3])
+				var ds: Array = seg[4]
+				while (step > 0 and v <= to) or (step < 0 and v >= to):
+					var c: Array = []
+					for dv in ds:
+						c.append(0 if int(dv) == 0 else (v if int(dv) == 1 else v / int(dv)))
+					_set_bg(c[0], c[1], c[2])
+					await _frame(visual)
+					v += step
+			"w":
+				if visual:
+					await _wait(int(seg[1]))
+			"r":
+				_set_bg(0, 0, 0)
+
+## sub_8085860(x, y): the camera on a tile, from the scene's "leaderEntity->pos.x + n" expressions.
+func _cam_expr(ex, ey):
+	var x = _tile_expr(str(ex), "x")
+	var y = _tile_expr(str(ey), "y")
+	if x == null or y == null:
+		return null
+	return dg._px(Vector2i(int(x), int(y)))
+
+func _tile_expr(e: String, axis: String):
+	var re := RegEx.new()
+	re.compile("^\\s*(\\w+)->pos\\.([xy])\\s*(?:([+-])\\s*(-?\\s*\\d+))?\\s*$")
+	var m := re.search(e)
+	if m == null:
+		return int(e) if e.strip_edges().is_valid_int() else null
+	var who := _mon_of("leader" if m.get_string(1).begins_with("leader") else ("partner" if m.get_string(1).begins_with("partner") else m.get_string(1)))
+	if who == null:
+		return null
+	var base := who.pos.x if m.get_string(2) == "x" else who.pos.y
+	var off := 0
+	if m.get_string(3) != "":
+		off = int(m.get_string(4).replace(" ", ""))
+		if m.get_string(3) == "-":
+			off = -off
+	return base + off
+
+func _cam_target(arg: String):
+	if arg == "&pos":
+		return _cam_pos
+	var re := RegEx.new()
+	re.compile("&(\\w+)->pixelPos")
+	var m := re.search(arg)
+	if m == null:
+		return null
+	var n := m.get_string(1)
+	var who := _mon_of("leader" if n.begins_with("leader") else ("partner" if n.begins_with("partner") else n))
+	if who and who.visual:
+		return who.visual.position
+	return null
+
+## ShiftCameraToPosition(pos, steps): a straight glide over that many frames.
+func _move_camera(to: Vector2, steps: int, visual: bool) -> void:
+	var from: Vector2 = dg.cam.position if dg.cs_cam_lock else dg.cam.position
+	dg.cs_cam_lock = true
+	for i in range(1, steps + 1):
+		dg.cs_cam_pos = from.lerp(to, float(i) / steps)
+		dg.cam.position = dg.cs_cam_pos
+		await _frame(visual)
+	dg.cs_cam_pos = to
+
+func _release_camera() -> void:
+	if not dg.cs_cam_lock:
+		return
+	if dg.fs.leader and dg.fs.leader.visual:
+		await _move_camera(dg.fs.leader.visual.position, 16, true)
+	dg.cs_cam_lock = false
+
+## sub_8086448: the team stands 56 px further down, then walks up into place while the camera scrolls down 56 px.
+func _intro_walk() -> void:
+	var team: Array = dg.fs.team().filter(func(m): return m.visual != null and is_instance_valid(m.visual))
+	if team.is_empty():
+		return
+	var animate: bool = not Dialog.auto and not (dg.autoplay and dg.auto_answer)
+	for m in team:
+		m.facing = 4
+		if animate:
+			m.visual.position = dg._px(m.pos) + Vector2(0, 56)
+			m.visual.play("Walk")
+	if not animate:
+		return
+	for i in 56:
+		for m in team:
+			m.visual.position.y -= 1.0
+		if dg.cs_cam_lock:
+			dg.cs_cam_pos.y += 1.0
+			dg.cam.position = dg.cs_cam_pos
+		await dg.get_tree().process_frame
+	for m in team:
+		m.visual.position = dg._px(m.pos)
+		m.visual.play("Idle")
+
+## Team walks (IncreaseEntityPixelPos each frame) that the scene data doesn't carry.
+func _team_walk(frames: int, step: Vector2, dir: int) -> void:
+	var team: Array = dg.fs.team().filter(func(m): return m.visual != null and is_instance_valid(m.visual))
+	for m in team:
+		m.facing = dir
+		m.visual.play("Walk")
+	if Dialog.auto or (dg.autoplay and dg.auto_answer):
+		return
+	for i in frames:
+		for m in team:
+			m.visual.position += step
+		await dg.get_tree().process_frame
+	for m in team:
+		m.visual.play("Idle")
+
+## Scene parts written out from the decomp where the data has only the dialogue.
+func _before_say(name: String) -> void:
+	if cutscene == "CUTSCENE_MAGMA_CAVERN_MID" and name == "MagmaCavernMidDialogue_6":
+		await _team_walk(48, Vector2(0, -2), 4)            # sub_80891F0: up to the fallen pair, 2 px a frame
+
+func _after_say(name: String, visual: bool) -> void:
+	if cutscene != "CUTSCENE_MAGMA_CAVERN_MID":
+		return
+	if name == "MagmaCavernMidDialogue_5":
+		# the camera between the two (+8 px), as Red's ShiftCameraToPosition(&pos, 0x20) that follows
+		var a := _mon_of("BEHAVIOR_GROUDON_1")
+		var b := _mon_of("BEHAVIOR_ALAKAZAM_2")
+		if a and b and a.visual and b.visual:
+			_cam_pos = (a.visual.position + b.visual.position) / 2.0 + Vector2(0, 8)
+	elif name == "MagmaCavernMidDialogue_14":
+		await _team_walk(120, Vector2(0, -2), 4)           # sub_8089294: off up the passage before the next floor
 
 func _flash() -> void:
 	var r := ColorRect.new()

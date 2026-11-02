@@ -61,11 +61,12 @@ static func is_recruited(sp: String) -> bool:
 static func is_seen(sp: String) -> bool:
 	return seen_dict().has(base(sp)) or is_recruited(sp)
 
-## Red's species (the ones with "red": 1), sorted by number.
+## The species in the game (the launcher's Pokémon choice: Red's 386, every generation, or Red's plus picks), and
+## any you have recruited, sorted by number. (Only Red's own were listed, so later generations never showed up.)
 static func species_list() -> Array:
 	if _species.is_empty():
 		for k in DB.species:
-			if str(k).length() == 4 and int(DB.species[k].get("red", 0)) == 1 and (load("res://scripts/core/launcher_cfg.gd").mon_on(str(k)) or is_recruited(str(k))):
+			if str(k).length() == 4 and (load("res://scripts/core/launcher_cfg.gd").mon_on(str(k)) or is_recruited(str(k))):
 				_species.append(str(k))
 		_species.sort()
 	return _species

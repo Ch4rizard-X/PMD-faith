@@ -2513,6 +2513,32 @@ func _ready() -> void:
 			print("BOSSRESUME summary ok=%d bad=%d" % [ok.ok, ok.bad])
 			get_tree().quit()).call_deferred()
 		return
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--bossview="):        # a story boss floor's cutscene as it plays, a screenshot every 0.25 s
+			(func():
+				var v := a.substr(11).split("@")
+				Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+				for e in Game.team:
+					e.level = 40
+					e.exp = DB.exp_at(str(e.sp), 40)
+				Dialog.auto_view = true
+				Dungeon.test_invincible = true
+				var key := v[0]
+				var fl: int = int(v[1]) if v.size() > 1 else DB.dungeons.dungeons[key].floors.size() - 1
+				DirAccess.make_dir_recursive_absolute("user://bossview")
+				start_dungeon(key, fl)
+				for i in 240:
+					await get_tree().create_timer(0.25).timeout
+					get_viewport().get_texture().get_image().save_png("user://bossview/%s_%03d.png" % [key, i])
+					if is_instance_valid(dungeon) and dungeon.boss and dungeon.boss.floor_over and i > 8:
+						print("BOSSVIEW floor over at ", i)
+						await get_tree().create_timer(1.0).timeout
+						break
+					if is_instance_valid(dungeon) and not dungeon.busy and not dungeon.menu_open and i > 12:
+						print("BOSSVIEW scene done at ", i)
+						break
+				get_tree().quit()).call_deferred()
+			return
 	if OS.get_cmdline_user_args().has("--bossfight"):
 		(func():
 			var key := "sinister_woods"
