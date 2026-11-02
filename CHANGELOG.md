@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.28 (2 Nov 2026)
+
+- **No end-of-dungeon screens where Red has none:** Red shows its end window (The Last Outing) after a cleared dungeon only where the leader can be switched (the later dungeons) or on rescues, and never for the first part of Mt. Thunder, Mt. Blaze, Frosty Forest, Mt. Freeze, Magma Cavern and Sky Tower (dungeon_exit.c, from each dungeon's data). Clearing those, or a story dungeon, now goes straight on into the next scene or part, without The Last Outing and the summary box (Magma Cavern to Magma Cavern Pit, Mt. Thunder to Mt. Thunder Peak, a clear right before a cutscene). Defeats, escapes, rescues and Explorers of Sky dungeons keep them.
+- **The falling star (Xatu's warning):** the comet was drawn black and grey: its dark outer layer is meant to be added onto the fiery comet below it (GBA colour blending), but a layer that also has an animated palette was drawn on top instead. It now blends, so the comet burns red, orange and yellow as in Red.
+
 ## v0.8.27 (2 Nov 2026)
 
 - **Boss floor cutscenes closer to Red** (from the decompilation's dungeon_cutscene*.c), in every story and legendary boss scene:

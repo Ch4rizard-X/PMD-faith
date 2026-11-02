@@ -1126,6 +1126,12 @@ func _apply_blend(info: Dictionary) -> void:
 		var mat := CanvasItemMaterial.new()
 		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		spr.material = mat
+	elif spr.material is ShaderMaterial:
+		# the layer is also palette-animated (the comet's dark glow, map 173): the same shader, added onto the
+		# layer below (drawn opaque, the black and grey hid the fiery comet)
+		var sm: ShaderMaterial = spr.material
+		if sm.shader and sm.shader.resource_path.ends_with("ground_palette.gdshader"):
+			sm.shader = load("res://shaders/ground_palette_add.gdshader")
 	var ka := clampf(int(b.get("eva", 16)) / 16.0, 0.0, 1.0)
 	spr.modulate = Color(ka, ka, ka, 1.0)
 	if evb < 16:

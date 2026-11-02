@@ -3509,6 +3509,23 @@ func start_dungeon(key: String, first_floor := 0, stop := -1) -> void:
 
 var last_dungeon := ""
 
+## dungeon_data.json (pmd-red): hasCheckpoint / leaderCanSwitch.
+const RED_CHECKPOINT := ["mt_thunder", "mt_blaze", "frosty_forest", "mt_freeze", "magma_cavern", "sky_tower"]
+const RED_LEADER_SWITCH := ["stormy_sea", "silver_trench", "western_cave", "wish_cave", "buried_relic", "pitfall_valley",
+	"northern_range", "desert_region", "southern_cavern", "wyvern_hill", "fiery_field", "northwind_field", "solar_cave",
+	"lightning_field", "darknight_relic", "grand_sea", "joyous_tower", "mt_faraway"]
+
+## A clear Red passes without its end window (sub_8083C88 false): a checkpoint dungeon, or a normal trip into a
+## dungeon where the leader can't be switched. (A finished rescue ends as "rescued", which keeps its window.)
+func _red_clear_is_quiet(head: String, key: String) -> bool:
+	if key.begins_with("eos_") or head.begins_with("eos_") or Dojo.is_maze_key(key):
+		return false
+	if not DB.dungeons.dungeons.has(key):
+		return false
+	if key in RED_CHECKPOINT or head in RED_CHECKPOINT:
+		return true
+	return not (key in RED_LEADER_SWITCH)
+
 func _on_dungeon_finished(res: String) -> void:
 	var job_exit: bool = is_instance_valid(dungeon) and dungeon.has_meta("job_exit")
 	if res == "boss_next" and Game.story.has("vars"):
@@ -3526,8 +3543,14 @@ func _on_dungeon_finished(res: String) -> void:
 	var chain_head := last_dungeon
 	if is_instance_valid(dungeon) and str(dungeon.dkey) != last_dungeon:
 		last_dungeon = str(dungeon.dkey)          # an EoS dungeon in parts: the trip ended in a later part
-	Audio.play_music("052" if ok else "051")
-	if dungeon and dungeon.has_method("show_last_outing"):
+	# Red (run_dungeon.c / dungeon_exit.c sub_8083C88) shows no end window when a dungeon is cleared and it has a
+	# checkpoint (the first part of Mt. Thunder, Mt. Blaze, Frosty Forest, Mt. Freeze, Magma Cavern, Sky Tower) or the
+	# leader can't be switched there on a normal trip: the story simply carries on into its scene. So no Last Outing
+	# and no summary box then (the remake's own dungeons keep them).
+	var quiet: bool = res == "cleared" and _red_clear_is_quiet(chain_head, last_dungeon)
+	if not quiet:
+		Audio.play_music("052" if ok else "051")
+	if dungeon and dungeon.has_method("show_last_outing") and not quiet:
 		await dungeon.show_last_outing(root, res)      # Red's "The Last Outing" window
 	var lines: Array = []
 	if res == "cleared":
@@ -3566,7 +3589,8 @@ func _on_dungeon_finished(res: String) -> void:
 		Missions.on_dungeon_end(str(pk), res)          # find-item jobs of the earlier parts
 	Missions.on_dungeon_end(last_dungeon, res)
 	Game.save_game()
-	await Dialog.talk(root, ["\n".join(lines)])
+	if not quiet:
+		await Dialog.talk(root, ["\n".join(lines)])
 	_clear()
 	for j in Game.jobs:
 		if j.get("wonder_mail", false) and str(j.get("state", "")) in ["done_pending", "done"]:
