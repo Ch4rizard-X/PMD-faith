@@ -13,6 +13,7 @@ import json, os, re, subprocess, sys, tempfile
 sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.dirname(os.path.abspath(__file__))]
 import common  # noqa: E402
 import redsrc  # noqa: E402
+import cdump  # noqa: E402
 
 DEC = common.PMDRED
 GAME = common.GAME
@@ -96,18 +97,7 @@ def compile_dump():
     with tempfile.TemporaryDirectory() as td:
         cf = os.path.join(td, "dump.c")
         open(cf, "w").write("\n".join(c))
-        objs = []
-        for s, o in [(cf, td + "/dump.o"), (DEC + "/src/dungeon_boss_dialogue.c", td + "/dlg.o")]:
-            r = subprocess.run(["gcc", "-c"] + CFLAGS + [s, "-o", o], capture_output=True, text=True)
-            if r.returncode != 0:
-                print(r.stderr[:3000])
-                sys.exit(1)
-            objs.append(o)
-        r = subprocess.run(["gcc"] + objs + ["-o", td + "/dump"], capture_output=True, text=True)
-        if r.returncode != 0:
-            print(r.stderr[:3000])
-            sys.exit(1)
-        raw = subprocess.run([td + "/dump"], capture_output=True).stdout
+        raw = cdump.run([cf, DEC + "/src/dungeon_boss_dialogue.c"], CFLAGS, td, "fixed_rooms")
     txt = raw.decode("utf-8", errors="replace")
     return json.loads(txt)
 

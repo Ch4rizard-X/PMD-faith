@@ -19,6 +19,7 @@ import csv, json, os, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import common as CM  # noqa: E402
+import cdump  # noqa: E402
 
 DEC = CM.PMDRED
 OUT = CM.p(CM.DATA, "ground", "extra.json")
@@ -121,10 +122,7 @@ int main(void) {
 structs = ms + "\n" + mf.group(0) + "\n" + mt
 open(os.path.join(WORK, "x.c"), "w").write(C % {"structs": structs, "tables": "\n".join(tables)})
 CF = ["-w", "-O0", "-iquote", DEC + "/include", "-iquote", DEC, "-D_(x)=x", "-D__(x)=x"]
-r = subprocess.run(["gcc"] + CF + [os.path.join(WORK, "x.c"), "-o", os.path.join(WORK, "x")], capture_output=True, text=True)
-if r.returncode:
-    sys.exit(r.stderr[:4000])
-subprocess.run([os.path.join(WORK, "x")], cwd=WORK, check=True)
+cdump.run([os.path.join(WORK, "x.c")], CF, WORK, "ground_extra")
 extra = json.loads(open(os.path.join(WORK, "extra_c.json"), "rb").read().decode("utf-8", "replace"))
 
 

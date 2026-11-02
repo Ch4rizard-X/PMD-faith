@@ -252,7 +252,9 @@ static func speed_stage(m: Mon) -> int:
 	s += int(_species(m).get("speed", 1))
 	if m.is_team() and AI.iq(m, "time tripper"):
 		s += 1  # Sky add-on: Time Tripper (CalcSpeedStage)
-	# TODO(red): apparent weather "snow" for Ice types needs GetApparentWeather; Deoxys-Speed; angry Kecleon.
+	if not m.is_team() and bool(m.get_meta("thief_kecleon", false)):
+		s += 1  # Kecleon chasing a thief (stoleFromKecleon)
+	# TODO(red): apparent weather "snow" for Ice types needs GetApparentWeather; Deoxys-Speed.
 	return clampi(s, 0, MAX_SPEED_STAGE)
 
 ## Number of actions m gets during one normal-speed leader turn (4 of Red's 24 sub-turns), counted with

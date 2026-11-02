@@ -136,6 +136,7 @@ const PARTS := [
 	["megas", "Mega Evolution", "Off", "On", "Rescue Team DX's Empowerment Seed: it drops after the story and Mega Evolves (or Primal Reverts) the Pokémon that can.", ""],
 	["fairy", "Fairy type", "Off", "On", "Red has no Fairy type. Off: later Fairy Pokémon and Fairy moves go back to their older types (pure Fairy = Normal, as Clefairy is).", ""],
 	["rules", "Remake rules", "Red's", "Remake", "DX recruiting, Smarter partner AI, burn and poison wearing off. Red's: Red's own rules (and they leave Game Options).", ""],
+	["friendbow", "Friend Bow", "One roll", "Two rolls", "Red: the Friend Bow adds +100 to one recruit roll. Two rolls: a missed recruit roll gets a second try with the bow.", ""],
 	["remakeitems", "Remake items", "Off", "On", "The remake's own items: the Exp. Share (Kecleon stocks one now and then).", ""],
 ]
 

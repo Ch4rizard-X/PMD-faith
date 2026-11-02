@@ -23,6 +23,14 @@ import sys
 from collections import Counter
 from multiprocessing import Pool
 
+
+class _Nothing:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
 import numpy as np
 from PIL import Image
 
@@ -303,8 +311,14 @@ def main():
         else:
             missing.append(k)
     sprites, report = {}, {}
-    with Pool(max(1, min(4, os.cpu_count() or 1))) as pool:
-        for i, (k, entry, rep) in enumerate(pool.imap_unordered(worker, own, chunksize=4)):
+    try:
+        pool = Pool(max(1, min(4, os.cpu_count() or 1)))
+        results = pool.imap_unordered(worker, own, chunksize=4)
+    except (OSError, ImportError, NotImplementedError) as e:    # no process pool (the APK's Python on a phone)
+        print(f'  (one process: {e})', flush=True)
+        pool, results = None, map(worker, own)
+    with (pool if pool is not None else _Nothing()):
+        for i, (k, entry, rep) in enumerate(results):
             if entry is not None:
                 sprites[k] = entry
             if rep.get('error') or rep.get('fallback') or rep.get('skipped'):

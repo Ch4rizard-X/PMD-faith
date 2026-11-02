@@ -258,6 +258,9 @@ func thief() -> void:
 		if bool(k.get_meta("shopkeeper", false)):
 			k.remove_meta("shopkeeper")
 			dg.mem.erase(k.uid)
+			k.recruit_ok = true          # Red clears info->shopkeeper: a plain foe now, it can join when beaten
+		if k.sp.begins_with(KECLEON) and not k.is_team():
+			k.set_meta("thief_kecleon", true)   # +1 speed while chasing the thief (CalcSpeedStage)
 	dg.shop_base = 0
 	Audio.play_music(MUS_THIEF)
 	await dg.get_tree().process_frame
@@ -270,6 +273,7 @@ func thief_spawn() -> void:
 	var k: Mon = DB.make_mon(KECLEON, LEVEL, "enemy")
 	k.pos = p
 	k.recruit_ok = true
+	k.set_meta("thief_kecleon", true)
 	dg.fs.mons.append(k)
 	dg._add_sprite(k)
 

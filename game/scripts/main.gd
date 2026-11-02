@@ -2069,7 +2069,7 @@ func _ready() -> void:
 			var found := false
 			var mix := {"red": 0, "eos": 0}
 			for key in ["mt_steel", "sinister_woods", "silent_chasm", "mt_thunder", "great_canyon", "lapis_cave", "mt_blaze", "frosty_forest", "mt_freeze", "magma_cavern", "sky_tower", "uproar_forest", "howling_forest", "stormy_sea", "silver_trench", "meteor_cave", "fiery_field", "lightning_field", "northwind_field", "mt_faraway", "western_cave", "northern_range", "pitfall_valley", "buried_relic", "wish_cave", "murky_cave", "desert_region", "southern_cavern", "wyvern_hill", "solar_cave", "darknight_relic", "grand_sea", "waterfall_pond", "unown_relic", "joyous_tower", "far_off_sea", "purity_forest"]:
-				if found or not DB.dungeons.dungeons.has(key): continue
+				if found or not DB.dungeons.dungeons.has(key) or OS.get_cmdline_user_args().has("--shopquick"): continue
 				var nfl: int = DB.dungeons.dungeons[key].floors.size()
 				for fi in range(0, nfl - 1):
 					await start_dungeon(key, fi)
@@ -2095,7 +2095,7 @@ func _ready() -> void:
 				check.call("a generated shop was found", false)
 			# 2) scripted shop on a known room
 			Dialog.auto = false
-			await start_dungeon("tiny_woods")
+			await start_dungeon("thunderwave_cave")      # Tiny Woods has no recruiting (Red)
 			await get_tree().create_timer(1.0).timeout
 			var d: Dungeon = dungeon
 			d.auto_answer = true
@@ -2128,7 +2128,12 @@ func _ready() -> void:
 			d.obj_layer.queue_redraw()
 			if L.visual: L.visual.position = d._px(L.pos)
 			await get_tree().create_timer(0.6).timeout
-			get_viewport().get_texture().get_image().save_png("user://shop_floor.png")
+			var shot := get_viewport().get_texture().get_image()
+			if shot: shot.save_png("user://shop_floor.png")
+			var hit_k := 0
+			for i in 50:
+				if HeldItems.throw_hits(d, L, k) == "hit": hit_k += 1
+			check.call("thrown items never hit the shopkeeper", hit_k == 0)
 			check.call("attacks ignore the shopkeeper", not d.fs.is_foe(L, k) and not d.targets_for(L, DB.moves.get("Regular Attack", {"r": "front"}), AI.dir_toward(L.pos, k.pos)).has(k) or FloorState.cheb(L.pos, k.pos) > 1)
 			# pick up a ware (unpaid)
 			var price1 := int(fs.items[w1].price)
@@ -2169,6 +2174,75 @@ func _ready() -> void:
 				await d.end_of_turn_i()
 			var n1 := fs.mons.filter(func(m): return m.sp == "0352").size()
 			check.call("Kecleon keep coming after the thief", n1 > n0, "%d -> %d" % [n0, n1])
+			# 3) the fight: Red clears info->shopkeeper on a theft, so the old shopkeeper is a plain foe too
+			var sp_base := int(DB.species["0352"].get("speed", 1))
+			check.call("the old shopkeeper can join now", k.recruit_ok)
+			check.call("Kecleon +1 speed after a theft", TurnRules.speed_stage(k) == sp_base + 1, "stage %d" % TurnRules.speed_stage(k))
+			var newk: Array = fs.mons.filter(func(m): return m.sp == "0352" and m != k)
+			check.call("arriving Kecleon: Lv 90, can join, +1 speed", not newk.is_empty() and newk.all(func(m): return m.level == 90 and m.recruit_ok and TurnRules.speed_stage(m) == sp_base + 1))
+			L.level = 90
+			L.held = "friendbow"
+			check.call("Red's rate: Lv 90 + Friend Bow = -339 + 100 + 240", d.recruit_rate(L, k) == 1, str(d.recruit_rate(L, k)))
+			L.level = 50
+			L.held = ""
+			check.call("Lv 50, no bow: can't join", d.recruit_rate(L, k) <= 0, str(d.recruit_rate(L, k)))
+			L.level = 90
+			L.held = "friendbow"
+			for m in fs.mons.duplicate():           # just Kecleon and the team left, next to the leader
+				if not m.is_team() and m != k:
+					fs.mons.erase(m)
+			var adj := fs.free_tile_near(L.pos, null, 1)
+			k.pos = adj
+			d.auto_answer = true
+			Game.friend_areas.erase("overgrownforest")
+			var joined := false
+			for i in 3000:
+				if await d.try_recruit(L, k):
+					joined = true
+					break
+			check.call("no Overgrown Forest: never joins", not joined)
+			Game.friend_areas.append("overgrownforest")
+			# Friend Bow: one roll with Red's rules, a second roll with the remake rules
+			var LCm = load("res://scripts/core/launcher_cfg.gd")
+			var cfg0: Dictionary = LCm.cfg().duplicate(true)
+			var draws := {}
+			for red in [true, false]:
+				var cc: Dictionary = cfg0.duplicate(true)
+				var pp: Dictionary = cc.get("parts", {}).duplicate()
+				pp["friendbow"] = red
+				cc["parts"] = pp
+				LCm.save(cc)
+				var n := 0
+				for i in 200:
+					var probe := RandomNumberGenerator.new()
+					probe.state = fs.rng.state
+					var st0 := fs.rng.state
+					if await d.try_recruit(L, k):
+						break
+					var got := 0
+					while probe.state != fs.rng.state and got < 4:
+						probe.randi_range(0, 999)
+						got += 1
+					n = maxi(n, got)
+				draws[red] = n
+			LCm.save(cfg0)
+			check.call("Friend Bow switch: one roll (Red), two rolls", draws.get(true, 0) == 1 and draws.get(false, 0) == 2, str(draws))
+			var tries := 0
+			while not joined and tries < 20000:
+				tries += 1
+				joined = await d.try_recruit(L, k)
+			check.call("with Overgrown Forest: Kecleon joins", joined, "after %d tries" % tries)
+			check.call("a recruited Kecleon loses the thief speed", not joined or TurnRules.speed_stage(k) == sp_base or not k.is_team())
+			# 4) the next floor: no thief, Kecleon calm again
+			await d.shop.on_floor_built({})
+			check.call("next floor: thief state ends", not d.shop_stole)
+			var spots := []
+			for dk in DB.dungeons.dungeons:
+				for fl in DB.dungeons.dungeons[dk].floors:
+					for e in fl.get("pk", []):
+						if str(e[0]).begins_with("0352") and int(e[2]) > 0:
+							spots.append(dk)
+			check.call("Kecleon isn't in the wild spawns", spots.is_empty(), str(spots.slice(0, 5)))
 			print("SHOPTEST summary ok=%d bad=%d" % [tally.ok, tally.bad])
 			get_tree().quit()).call_deferred()
 		return
@@ -2660,6 +2734,8 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--towntest"):
 		add_child(load("res://tests/test_town.gd").new())
 		return
+	if OS.get_cmdline_user_args().has("--redaudit"):
+		add_child(load("res://tests/red_audit.gd").new())   # Vanilla Red play pass (with --storytest)
 	if OS.get_cmdline_user_args().has("--storytest"):
 		_storytest.call_deferred()
 		return
@@ -5323,6 +5399,11 @@ func _storytest() -> void:
 			if a.begins_with("--scen="):
 				var v := a.substr(7).split(",")
 				GVars.scenario_calc(GVars.SCENARIO_MAIN, int(v[0]), int(v[1]))
+			if a.begins_with("--sub1="):         # tests: repair a save the old dungeon-list bug left behind
+				var v1 := a.substr(7).split(",")
+				GVars.scenario_calc(GVars.var_id("SCENARIO_SUB1"), int(v1[0]), int(v1[1]))
+				GVars.rescue_set_job(14, false)
+				print("  TEST sub1 set to ", GVars.scenario(GVars.var_id("SCENARIO_SUB1")))
 		continue_story()
 	else:
 		new_game()
@@ -5332,6 +5413,13 @@ func _storytest() -> void:
 		t += 1
 		if is_instance_valid(ground):
 			ground.text.auto = true
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--autodelay="):            # tests: a slower (or faster) reader
+					ground.text.auto_delay = int(a.substr(12))
+				if a.begins_with("--dropcue="):              # tests: a cue that never arrives (deadlock rescue)
+					var dv := a.substr(10).split("@")
+					ground.test_drop_cue = int(dv[0])
+					ground.test_drop_from = int(dv[1])
 			# post-game side stories (test only): give what a player would collect on their own so each story can start
 			if Game.story.has("vars") and GVars.after(GVars.SCENARIO_MAIN, 17, -1):
 				_test_postgame_grants()

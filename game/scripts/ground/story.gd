@@ -916,14 +916,16 @@ static func _name_input(root: Control, title: String, cur: String, maxlen: int) 
 	panel.queue_free()
 	return r if r != "" else cur
 
-## IsRescueDungeonAvailable (+ dungeons where a taken Job List job waits).
+## IsRescueDungeonAvailable (+ dungeons where a taken Job List job waits). Red (sub_8097384): only an accepted
+## story job (RESCUE_SCENARIO_JOB_LIST) opens the dungeon; one that is merely posted on the board doesn't (going
+## in without accepting it left the job on the board, and accepting it later restarted that side story).
 static func rescue_available(r: int) -> bool:
 	var sd := GData.rescue_to_script(r)
 	if sd < 0 or int(GData.dungeon_info(sd).map1) == -1:
 		return false
 	if GVars.quest(GVars.QUEST_UNK5):
 		return false
-	if GVars.rescue_ordered(r) or GVars.rescue_job(r):
+	if GVars.rescue_job(r):
 		return true
 	var key := DB.dungeon_key(int(GData.dungeon_info(sd).dungeon))
 	for j in Game.jobs:

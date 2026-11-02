@@ -2,7 +2,8 @@
 
   python tools/fetch.py
 
-Needs git. Downloads go to WORK_DIR/ext (see tools/common.py); nothing is written outside WORK_DIR.
+Uses git when it's there; without it (the APK's on-phone build, or MDR_NO_GIT=1) tools/http_fetch.py downloads
+the same files over plain HTTPS. Downloads go to WORK_DIR/ext (see tools/common.py); nothing is written outside WORK_DIR.
 """
 import os
 import shutil
@@ -86,12 +87,37 @@ def git(*args, cwd=None, watch=None, label=""):
         raise subprocess.CalledProcessError(p.returncode, ["git", *args])
 
 
+def use_git():
+    return not os.environ.get("MDR_NO_GIT") and shutil.which("git") is not None
+
+
+def fetch_repo_http(name, url, sparse, dst, mark):
+    """The same download without git: SpriteCollab through git's own download protocol (only the files the game
+    uses, in large batches; it carries on after a stop), the others as one streamed archive each."""
+    import http_fetch
+    owner, repo = url[:-4].split("/")[-2:]
+    print(f"Downloading {name}: {ABOUT.get(name, url)}", flush=True)
+    if name == "SpriteCollab":
+        http_fetch.fetch_spritecollab(dst, sparse)
+    elif sparse and all("*" not in p and not p.endswith("/") for p in sparse):
+        http_fetch.raw_files(owner, repo, dst, [p.lstrip("/") for p in sparse], ref="HEAD", label=name)
+    else:
+        if os.path.isdir(dst):
+            shutil.rmtree(dst)
+        http_fetch.archive(owner, repo, dst, sparse, label=name)
+    open(mark, "w").write("ok\n")
+    print(f"{name}: done ({_folder_mb(dst):.0f} MB)", flush=True)
+
+
 def fetch_repo(name, url, sparse):
     dst = os.path.join(EXT, name)
     mark = os.path.join(dst, ".mdr_complete")      # written only once the download really finished
     if os.path.isfile(mark):
         print(f"{name}: already downloaded")
         return
+    if not use_git():
+        os.makedirs(dst, exist_ok=True)
+        return fetch_repo_http(name, url, sparse, dst, mark)
     if os.path.isdir(os.path.join(dst, ".git")):    # an earlier download that may have stopped part-way: repair it
         print(f"{name}: checking an earlier download and fetching what's missing", flush=True)
         try:
@@ -132,9 +158,20 @@ def build_xbrz():
     if os.path.exists(XBRZ_LIB):
         print("xbrz: already built")
         return
+    pre = os.environ.get("MDR_XBRZ_LIB")            # the APK brings it compiled (no compiler on a phone)
+    if pre and os.path.isfile(pre):
+        if not os.path.isfile(os.path.join(XBRZ_DIR, "xbrz.py")):
+            import http_fetch
+            http_fetch.raw_files("ioistired", "xbrz.py", XBRZ_DIR, ["xbrz.py", "LICENSE.md"], ref="HEAD", label="xbrz.py")
+        shutil.copyfile(pre, XBRZ_LIB)
+        print("xbrz: using the packed library")
+        return
+    cxx = shutil.which("g++") or shutil.which("clang++")
+    if not cxx and not use_git():
+        print("xbrz: no C++ compiler here; the HD scaling uses Scale2x/3x instead (tools/scalex.py)")
+        return
     if not os.path.isdir(XBRZ_DIR):
         git("clone", "--depth", "1", "https://github.com/ioistired/xbrz.py.git", XBRZ_DIR)
-    cxx = shutil.which("g++") or shutil.which("clang++")
     if not cxx:
         sys.exit("xbrz: install the pip package `xbrz.py` or a C++ compiler (g++/clang++).")
     import sysconfig

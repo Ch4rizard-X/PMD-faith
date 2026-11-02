@@ -26,6 +26,8 @@ sys.path.insert(0, TOOLS)
 import common  # noqa: E402
 
 PY = [sys.executable, "-I", "-X", "utf8"]           # -I ignores PYTHONUTF8; -X utf8 still applies (Windows: UTF-8 files, not cp1252)
+if os.environ.get("PYTHONHOME"):                     # the APK's Python finds its library only through PYTHONHOME,
+    PY = [sys.executable, "-P", "-s", "-X", "utf8"]  # which -I would ignore: the rest of -I (-P -s) by hand
 UI_OTHERS = ("mark_", "items.png")           # files in assets/ui other workers own
 
 
@@ -121,8 +123,36 @@ def main(argv=None):
     if "--skip-audio" in argv:
         want = [w for w in want if w not in AUDIO]
     common.need(os.path.join(common.PMDRED, "baserom.gba"), "pmd-red decomp with your Red ROM (tools/fetch.py)")
+    # a full run that stopped part-way (the phone's build can take hours here) carries on after the parts that
+    # finished: they're noted in work/tmp, and their files kept
+    resume = os.path.join(common.TMP, "ground_steps_done.json")
+    done_before = []
+    if "--only" not in argv and not os.path.exists(resume) and os.environ.get("PYTHONHOME"):
+        # the APK's first builds didn't note finished parts yet: their slow music parts count as finished when all
+        # their files are there (the app's build folder only ever holds one unfinished build: it's deleted after)
+        early = []
+        if os.path.exists(os.path.join(common.DATA, "eos_loops.json")):     # written once every track is done
+            early.append("eos_music")
+        rs = os.path.join(common.TMP, "red_music_stats.json")
+        if os.path.exists(rs):
+            sys.path.insert(0, os.path.join(common.ROOT, "tools", "music", "red"))
+            try:
+                import make as red_make
+                if all("%03d" % n in common.load_json(rs) for n in red_make.BGM_IDS):
+                    early.append("red_music")
+            except Exception:
+                pass
+            sys.path.pop(0)
+        if early:
+            os.makedirs(common.TMP, exist_ok=True)
+            common.save_json(resume, early)
+    if "--only" not in argv and os.path.exists(resume):
+        done_before = [w for w in common.load_json(resume) if w in want]
+        if done_before:
+            print("already built earlier: " + ", ".join(done_before), flush=True)
+        want = [w for w in want if w not in done_before]
     clean(set(want))
-    failed = []
+    failed, failed_tails = [], []
     for name, cmd in STEPS:
         if name not in want:
             continue
@@ -131,16 +161,28 @@ def main(argv=None):
         # the part's output goes through this process's stdout, so build_all's log (and the setup screen) gets it
         r = subprocess.Popen(PY + cmd, cwd=common.ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              text=True, encoding="utf-8", errors="replace")
+        tail = []
         for ln in r.stdout:
             print("   " + ln.rstrip(), flush=True)
+            tail = (tail + [ln.rstrip()])[-12:]
         r.wait()
         print("== %s %s (%.0fs)" % (name, "ok" if r.returncode == 0 else "FAILED", time.time() - t0), flush=True)
         if r.returncode:
             failed.append(name)
-    if "red_music" in want or "eos_music" in want:
-        merge_red_loops()
+            failed_tails.append((name, tail))
+        elif "--only" not in argv:
+            done_before.append(name)
+            os.makedirs(common.TMP, exist_ok=True)
+            common.save_json(resume, done_before)
+    merge_red_loops()                               # (does nothing without both files)
     if failed:
+        for name, tail in failed_tails:            # again at the end, where the setup screen shows the last lines
+            print("-- %s stopped with:" % name, flush=True)
+            for ln in tail:
+                print("   " + ln, flush=True)
         sys.exit("failed steps: " + ", ".join(failed))
+    if os.path.exists(resume):
+        os.remove(resume)
     print("ground build done")
 
 

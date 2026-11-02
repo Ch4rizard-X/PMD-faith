@@ -79,8 +79,13 @@ def render_one(num, bank, gain, outdir, keep_wav=False):
     pcm.tofile(wav)
     ogg = os.path.join(outdir, 'eos_%04d.ogg' % num)
     nice = ['nice', '-n', '19'] if shutil.which('nice') else []      # low priority where available (not on Windows)
-    subprocess.run(nice + [shutil.which('ffmpeg') or 'ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-f', 's16le', '-ar',
-                    str(SR_OUT), '-ac', '2', '-i', wav, '-c:a', 'libvorbis', '-q:a', '0', ogg], check=True)
+    ff = os.environ.get('MDR_FFMPEG') or shutil.which('ffmpeg')
+    if ff:
+        subprocess.run(nice + [ff, '-nostdin', '-y', '-loglevel', 'error', '-f', 's16le', '-ar',
+                        str(SR_OUT), '-ac', '2', '-i', wav, '-c:a', 'libvorbis', '-q:a', '0', ogg], check=True)
+    else:                                                          # the APK: libvorbis directly (audio_libs.py)
+        import audio_libs
+        audio_libs.encode_ogg(pcm.reshape(-1, 2), SR_OUT, ogg)
     if keep_wav:
         os.replace(wav, wav.replace('.raw', '.s16'))
     else:

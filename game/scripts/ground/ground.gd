@@ -343,6 +343,7 @@ func _reset_locks() -> void:
 	cue_last.clear()
 	_cue_quiet = 0
 	_cue_quiet_total = 0
+	_stuck_checks = 0
 	for i in 136:
 		locks[i] = false
 		lock_conds[i] = false
@@ -687,6 +688,9 @@ func _on_pad(e: InputEvent) -> bool:
 const CUE_QUIET := 180
 const CUE_QUIET_LONG := 600
 var _cue_quiet_total := 0       # quiet frames counted while some script was still busy
+var test_drop_cue := -1
+var test_drop_from := 0
+var _stuck_checks := 0          # half-second checks in a row that found the scene stuck with no missed cue
 func _cue_rescue() -> void:
 	_cue_quiet += 1
 	if _cue_quiet < CUE_QUIET or text.is_open() or cue_last.is_empty():
@@ -722,6 +726,22 @@ func _cue_rescue() -> void:
 			best_t = t
 	_cue_quiet = CUE_QUIET - 30          # look again in half a second
 	if best == null:
+		# nobody missed a cue, yet the whole scene has stood still for ~10 s: an actor ran a step ahead of Red's
+		# order (took a cue meant for a later moment), so the cue the scene now waits for was sent earlier and
+		# will never come again. The scene's own script (the leader's, else the map's) gets the cue it waits for,
+		# so the story goes on instead of hanging with only the music playing. Only the leader's script: it runs
+		# the cutscene (lives0_dlg0); outside cutscenes the player drives the leader and it waits on no cue, so
+		# map and NPC scripts that wait for a cue by design are never touched.
+		_stuck_checks += 1
+		if _stuck_checks < 14:
+			return
+		_stuck_checks = 0
+		var lead = lives[0].action if lives.size() > 0 and lives[0].kind_id != -1 else null
+		if lead == null or lead.sd.unk22 <= 1 or lead.sd.unk22 >= 0x80:
+			return
+		best = lead
+		print("    CUE rescue: scene stuck, giving cue %d to %s" % [best.sd.unk22, best._where()])
+		best.notify(best.sd.unk22)
 		return
 	var id: int = best.sd.unk22
 	print("    CUE rescue: delivering missed cue %d (sent f%d, waiting since f%d)" % [id, best_t, best.sd.wait_since])
@@ -758,17 +778,29 @@ func _unlock() -> void:
 		return
 	any_locked = false
 	for i in 129:
+		if locks[i] and i == test_drop_cue and _frame >= test_drop_from:
+			locks[i] = false                 # tests: this cue never arrives (--dropcue=ID@FRAME)
+			continue
 		if locks[i]:
 			if i > 1 and i < 0x80 and not lock_conds[i]:
 				cue_last[i] = _frame
 				_cue_quiet = 0
 				_cue_quiet_total = 0
+				_stuck_checks = 0
 			var c := _notify_all(i)
 			if not c and i > 1 and i < 0x80 and not lock_conds[i]:
 				# nobody is waiting yet: keep the cue a moment for an actor that is a few frames late
 				# (our animation timings differ slightly from Red's, which can make a cue miss its waiter)
 				var pc: Array = pending_cues.get(i, [0, 0])
-				pending_cues[i] = [int(pc[0]) + 1, 60]      # [count, ticks left]: ~1 s grace only (Red drops unheard cues)
+				# [count, ticks left, frame sent]: ~1 s grace (Red drops unheard cues). Not for an actor that was
+				# waiting on another cue when this one was sent (GAction._check_lock): in Red it surely missed it, and
+				# scenes rely on that (Pokémon Square at 15,8 sends cues 6 and 9 together; Gengar, released by the 6,
+				# must miss the 9, or he runs a step ahead of the partner and the scene deadlocks)
+				var busy := {}                               # actors waiting on some other cue right now
+				for a in [map_action] + lives.map(func(L): return L.action) + objects.map(func(T): return T.action) + effects.map(func(T): return T.action):
+					if a != null and a.sd.unk22 != -1:
+						busy[a.get_instance_id()] = true
+				pending_cues[i] = [int(pc[0]) + 1, 60, _frame, busy]
 			if lock_conds[i]:
 				if c:
 					_notify_all(i | 0x80)
@@ -1024,6 +1056,7 @@ func _load_map(m: int, dungeon_id := -1, floor_n := 0) -> void:
 	cue_last.clear()          # nor counts as "missed" by the new map's actors (Ground._cue_rescue)
 	_cue_quiet = 0
 	_cue_quiet_total = 0
+	_stuck_checks = 0
 	GVars.clear_arr(null, GVars.MAP_LOCAL)
 	GVars.clear_arr(null, GVars.MAP_LOCAL_DOOR)
 	scroll = {"e8": Vector2i.ZERO, "f0": 0, "f4": 0, "f8": Vector2i.ZERO}

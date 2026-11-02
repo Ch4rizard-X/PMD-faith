@@ -130,6 +130,7 @@ func execute_predefined(i: int, trigger = null) -> bool:
 	return execute(predefined_info(i), trigger)
 
 var heard := {}          # cue id -> frame of the alert this script last received
+var released_at := -1    # frame a cue last released this script from a wait
 
 func notify(id: int) -> bool:
 	var r := false
@@ -141,13 +142,15 @@ func notify(id: int) -> bool:
 		r = true
 	if r:
 		heard[id] = int(G.cue_last.get(id, G._frame))
+		released_at = G._frame
 	return r
 
 func _check_lock(id: int) -> bool:          # GroundScriptCheckLockCondition
 	if id == 0 and not G.text.is_open():
 		sd.si.ptr = _resolve_jump(0)
 		return false
-	if id > 1 and G.pending_cues.has(id):
+	if id > 1 and G.pending_cues.has(id) and released_at != int(G.pending_cues[id][2]) \
+			and not (G.pending_cues[id][3] as Dictionary).has(get_instance_id()):
 		G.pending_cues[id][0] -= 1
 		if G.pending_cues[id][0] <= 0:
 			G.pending_cues.erase(id)
@@ -159,7 +162,7 @@ func _check_lock(id: int) -> bool:          # GroundScriptCheckLockCondition
 	# (our walk / jump timings can run a few frames behind Red's)
 	if id > 1 and id < 0x80 and G.cue_last.has(id):
 		var t: int = G.cue_last[id]
-		if G._frame - t <= 15 and int(heard.get(id, -1)) != t:
+		if G._frame - t <= 15 and int(heard.get(id, -1)) != t and released_at != t:
 			heard[id] = t
 			sd.si.ptr = _resolve_jump(G.unlock_labels[id])
 			if trace:

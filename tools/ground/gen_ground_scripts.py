@@ -16,6 +16,7 @@ import glob, json, os, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import common as CM  # noqa: E402
+import cdump  # noqa: E402
 
 DEC = CM.PMDRED
 OUT = os.path.join(CM.DATA, "ground")
@@ -218,21 +219,10 @@ int main(void) {
 externs = "\n".join("extern const struct ArrReg %s[];" % n for n in reg_names)
 open(os.path.join(WORK, "dump.c"), "w").write(DUMP % {"externs": externs, "regs": ", ".join(reg_names)})
 
-objs = []
 units = [os.path.join(WORK, f) for f in sorted(os.listdir(WORK)) if f.startswith("w_") and f.endswith(".c")]
 units += [os.path.join(WORK, "dump.c")] + [DEC + "/src/" + n for n in
           ["map_script_table.c", "script_vars_info.c", "ground_map_conversion_table.c", "map_files_table.c"]]
-for u in units:
-    o = os.path.join(WORK, os.path.basename(u)[:-2] + ".o")
-    r = subprocess.run(["gcc", "-c"] + CFLAGS + ["-I", os.path.dirname(WORK), u, "-o", o], capture_output=True, text=True)
-    if r.returncode:
-        sys.exit("compile failed %s\n%s" % (u, r.stderr[:3000]))
-    objs.append(o)
-exe = os.path.join(WORK, "dump")
-r = subprocess.run(["gcc"] + objs + ["-o", exe], capture_output=True, text=True)
-if r.returncode:
-    sys.exit("link failed\n" + r.stderr[:3000])
-subprocess.run([exe], cwd=WORK, check=True)
+cdump.run(units, CFLAGS + ["-I", os.path.dirname(WORK)], WORK, "ground_scripts")
 
 
 # ---------------------------------------------------------------- enums

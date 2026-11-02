@@ -48,6 +48,7 @@ var _done := true
 var _value := -1
 var _busy_special := false
 var auto := false                # tests: advance by itself
+var auto_delay := 6              # tests: frames after the text is out before auto presses (--autodelay=)
 
 func _init(ground) -> void:
 	G = ground
@@ -395,7 +396,7 @@ func tick() -> void:
 				press()
 			elif _auto_mid >= 0 and not last and _auto_t >= _auto_mid:
 				press()
-			elif auto and _auto_t >= 6:
+			elif auto and _auto_t >= auto_delay:
 				press()
 
 func handle_input(e: InputEvent) -> bool:

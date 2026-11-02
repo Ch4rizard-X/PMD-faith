@@ -58,6 +58,7 @@ func _ready() -> void:
 	check("Red rules: Red recruiting / partner AI / no status fade", DungeonQoL.opt("qol_recruit") == 0 and DungeonQoL.opt("qol_partner_ai") == 0 and DungeonQoL.opt("qol_statusfade") == false)
 	check("Red rules: gone from the option menus", not "qol_recruit" in DungeonQoL.shown_keys() and "qol_run" in DungeonQoL.shown_keys())
 	check("no remake items", LC.red_part("remakeitems"))
+	check("Friend Bow: one roll", LC.red_part("friendbow"))
 	# ---- custom: everything EoS except Red's move animations and abilities
 	var mix := _all(false)
 	mix.anim = true
@@ -144,7 +145,7 @@ func _ready() -> void:
 	LC._red_data = 0
 	var c := LC.defaults()
 	LC.save(c)
-	check("Red build: switchable %s" % str(LC.switchable().map(func(P): return P[0])), LC.switchable().map(func(P): return P[0]) == ["megas", "fairy", "rules", "remakeitems"])
+	check("Red build: switchable %s" % str(LC.switchable().map(func(P): return P[0])), LC.switchable().map(func(P): return P[0]) == ["megas", "fairy", "rules", "friendbow", "remakeitems"])
 	check("Red build: Megas off by default", not LC.megas_on() and LC.red_only())
 	check("Red build: EoS parts Red's", LC.red_part("anim") and LC.red_part("iq") and not SwapShop.unlocked() and LC.red_part("growth"))
 	c.parts = {"megas": false}
@@ -158,7 +159,7 @@ func _ready() -> void:
 	LC._red_data = 0
 	LC.save(LC.defaults())
 	var sw: Array = LC.switchable().map(func(P): return P[0])
-	check("no Red tables: switchable (%s)" % str(sw), sw == ["growth", "swapshop", "megas", "fairy", "rules", "remakeitems"])
+	check("no Red tables: switchable (%s)" % str(sw), sw == ["growth", "swapshop", "megas", "fairy", "rules", "friendbow", "remakeitems"])
 	check("no Red tables: EoS animations, Move Growth on", not LC.red_part("anim") and not LC.red_part("growth") and LC.megas_on())
 	var c2 := LC.defaults()
 	c2.parts = {"growth": true}

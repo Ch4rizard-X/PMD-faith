@@ -25,10 +25,12 @@ var _gen := 1
 var _mons_by_gen := {}
 var _tex_cache := {}
 
-## Shown in public builds (the game's data built from the player's ROMs), or with --launcher.
+## Shown in public builds (the game's data built from the player's ROMs), on Android (the APK), or with --launcher.
 static func wanted() -> bool:
 	var args := OS.get_cmdline_user_args()
 	if args.has("--launcher") or args.has("--launchershot"):
+		return true
+	if OS.has_feature("android"):
 		return true
 	if not args.is_empty():
 		return false
@@ -100,6 +102,7 @@ func _show_game() -> void:
 		g.add_child(l)
 		var b := _btn(str(P[2]) if red else str(P[3]), _toggle_part.bind(str(P[0])))
 		b.custom_minimum_size.x = 118
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL      # wide phone screens: the switches fill the width
 		b.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45) if red else Color(0.6, 0.85, 1.0))
 		b.focus_entered.connect(func(): desc.text = str(P[4]))
 		b.mouse_entered.connect(func(): desc.text = str(P[4]))
@@ -251,6 +254,21 @@ func _window(child: Control, alpha := 1.0) -> PanelContainer:
 	p.add_child(child)
 	return p
 
+## Android's Back button: a page goes back to the main menu (and doesn't close the app); on the main menu it closes it.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and is_inside_tree():
+		if _page and _page.get_meta("sub", false):
+			_save()
+			_show_main()
+		else:
+			get_tree().quit()
+
+func _enter_tree() -> void:
+	get_tree().quit_on_go_back = false
+
+func _exit_tree() -> void:
+	get_tree().quit_on_go_back = ProjectSettings.get_setting("application/config/quit_on_go_back", true)
+
 func _input(e: InputEvent) -> void:
 	if e.is_action_pressed("ui_cancel") and _page and _page.get_meta("sub", false):
 		get_viewport().set_input_as_handled()
@@ -377,6 +395,14 @@ func _show_main() -> void:
 		rb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		rb.custom_minimum_size.x = 200
 		left.add_child(rb)
+	# the on-phone build tools check (APK test builds only: user://tools_test or --toolsrow; android_tools.gd is
+	# part of the APK's private setup tools, not every copy has it)
+	if ResourceLoader.exists("res://scripts/core/android_tools.gd") and (FileAccess.file_exists("user://tools_test") \
+			or OS.get_cmdline_user_args().has("--toolsrow")):
+		var tb := _btn(" Tools test ", _show_tools_test)
+		tb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		tb.custom_minimum_size.x = 200
+		left.add_child(tb)
 	# right: the menu in a Red window
 	var menu := VBoxContainer.new()
 	menu.add_theme_constant_override("separation", 3)
@@ -403,6 +429,25 @@ func _show_main() -> void:
 			first = b
 			b.add_theme_color_override("font_color", GOLD)
 	first.grab_focus.call_deferred()
+
+# ------------------------------------------------------------------ the on-phone build tools (APK test)
+func _show_tools_test() -> void:
+	var v := _new_page(true)
+	var il := _top_bar(v, "Tools test", "")
+	var out := _lbl("Unpacking and starting the build tools...", SMALL)
+	out.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(out)
+	await get_tree().create_timer(0.2).timeout
+	var AT = load("res://scripts/core/android_tools.gd")
+	var t := Thread.new()
+	t.start(func(): return AT.self_test())
+	var t0 := Time.get_ticks_msec()
+	while t.is_alive():
+		await get_tree().create_timer(0.3).timeout
+		var st: String = AT.status if AT.status != "" else "Starting..."
+		out.text = "%s\n\nRunning for %d s (the first time unpacks a few thousand files, a minute or two)" % [st, (Time.get_ticks_msec() - t0) / 1000]
+	out.text = t.wait_to_finish()
+	il.text = "saved: android_tools_test.txt"
 
 # ------------------------------------------------------------------ ROMs
 func _roms_summary() -> String:
@@ -865,6 +910,10 @@ func _shots() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(dir + n + ".png")
 	await snap.call("1_main")
+	if not LC.switchable().is_empty():
+		_show_game()
+		await tree.create_timer(0.4).timeout
+		await snap.call("1b_game")
 	_show_mons()
 	_pick_gen(5)
 	_toggle_mon(str(_mons_by_gen[5][3]), _grid.get_child(3))

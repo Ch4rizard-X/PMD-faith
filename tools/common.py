@@ -103,10 +103,14 @@ def xbrz_module():
             import xbrz as m
         except ImportError:
             import types
-            need(XBRZ_LIB, "compiled xBRZ library")
-            sys.modules.setdefault("_xbrz", types.SimpleNamespace(__file__=XBRZ_LIB))
-            sys.path.insert(0, XBRZ_DIR)
-            import xbrz as m
+            if not os.path.exists(XBRZ_LIB) and os.environ.get("MDR_NO_GIT"):
+                import scalex as m             # the APK without a packed xBRZ: Scale2x/3x (tools/scalex.py)
+                print("xbrz: not available here, using Scale2x/3x", flush=True)
+            else:
+                need(XBRZ_LIB, "compiled xBRZ library")
+                sys.modules.setdefault("_xbrz", types.SimpleNamespace(__file__=XBRZ_LIB))
+                sys.path.insert(0, XBRZ_DIR)
+                import xbrz as m
         _xbrz = m
     return _xbrz
 

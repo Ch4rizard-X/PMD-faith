@@ -3,6 +3,17 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.24 (2 Nov 2026)
+
+- **Cutscenes can't hang any more:** if a cutscene stands completely still for about 10 seconds with no text on screen (one Pokémon took its cue a moment too early, so the cue the scene waits for never comes again), the scene's own script carries on. Fixes the hang in Pokémon Square after Mt. Freeze, right after Gengar runs off, where only the music kept playing (reported on the Android build).
+- **Story fixes from a full Vanilla Red play-through** (start to credits: 20 dungeons, 419 floors, 1,745 wild Pokémon, every floor and spawn checked against Red's tables, no differences):
+  - A rescue destination could open from a posted job alone; as in Red, only an accepted job opens it.
+  - A cue an actor wasn't listening for could be handed to it a moment later, so in Pokémon Square (chapter 15) Gengar ran a step ahead of your partner and the scene stopped. A Pokémon that was waiting on another cue, or was released in that same moment, no longer takes it.
+- **Kecleon's shop, as in Red:** a calm shopkeeper can't be hit by moves or thrown items. Stealing turns every Kecleon in the dungeon against you (one speed level faster), and only then can a former shopkeeper be recruited after defeating it.
+- **Friend Bow (Game page):** Red's one recruitment roll, or the remake's two. Vanilla Red sets it to one roll.
+- **Launcher on Android:** the Play / Game / Pokémon / Dungeons / Difficulty pages also open on the APK, and the phone's Back button returns to the previous page.
+- **Build tools without git, a C compiler or ffmpeg** (for builds on machines that have none of them): downloads use git's own protocol over HTTPS (tools/http_fetch.py, SpriteCollab in large batches instead of tens of thousands of single files), the decompilation's small data dumpers compile into a shared library with any C compiler including TinyCC (tools/cdump.py), music and sounds encode through libvorbis, LAME and the SoX resampler directly (tools/music/audio_libs.py), and the HD scaling falls back to Scale2x/3x when xBRZ can't be built (tools/scalex.py). A stopped build of the maps, music and sounds step carries on after the parts that finished.
+
 ## v0.8.23 (31 Oct 2026)
 
 - **MD-Recomp on the Releases page:** the Windows public build (`MD-Recomp.exe`) is attached to this release. It contains no game data: on its first start it builds the game from your own ROMs (Red Rescue Team alone, or with Explorers of Sky and Explorers Remixed). From this version on it updates itself with the script patches like every other build.

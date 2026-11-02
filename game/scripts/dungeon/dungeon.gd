@@ -2846,8 +2846,8 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 	if bool(fs.get_meta("inviting", false)):
 		rate *= 2                                        # Inviting Orb: twice as likely on this floor
 	var missed := fs.rng.randi_range(0, 999) >= rate
-	if missed and r.held == "friendbow":
-		missed = fs.rng.randi_range(0, 999) >= rate
+	if missed and r.held == "friendbow" and not LCFG.red_part("friendbow"):
+		missed = fs.rng.randi_range(0, 999) >= rate     # Game page "Friend Bow: Two rolls" (Red: one)
 	if missed:
 		return false
 	# it gets up and asks to join

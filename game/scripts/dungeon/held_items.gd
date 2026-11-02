@@ -113,6 +113,8 @@ static func throw_setup(d, m: Mon, dir: int) -> Dictionary:
 ## sub_8083D... hit roll for a thrown item reaching Pokémon t (90%; Whiff Specs never, Lockon Specs always,
 ## Dodge Scarf on the target never). Bounce Band: the item bounces off (returns "bounce").
 static func throw_hits(d, thrower: Mon, t: Mon) -> String:
+	if bool(t.get_meta("shopkeeper", false)) or bool(t.get_meta("rescue_target", false)):
+		return "miss"                   # CanProjectileHitTarget: a shopkeeper always dodges thrown items
 	if t.held == "bounceband" or EosItems.has(t, "bounce_throw"):
 		return "bounce"
 	var ok: bool = d.fs.rng.randi_range(0, 99) < PROJECTILE_HIT_CHANCE
