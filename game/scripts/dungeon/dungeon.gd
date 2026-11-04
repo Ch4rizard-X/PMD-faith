@@ -288,7 +288,7 @@ func build_floor() -> void:
 		boss = BossScene.make(self, fixed_no)
 		if boss:
 			# story fights can't end in a recruitment; post-story re-fights can (Red's legend recruits)
-			if boss.cutscene.contains("POSTSTORY"):
+			if boss.cutscene.contains("POSTSTORY") or boss.cutscene in ["CUTSCENE_REGIROCK", "CUTSCENE_REGICE", "CUTSCENE_REGISTEEL"]:
 				for m in fs.mons:
 					if str(m.get_meta("behavior", "")) not in ["", "BEHAVIOR_FIXED_ENEMY"]:
 						m.recruit_ok = true
@@ -909,12 +909,15 @@ func _spawn_wild(p: Vector2i) -> Mon:
 		return null
 	var fdata: Dictionary = ddata.floors[floor_i]
 	var pairs: Array = []
+	var mew_ok := mew_can_appear()
 	for e in fdata.get("pk", []):
-		if DB.species.has(str(e[0])):
+		if DB.species.has(str(e[0])) and (mew_ok or str(e[0]).substr(0, 4) != "0151"):
 			pairs.append([e, int(e[2])])
 	var e = _pick_weighted(pairs)
 	if e == null:
 		return null
+	if str(e[0]).substr(0, 4) == "0151":
+		fs.set_meta("mew_spawned", true)            # one Mew a floor (gDungeon->unk37FF)
 	var m := DB.make_mon(str(e[0]), Difficulty.wild_level(self, maxi(1, int(e[1]))), "enemy")
 	if Shiny.roll(fs.rng):
 		m.set_meta("shiny", true)                    # DX: a rare shiny
@@ -1423,6 +1426,12 @@ func leader_action(a: Dictionary) -> void:
 	var L := fs.leader
 	a = _confuse_leader(L, a)
 	var used := await execute(L, a)
+	if has_meta("mew_exit") and not result_sent:
+		# dungeon_mon_recruit.c: once Mew joins, the expedition ends (DUNGEON_EXIT_BEFRIENDED_MEW)
+		remove_meta("mew_exit")
+		await get_tree().create_timer(0.6 if not Dialog.auto else 0.05).timeout
+		_end("mew")
+		return
 	if used and not (boss and boss.floor_over):
 		await world_turn()
 		if not result_sent and not (boss and boss.floor_over):
@@ -1851,6 +1860,7 @@ func _mon_try_pick_up(m: Mon) -> void:
 		if seen:
 			Audio.sfx("pickup")
 			_msg("%s picked up the %s and put it in the Toolbox." % [nm, iname])
+		after_pickup.call_deferred(str(it.id))
 	elif m.held == "" and str(it.id) != "poke" and not is_temp(m):
 		if m.is_team():
 			TeamScreens.set_held(m, str(it.id), int(it.get("n", 1)))
@@ -2028,6 +2038,8 @@ func _after_leader_step_i() -> void:
 			fs.items.erase(L.pos)
 			Audio.sfx("pickup")
 			_msg("Picked up the [color=#ffdc4a]%s[/color]." % DB.item_name(it.id))
+			obj_layer.queue_redraw()
+			await after_pickup(str(it.id))
 		else:
 			_msg("The Toolbox is full.")
 		obj_layer.queue_redraw()
@@ -3033,6 +3045,8 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 	if t.visual:
 		t.visual.set_species(t.sp)     # team marker colour
 	await _join_sequence(t)
+	if t.sp.substr(0, 4) == "0151" and not is_temp(t):
+		set_meta("mew_exit", true)
 	return true
 
 func gain_exp(m: Mon, n: int) -> void:
@@ -3759,6 +3773,7 @@ func _item_commands(pg: Dictionary, idx: int, win: Control) -> bool:
 				return false
 			fs.items.erase(L.pos)
 			obj_layer.queue_redraw()
+			await after_pickup(id)
 			await _menu_turn()
 			return true
 		"switch":
@@ -5170,6 +5185,8 @@ func _end_summary(res: String) -> Dictionary:
 			return LastOuting.summary("rescue", who)
 		"quit", "escaped":
 			return LastOuting.summary("escaped", who)
+		"mew":
+			return LastOuting.summary("mew", who)
 	return LastOuting.summary("powerful_move", who)
 
 ## main.gd calls this when the expedition is over: Red's "The Last Outing" window.
@@ -5241,6 +5258,23 @@ func _level_up_boxes(m: Mon, before: Dictionary) -> void:
 
 ## The end of MonsterJoinSequence_Async after the Pokémon accepted: fanfare (0xCC), a pause, the nickname
 ## question, "$m0 joined $t to go on adventures!".
+## SpawnWildMonsOnFloor / sub_806AA0C: Mew shows up only while the Music Box is in the Toolbox (or held), until it
+## has joined, and only once a floor.
+func mew_can_appear() -> bool:
+	if fs != null and bool(fs.get_meta("mew_spawned", false)):
+		return false
+	if not (Missions.bag_has("musicbox") or Game.team.any(func(e): return str(e.get("held", "")) == "musicbox")):
+		return false
+	for f in Game.friends + Game.team:
+		if str(f.get("sp", "")).substr(0, 4) == "0151":
+			return false
+	return true
+
+## After the team picks something up: the Regi parts (dungeon_cutscene_regis.c sub_808AFB0 and the others).
+func after_pickup(id: String) -> void:
+	if boss != null and boss.has_method("on_pickup"):
+		await boss.on_pickup(id)
+
 func _join_sequence(t: Mon) -> void:
 	Audio.sfx("join")
 	if is_temp(t):                     # DX: joins for this dungeon; the nickname comes if it stays at the exit

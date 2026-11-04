@@ -2668,6 +2668,83 @@ func _ready() -> void:
 			st_.pump = false
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--regitest"):     # Buried Relic Regis: stairs + part drop, pickup, Music Box, Mew
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for e in Game.team:
+				e.level = 60
+				e.exp = DB.exp_at(str(e.sp), 60)
+			Dialog.auto = true
+			Dungeon.test_invincible = true
+			var D: Dictionary = DB.dungeons.dungeons["buried_relic"]
+			var regi_floors: Array = []
+			for i in D.floors.size():
+				var raw := PackedByteArray()
+				for b in D.floors[i].props:
+					raw.append(int(b))
+				var n := int(DungeonGen.props_from_bytes(raw).get("fixedRoomNumber", 0))
+				if n != 0:
+					regi_floors.append([i, n])
+			print("REGI fixed floors ", regi_floors)
+			for rf in regi_floors:
+				start_dungeon("buried_relic", int(rf[0]))
+				for i in 60:
+					await get_tree().create_timer(0.3).timeout
+					if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 4:
+						break
+				var d := dungeon
+				if d.boss == null:
+					print("REGI floor ", rf, " no boss scene")
+					continue
+				var b: Mon = null
+				for m in d.fs.mons:
+					if str(m.get_meta("behavior", "")).begins_with("BEHAVIOR_REGI"):
+						b = m
+				print("REGI floor ", rf, " cutscene=", d.boss.cutscene, " regi=", b.name if b else "-", " stairs=", d.fs.stairs)
+				if b == null:
+					continue
+				b.hp = 0
+				await d.faint(b, d.fs.leader)
+				var part: String = str(BossScene.REGI_PART.get(d.boss.cutscene, ""))
+				var at := []
+				for p in d.fs.items:
+					if str(d.fs.items[p].id) == part:
+						at.append(p)
+				print("REGI after faint stairs=", d.fs.stairs, " part ", part, " at ", at, " floor_over=", d.boss.floor_over)
+				Game.bag_add(part)
+				await d.after_pickup(part)
+				print("REGI obtained flag=", BossScene.get_flag("CUTSCENE_FLAG_REGI_ITEM_OBTAINED"), " bag=", Game.bag.map(func(x): return x.id))
+			print("REGI mew_can_appear=", is_instance_valid(dungeon) and dungeon.mew_can_appear())
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--roughskintest"):   # KO a Rough Skin Gible: no counterattack after the KO
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			start_dungeon("tiny_woods", 0)
+			for i in 60:
+				await get_tree().create_timer(0.2).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 3:
+					break
+			var d := dungeon
+			var L: Mon = d.fs.leader
+			L.level = 100
+			DB.recalc(L)
+			L.hp = L.max_hp
+			var g := DB.make_mon("0443", 5, "enemy")
+			g.ability = "rough-skin"
+			g.pos = d.fs.free_tile_near(L.pos + Vector2i(1, 0), g, 2)
+			d.fs.mons.append(g)
+			d._add_sprite(g)
+			print("ROUGH gible ability=", AbilityFx.has(g, "rough skin"), " hp=", g.hp, " leader hp=", L.hp)
+			for k in 4:
+				if not d.fs.mons.has(g):
+					break
+				await d.leader_action({"type": "attack", "move": "", "dir": AI.dir_toward(L.pos, g.pos)})
+				await get_tree().create_timer(0.3).timeout
+			print("ROUGH after: gible on floor=", d.fs.mons.has(g), " leader hp=", L.hp, "/", L.max_hp)
+			get_tree().quit()).call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--agedtest"):     # Aged Chamber AN / O? residents after the split
 		for k in ["agedchamberan", "agedchambero"]:
 			var A: Dictionary = Services.fa().areas[k]
@@ -3747,6 +3824,9 @@ func _on_dungeon_finished(res: String) -> void:
 		return
 	if res == "boss_next":
 		res = "cleared"
+	var mew := res == "mew"                     # DUNGEON_EXIT_BEFRIENDED_MEW: a success, like a clear (no unlocks)
+	if mew:
+		res = "escaped"
 	var ok := res != "defeated"
 	var chain_done: Array = dungeon.get_meta("chain_done", []) if is_instance_valid(dungeon) else []
 	var chain_head := last_dungeon
@@ -3768,6 +3848,8 @@ func _on_dungeon_finished(res: String) -> void:
 			lines.append("A new place opened up: [color=#7fe0ff]%s[/color]!" % Services.dname(k))
 	elif res == "rescued":
 		lines.append("[color=#ffdc4a]The rescue was a success![/color]")
+	elif res == "escaped" and mew:
+		lines.append("[color=#ffdc4a]The team befriended Mew![/color]")
 	elif res == "escaped":
 		lines.append("The team escaped from the dungeon.")      # Escape Orb: nothing is lost
 	elif Dojo.is_maze_key(last_dungeon):

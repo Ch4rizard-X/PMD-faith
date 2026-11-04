@@ -112,6 +112,8 @@ static func after_damaged(d, m: Mon, t: Mon, dmg: int, physical: bool, move_type
 	var fs: FloorState = d.fs
 	if m == null or t == null or m == t or m.hp <= 0:
 		return
+	if t.hp <= 0:
+		return              # HandleDealingDamage_Async: a knocked-out target strikes back with nothing (no Rough Skin)
 	if dmg > 0 and t.hp > 0 and has(t, "berserk") and t.hp * 2 < t.max_hp and (t.hp + dmg) * 2 >= t.max_hp:
 		t.stages.spa = mini(20, int(t.stages.get("spa", 10)) + 1)
 		d._msg("%s's Berserk raised its Sp. Atk!" % d._nm(t))

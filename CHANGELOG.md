@@ -3,13 +3,20 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.33 (5 Nov 2026)
+
+- **Buried Relic's Regis, as in Red** (dungeon_cutscene_regis.c): beating Regirock, Regice or Registeel now puts stairs on the floor and drops the part it was guarding where it fell ("Something fell from Regirock's body."). You pick the part up yourself ("... obtained the Rock Part that Regirock was guarding!") and take the stairs. Before, the part never dropped and the game went straight on to the next floor. With all three parts in the Toolbox, they fit together into the **Music Box**. A Regi can join your team on a later visit, once you have its part.
+- **Mew needs the Music Box:** Mew only appears in the Buried Relic while the Music Box is in the Toolbox (at most one a floor), and no longer once it has joined. Recruiting Mew ends the expedition at once, as in Red ("befriended Mew!"), keeping everything you found.
+- **Meeting Xatu at Great Canyon:** while Xatu is waiting in the Ho-Oh story, the dungeon list sends you on Red's "Meet Xatu" trip through Great Canyon, which ends at the top with Xatu. Before, it was the ordinary Great Canyon trip, which ends back home. The second trip to Mt. Freeze is listed the same way.
+- **Rough Skin no longer strikes back after a knockout:** Gible's line (and anything else with Rough Skin) hurt the attacker even when the hit knocked it out, using the whole hit's damage, so a strong attack could faint your own Pokémon. As in Red, a knocked-out Pokémon doesn't counterattack, and neither do Explorers of Sky held items that strike back.
+- **Android: MD-Recomp APK 0.8.33** is attached to this release.
+
 ## v0.8.32 (4 Nov 2026)
 
 - **Pokédex inside dungeons:** Others → Pokédex opens the Pokédex during an expedition, with two extra lists at the top: "On this floor" (the Pokémon you have seen on the current floor) and "This dungeon" (everything that lives there). Each entry shows whether you already have that Pokémon on your team.
 - **Aged Chamber O? has residents:** both Aged Chambers held the same Pokémon, so O? had none of its own. They are now split: Unown and the Gothita, Solosis, Hatenna and Munna lines live in Aged Chamber AN; Elgyem, Beheeyem, Espurr, Meowstic, Inkay, Malamar, Indeedee, Flittle and Scream Tail live in Aged Chamber O? (families stay together).
 - **The camera follows you again in free roam:** since v0.8.31, the view could stay where the last scene left it, so walking to the Friend Areas, the dungeons or town took you out of frame. The camera now goes back to following the leader as soon as you take control.
 - **Multi-hit moves stop after a recruit:** a Pokémon that joined your team on one hit of Double Kick, Fury Swipes or Parental Bond kept taking the remaining hits as a new teammate. The remaining hits now skip it.
-- **Android: MD-Recomp APK 0.8.32** is attached to this release.
 
 ## v0.8.31 (2 Nov 2026)
 

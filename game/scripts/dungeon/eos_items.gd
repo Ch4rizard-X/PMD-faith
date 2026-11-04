@@ -123,8 +123,8 @@ static func damage_factor(att: Mon, def: Mon, physical: bool, move_name: String)
 ## When m's attack damaged t: the target's items strike back (status 12%, counter, sealed move, PP back,
 ## Exp. on hit, Invisible / speed when hit, warp at low HP).
 static func after_damaged(d, m: Mon, t: Mon, dmg: int, physical: bool, move_name: String) -> void:
-	if m == null or t == null or m == t or dmg <= 0:
-		return
+	if m == null or t == null or m == t or dmg <= 0 or t.hp <= 0:
+		return              # a knocked-out holder's item does nothing back (as Red's counterattacks)
 	var rng: RandomNumberGenerator = d.fs.rng
 	var adjacent := FloorState.cheb(m.pos, t.pos) <= 1
 	for e in effects(t):

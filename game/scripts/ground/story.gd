@@ -977,11 +977,21 @@ static func _dungeon_list(root: Control, G = null) -> int:
 	var ids: Array = []
 	var prio: Array = []
 	var seen_did: Array = []
-	for r in 46:
+	var gc2 := _rd("GREAT_CANYON_2")
+	var mf2 := _rd("MT_FREEZE_2")
+	for r0 in 46:
+		if r0 == gc2 or r0 == mf2:
+			continue                  # CountAvailableDungeons: the second parts are never listed on their own...
+		if not rescue_available(r0):
+			continue
+		var r := r0
+		# ...but stand in for Great Canyon / Mt. Freeze while their story job is open (meet Xatu at the top)
+		if r0 == _rd("GREAT_CANYON") and not GVars.rescue_job(r0) and GVars.rescue_job(gc2):
+			r = gc2
+		elif r0 == _rd("MT_FREEZE") and not GVars.rescue_job(r0) and GVars.rescue_job(mf2):
+			r = mf2
 		var sd := GData.rescue_to_script(r)
 		if sd < 0:
-			continue
-		if not rescue_available(r):
 			continue
 		var did := int(GData.dungeon_info(sd).dungeon)
 		if did in seen_did:

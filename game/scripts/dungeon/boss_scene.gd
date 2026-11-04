@@ -370,6 +370,8 @@ const INTRO_WALK := ["CUTSCENE_FROSTY_GROTTO_ATTEMPT1", "CUTSCENE_FROSTY_GROTTO_
 # ------------------------------------------------------------------ running steps
 func run_setup() -> void:
 	await _run(scene.get("setup", []), false)
+	if REGI_PART.has(cutscene) and get_flag("CUTSCENE_FLAG_REGI_RECRUITED"):
+		_regi_stairs(str(REGI_PART[cutscene]))         # sub_808AD48 & co.: already recruited -> stairs (+ its part)
 
 func run_prefight() -> void:
 	if cutscene in INTRO_WALK:
@@ -388,7 +390,10 @@ func on_faint(m: Mon, joined := false) -> void:
 		return
 	_faint_behavior = b
 	_joined = joined
-	await _run(scene.get("faint", []), true)
+	if REGI_PART.has(cutscene):
+		await _regi_faint(m, b)
+	else:
+		await _run(scene.get("faint", []), true)
 	_faint_behavior = ""
 	# Safety net for scenes whose win condition lives in code we don't run (Regis, Jirachi wishes ...):
 	# a floor-wide arena without stairs ends once every hostile story Pokémon is down.
@@ -787,3 +792,106 @@ func _format(s: String) -> String:
 			pass
 	out += t.substr(last)
 	return out
+
+# ------------------------------------------------------------------ the Regis (dungeon_cutscene_regis.c, written out)
+const REGI_PART := {"CUTSCENE_REGIROCK": "rockpart", "CUTSCENE_REGICE": "icepart", "CUTSCENE_REGISTEEL": "steelpart"}
+const REGI_BEHAVIOR := {"CUTSCENE_REGIROCK": "BEHAVIOR_REGIROCK", "CUTSCENE_REGICE": "BEHAVIOR_REGICE", "CUTSCENE_REGISTEEL": "BEHAVIOR_REGISTEEL"}
+const REGI_NAME := {"CUTSCENE_REGIROCK": "Regirock", "CUTSCENE_REGICE": "Regice", "CUTSCENE_REGISTEEL": "Registeel"}
+
+func _bag_has(id: String) -> bool:
+	if Missions.bag_has(id):
+		return true
+	for e in Game.team:
+		if str(e.get("held", "")) == id:
+			return true
+	return false
+
+## sub_808B1CC: stairs appear on the room's marked tile (fixed-room action 69, where Red also hid a Seal Trap;
+## else under the leader), and the part lies just above them when the team has neither it nor the Music Box.
+func _regi_stairs(part: String) -> void:
+	var fs: FloorState = dg.fs
+	var pos := Vector2i(-1, -1)
+	for tp in fs.traps:
+		if str(fs.traps[tp].get("id", "")) == "seal":
+			pos = tp
+			break
+	if pos.x < 0 and fs.leader:
+		pos = fs.leader.pos
+	if pos.x < 0:
+		floor_over = true
+		return
+	fs.traps.erase(pos)                                   # sub_807FE04
+	fs.stairs = pos
+	if part != "" and not _bag_has(part) and not _bag_has("musicbox"):
+		var ip := pos + Vector2i(0, -1)
+		if fs.inb(ip) and not fs.is_wall(ip):
+			fs.items[ip] = {"id": part, "n": 1, "price": 0}
+	dg.obj_layer.queue_redraw()
+	if dg.get("red_map") and is_instance_valid(dg.red_map) and dg.red_map.has_method("queue_redraw"):
+		dg.red_map.queue_redraw()
+	if Dialog.auto:
+		print("  BOSS regi stairs at ", pos)
+
+## HandleRegirockBossFaint_Async & co.: the stairs appear; the first time, the part drops where the Regi fell,
+## the music changes and "Something fell from Regirock's body."
+func _regi_faint(m: Mon, b: String) -> void:
+	if get_flag("CUTSCENE_FLAG_REGI_RECRUITED") or b != str(REGI_BEHAVIOR[cutscene]):
+		return
+	_regi_stairs("")
+	if not get_flag("CUTSCENE_FLAG_REGI_ITEM_OBTAINED"):
+		var part := str(REGI_PART[cutscene])
+		var fs: FloorState = dg.fs
+		var ip: Vector2i = m.pos
+		if fs.items.has(ip) or ip == fs.stairs:
+			for r in range(1, 4):
+				var found := false
+				for dy in range(-r, r + 1):
+					for dx in range(-r, r + 1):
+						var q := m.pos + Vector2i(dx, dy)
+						if fs.inb(q) and not fs.is_wall(q) and not fs.items.has(q) and q != fs.stairs:
+							ip = q
+							found = true
+							break
+					if found:
+						break
+				if found:
+					break
+		fs.items[ip] = {"id": part, "n": 1, "price": 0}
+		dg.obj_layer.queue_redraw()
+		Audio.play_music("114")
+		await say("g%sPostFightDialogue_1" % str(REGI_NAME[cutscene]))
+
+## sub_808AFB0_Async & co.: picking up the part the Regi guarded; then the parts may make the Music Box.
+func on_pickup(id: String) -> void:
+	if not REGI_PART.has(cutscene) or id != str(REGI_PART[cutscene]):
+		return
+	if get_flag("CUTSCENE_FLAG_REGI_RECRUITED") or get_flag("CUTSCENE_FLAG_REGI_ITEM_OBTAINED"):
+		return
+	set_flag("CUTSCENE_FLAG_REGI_ITEM_OBTAINED")
+	await say("g%sPostFightDialogue_2" % str(REGI_NAME[cutscene]))
+	Audio.sfx("212")
+	await _wait(70)
+	await music_box_creation()
+
+## MusicBoxCreation_Async (dungeon_items.c): the Rock, Ice and Steel Parts in the Toolbox become the Music Box.
+func music_box_creation() -> void:
+	if not (Missions.bag_has("rockpart") and Missions.bag_has("icepart") and Missions.bag_has("steelpart")):
+		return
+	for id in ["rockpart", "icepart", "steelpart"]:
+		Missions._bag_take(id)
+	Game.bag.append({"id": "musicbox", "n": 1})
+	var G := "[color=#7fe0ff]%s[/color]"
+	await Dialog.say(dg.ui_root, "That means...")
+	await Dialog.say(dg.ui_root, "By finding the %s,\n%s, and %s..." % [G % "Rock Part", G % "Ice Part", G % "Steel Part"])
+	await Dialog.say(dg.ui_root, "All three parts are yours!")
+	await _wait(60)
+	await Dialog.say(dg.ui_root, "Oh? The three parts...\nThey're reacting to each other?")
+	Audio.sfx("215")
+	await _wait(60)
+	await Dialog.say(dg.ui_root, "The three parts\nfit together...")
+	await Dialog.say(dg.ui_root, "and became a %s!" % (G % "Music Box"))
+	await _wait(10)
+	Audio.sfx("212")
+	var nm: String = dg.fs.leader.name if dg.fs.leader else "The team"
+	await Dialog.say(dg.ui_root, "%s obtained\nthe %s!" % [nm, G % "Music Box"])
+	await Dialog.say(dg.ui_root, "The %s only needs\nto be in the Toolbox for it to\nattract a special something!" % (G % "Music Box"))
