@@ -9,7 +9,6 @@ Everything listed here is code; the game's graphics, music and data are built fr
 - **Mew needs the Music Box:** Mew only appears in the Buried Relic while the Music Box is in the Toolbox (at most one a floor), and no longer once it has joined. Recruiting Mew ends the expedition at once, as in Red ("befriended Mew!"), keeping everything you found.
 - **Meeting Xatu at Great Canyon:** while Xatu is waiting in the Ho-Oh story, the dungeon list sends you on Red's "Meet Xatu" trip through Great Canyon, which ends at the top with Xatu. Before, it was the ordinary Great Canyon trip, which ends back home. The second trip to Mt. Freeze is listed the same way.
 - **Rough Skin no longer strikes back after a knockout:** Gible's line (and anything else with Rough Skin) hurt the attacker even when the hit knocked it out, using the whole hit's damage, so a strong attack could faint your own Pokémon. As in Red, a knocked-out Pokémon doesn't counterattack, and neither do Explorers of Sky held items that strike back.
-- **Android: MD-Recomp APK 0.8.33** is attached to this release.
 
 ## v0.8.32 (4 Nov 2026)
 
