@@ -16,7 +16,46 @@ static func fa() -> Dictionary:
 		var f := FileAccess.open("res://data/friend_areas.json", FileAccess.READ)
 		if f:
 			_fa = JSON.parse_string(f.get_as_text())
+			_split_aged_chambers(_fa)
 	return _fa
+
+## Red keeps Unown's 28 forms apart: A-N live in Aged Chamber AN, O-Z, ! and ? in Aged Chamber O?. The remake has one
+## Unown, so the data put every newer resident in AN and left O? empty. Half of AN's newer residents (whole
+## evolution families) move to O?, which holds Red's 14.
+static func _split_aged_chambers(d) -> void:
+	if not d is Dictionary or not d.has("areas"):
+		return
+	var A: Dictionary = d.areas.get("agedchamberan", {})
+	var O: Dictionary = d.areas.get("agedchambero", {})
+	if A.is_empty() or O.is_empty() or not (O.get("species", []) as Array).is_empty():
+		return
+	var newer: Array = (A.species as Array).filter(func(sp): return not _red_species(str(sp)))
+	if newer.size() < 2:
+		return
+	var moved: Array = []
+	for i in range(newer.size() / 2, newer.size()):
+		moved.append(newer[i])
+	# keep families together: a Pokémon whose pre-evolution stays in AN stays with it
+	var keep := true
+	while keep and not moved.is_empty():
+		var first: String = str(moved[0])
+		var pre := str(DB.species.get(first, {}).get("pre", ""))
+		keep = pre != "" and pre in A.species and not pre in moved
+		if keep:
+			moved.remove_at(0)
+	if moved.is_empty():
+		return
+	A.species = (A.species as Array).filter(func(sp): return not sp in moved)
+	O.species = moved
+	for k in [A, O]:
+		var red_cap := int(k.get("red_cap", k.get("cap", 14)))
+		k["cap"] = maxi(mini(red_cap, 14), (k.species as Array).size())
+	for sp in moved:
+		d.species[str(sp)] = "agedchambero"
+
+static func _red_species(sp: String) -> bool:
+	var r = DB.species.get(sp, {}).get("red", 0)
+	return (r is bool and r) or ((r is int or r is float) and float(r) != 0.0) or (r is String and r.is_valid_float() and float(r) != 0.0)
 
 static func area_of(sp: String) -> String:
 	return str(fa().get("species", {}).get(sp.substr(0, 4), ""))

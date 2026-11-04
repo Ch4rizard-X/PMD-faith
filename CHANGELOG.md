@@ -3,6 +3,14 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.32 (4 Nov 2026)
+
+- **Pokédex inside dungeons:** Others → Pokédex opens the Pokédex during an expedition, with two extra lists at the top: "On this floor" (the Pokémon you have seen on the current floor) and "This dungeon" (everything that lives there). Each entry shows whether you already have that Pokémon on your team.
+- **Aged Chamber O? has residents:** both Aged Chambers held the same Pokémon, so O? had none of its own. They are now split: Unown and the Gothita, Solosis, Hatenna and Munna lines live in Aged Chamber AN; Elgyem, Beheeyem, Espurr, Meowstic, Inkay, Malamar, Indeedee, Flittle and Scream Tail live in Aged Chamber O? (families stay together).
+- **The camera follows you again in free roam:** since v0.8.31, the view could stay where the last scene left it, so walking to the Friend Areas, the dungeons or town took you out of frame. The camera now goes back to following the leader as soon as you take control.
+- **Multi-hit moves stop after a recruit:** a Pokémon that joined your team on one hit of Double Kick, Fury Swipes or Parental Bond kept taking the remaining hits as a new teammate. The remaining hits now skip it.
+- **Android: MD-Recomp APK 0.8.32** is attached to this release.
+
 ## v0.8.31 (2 Nov 2026)
 
 - **Cutscenes start where Red points the camera:** many of Red's scenes place an invisible camera marker that the view starts on (ground_effect.c: a camera-type marker with no script runs NORMAL_CAMERA). These were ignored, so in those scenes the view sat in the map's top-left corner, for example on the trees north of your base at the start of the Latias and Latios story, and in Spinda's scene in your base. Fixed everywhere Red uses one (about 150 maps): the ending's ball of light is now in the middle of the sky above the text box, and THE END is centred.

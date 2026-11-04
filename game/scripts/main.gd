@@ -2539,6 +2539,142 @@ func _ready() -> void:
 						break
 				get_tree().quit()).call_deferred()
 			return
+	if OS.get_cmdline_user_args().has("--dexdgtest"):    # the Pokédex from a dungeon's Others menu: floor list + entry
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dungeon.test_invincible = true
+			start_dungeon("tiny_woods", 1)
+			for i in 60:
+				await get_tree().create_timer(0.1).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy:
+					break
+			var d := dungeon
+			var dex_done := false
+			(func():
+				await PokedexUI.open(d.ui_root, d)
+				dex_done = true).call()
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://dexdg_menu.png")
+			var ev := InputEventAction.new(); ev.action = "ui_accept"; ev.pressed = true
+			Input.parse_input_event(ev)
+			await get_tree().create_timer(0.1).timeout
+			var ev2 := InputEventAction.new(); ev2.action = "ui_accept"; ev2.pressed = false
+			Input.parse_input_event(ev2)
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://dexdg_floor.png")
+			print("DEXDG floor species: ", d.fs.mons.filter(func(m): return not m.is_team()).map(func(m): return m.sp))
+			get_tree().quit()).call_deferred()
+		return
+	for a_ in OS.get_cmdline_user_args():
+		if not a_.begins_with("--recruittest="):    # --recruittest=dungeon,floor : real join + naming flow, then the floor exit
+			continue
+		var rp_: PackedStringArray = a_.substr(14).split(",")
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dungeon.test_invincible = false
+			var bossmode := rp_.size() > 2
+			Dungeon.test_invincible = bossmode
+			if bossmode:
+				for fl_ in Dungeon.RECRUIT_AFTER.values():
+					BossScene.set_flag(str(fl_))
+				GVars.reset_all()
+				GVars.set_arr(null, GVars.SCENARIO_MAIN, 0, 18)
+				GVars.set_arr(null, GVars.SCENARIO_MAIN, 1, 5)
+				print("RECRUIT can change leader=", GVars.quest(GVars.QUEST_CAN_CHANGE_LEADER))
+			start_dungeon(rp_[0], int(rp_[1]))
+			if bossmode:
+				var pump0 := {"on": true}
+				(func():
+					while pump0.on:
+						await get_tree().create_timer(0.35).timeout
+						var e1 := InputEventAction.new(); e1.action = "ui_accept"; e1.pressed = true
+						Input.parse_input_event(e1)
+						await get_tree().create_timer(0.05).timeout
+						var e2 := InputEventAction.new(); e2.action = "ui_accept"; e2.pressed = false
+						Input.parse_input_event(e2)).call()
+				for w_ in 12:
+					await get_tree().create_timer(1.0).timeout
+					get_viewport().get_texture().get_image().save_png("user://rw_%d.png" % w_)
+					print("RECRUIT wait ", w_, " dg=", is_instance_valid(dungeon), " boss=", is_instance_valid(dungeon) and dungeon.boss != null, " res=", dungeon.result_sent if is_instance_valid(dungeon) else "-")
+				pump0.on = false
+			for i in 80:
+				await get_tree().create_timer(0.1).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy:
+					break
+			var d := dungeon
+			var L: Mon = d.fs.leader
+			for tm__ in d.fs.team():
+				tm__.level = 100
+				DB.recalc(tm__)
+				tm__.hp = tm__.max_hp
+			var foe: Mon = null
+			for m in d.fs.mons:
+				var ar_ := Services.area_of(m.sp)
+				if ar_ != "" and not ar_ in Game.friend_areas:
+					Game.friend_areas.append(ar_)
+				if not m.is_team() and Services.has_area_for(m.sp) and not d.legend_owned(m) and (not bossmode or m.has_meta("behavior")):
+					foe = m
+					break
+			if foe == null:
+				print("RECRUIT no candidate"); get_tree().quit(); return
+			DB.species[foe.sp]["recruit"] = 1000
+			for m in d.fs.mons:
+				if m != foe and m != L and not m.is_team():
+					m.pos = d.fs.free_tile_near(m.pos + Vector2i(30, 30), m, 40)
+			foe.pos = d.fs.free_tile_near(L.pos + Vector2i(1, 0), foe, 3)
+			d._snap_visuals()
+			print("RECRUIT target ", foe.sp, " ", foe.name, " at ", foe.pos, " leader ", L.pos)
+			var st_ := {"pump": true}
+			(func():
+				while st_.pump:
+					await get_tree().create_timer(0.35).timeout
+					var ns_ := root.find_children("*", "NamingScreen", true, false)
+					if ns_.size() > 0:
+						print("RECRUIT naming screen open -> Bolt")
+						ns_[0]._done.emit("Bolt")
+						continue
+					var ev := InputEventAction.new(); ev.action = "ui_accept"; ev.pressed = true
+					Input.parse_input_event(ev)
+					await get_tree().create_timer(0.05).timeout
+					var ev2 := InputEventAction.new(); ev2.action = "ui_accept"; ev2.pressed = false
+					Input.parse_input_event(ev2)).call()
+			foe.hp = 1
+			var mv: String = str(L.moves[0].name)
+			for k_ in 12:
+				if not d.fs.mons.has(foe) or foe.is_team():
+					break
+				var dv: Vector2i = foe.pos - L.pos
+				L.facing = DB.dir_index(Vector2i(signi(dv.x), signi(dv.y)))
+				if OS.get_cmdline_user_args().has("--directfaint"):
+					foe.hp = 0
+					await d.faint(foe, L)
+				else:
+					await d.leader_action({"type": "attack", "move": "" if not OS.get_cmdline_user_args().has("--usemv") else mv, "dir": AI.dir_toward(L.pos, foe.pos)})
+				print("RECRUIT hit ", k_, " foe hp=", foe.hp, " on=", d.fs.mons.has(foe), " side=", foe.side, " pos ", foe.pos, " L ", L.pos, " face ", L.facing, " busy ", d.busy)
+				foe.hp = mini(foe.hp, 1)
+				await get_tree().create_timer(0.3).timeout
+			print("RECRUIT joined=", foe.is_team(), " name=", foe.name, " team=", d.fs.team().map(func(m): return m.name))
+			await get_tree().create_timer(1.0).timeout
+			get_viewport().get_texture().get_image().save_png("user://recruit_after.png")
+			print("RECRUIT -> next_floor")
+			if not bossmode:
+				d.next_floor()
+			for i in 12:
+				await get_tree().create_timer(5.0).timeout
+				print("RECRUIT t=", (i + 1) * 5, " valid=", is_instance_valid(d), " floor=", d.floor_i if is_instance_valid(d) else -1, " boss=", is_instance_valid(d) and d.boss != null, " team=", d.fs.team().map(func(m): return m.name) if is_instance_valid(d) and d.fs else [])
+				get_viewport().get_texture().get_image().save_png("user://recruit_t%d.png" % i)
+			print("RECRUIT friends=", Game.friends.map(func(e): return e.name), " team=", Game.team.map(func(e): return e.name))
+			get_viewport().get_texture().get_image().save_png("user://recruit_end.png")
+			st_.pump = false
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--agedtest"):     # Aged Chamber AN / O? residents after the split
+		for k in ["agedchamberan", "agedchambero"]:
+			var A: Dictionary = Services.fa().areas[k]
+			print("AGED ", k, " cap=", A.cap, " ", (A.species as Array).map(func(x): return DB.species[x].name))
+		print("AGED area_of Inkay=", Services.area_of("0686"), " Unown=", Services.area_of("0201"))
+		get_tree().quit()
+		return
 	if OS.get_cmdline_user_args().has("--keytest"):      # vaults: a closed vault, its locked door, and the Key opening it
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
@@ -5455,6 +5591,39 @@ func _storytest() -> void:
 		if a.begins_with("--spam="):
 			GText.spam = int(a.substr(7))
 	Game.settings.hunger = false
+	for a_ in OS.get_cmdline_user_args():
+		if a_.begins_with("--recruitin="):       # storytest: recruit one Pokémon on each floor of these dungeons
+			var keys_: PackedStringArray = a_.substr(12).split(",")
+			var done_ := {}
+			get_tree().process_frame.connect(func():
+				if not is_instance_valid(dungeon) or dungeon.fs == null or dungeon.busy or dungeon.result_sent or not (str(dungeon.dkey) in keys_):
+					return
+				var tag_ := "%s:%d" % [dungeon.dkey, dungeon.floor_i]
+				if done_.has(tag_) or dungeon.fs.team().size() >= 4:
+					return
+				done_[tag_] = true
+				var d_: Dungeon = dungeon
+				var L_: Mon = d_.fs.leader
+				for m in d_.fs.mons:
+					if m.is_team() or m.has_meta("behavior") or d_.legend_owned(m) or not d_.recruit_allowed(m):
+						continue
+					var ar_ := Services.area_of(m.sp)
+					if ar_ == "":
+						continue
+					if not ar_ in Game.friend_areas:
+						Game.friend_areas.append(ar_)
+					DB.species[m.sp]["recruit"] = 1000
+					var p_ := d_.fs.free_tile_near(L_.pos + Vector2i(1, 0), m, 3)
+					m.pos = p_
+					d_._snap_visuals()
+					print("RECRUITIN %s floor %d: %s" % [d_.dkey, d_.floor_i + 1, m.name])
+					d_.busy = true
+					(func():
+						m.hp = 0
+						await d_.faint(m, L_)
+						print("RECRUITIN joined=%s team=%s" % [m.is_team(), d_.fs.team().map(func(x): return x.name)])
+						d_.busy = false).call()
+					break)
 	if OS.get_cmdline_user_args().has("--vox"):
 		Game.settings.vox_view = 1                   # play the story with the 3D view on
 	Dungeon.test_invincible = not OS.get_cmdline_user_args().has("--force=defeated")
@@ -5622,6 +5791,8 @@ func _storytest() -> void:
 			if OS.get_cmdline_user_args().has("--lives"):
 				for L in ground.lives:
 					if L.kind_id != -1:
+						if L.id == 0:
+							print("    CAM kind=%d id=%d mode=%d goal=%s" % [ground.camera.target_kind, ground.camera.target_id, ground.camera.mode, ground.camera.goal / 2048])
 						print("    L%d kind=%d g%d s%d pos=%s flags=%x anim=%x %s" % [L.id, L.kind_id, L.group, L.sector, L.p144 / 2048, L.flags, L.anim, (L.sprite._anim_name(L.sprite.anim_group) + ("" if L.sprite.loop else "/once")) if L.sprite else "-"])
 		elif is_instance_valid(dungeon):
 			if not dungeon.autoplay:

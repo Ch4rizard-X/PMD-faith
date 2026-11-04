@@ -2271,13 +2271,16 @@ func do_attack(m: Mon, move_name: String, d: int, announce := true) -> void:
 		else:
 			_msg("The move missed!" if mv.get("r", "front") != "user" else "")
 		return
+	var side0 := {}
+	for t0 in targets:
+		side0[t0] = t0.is_team()
 	for h in hits:
 		if pbond:
 			m.set_meta("pb_hit", h)
 		for t0 in targets:
 			var t: Mon = t0
-			if t.hp <= 0:
-				continue
+			if t.hp <= 0 or t.is_team() != bool(side0.get(t0, t.is_team())) or not fs.mons.has(t):
+				continue                                 # fainted, or it joined the team on an earlier hit
 			t = HeldItems.pass_scarf(self, m, t, mv)
 			t = IQSky.before_hit(self, m, t)
 			if t == null:
@@ -4377,7 +4380,7 @@ func _others_menu() -> bool:
 	while not result_sent:
 		var can_recruit := recruit_ok_here()
 		var rows: Array = ["Game Options", "Quicksave or Give Up", "Message log", "Mission objectives",
-			{"text": "Recruitment search" if can_recruit else "[color=#ff8070]Recruitment search[/color]", "disabled": not can_recruit}, "Hints"]
+			{"text": "Recruitment search" if can_recruit else "[color=#ff8070]Recruitment search[/color]", "disabled": not can_recruit}, "Hints", "Pokédex"]
 		var m := TeamScreens.menu("Others", rows, 288)
 		m.sel = sel
 		var r := await TeamScreens.run_menu(ui_root, m, Vector2(TeamScreens.WIN_X, TeamScreens.WIN_Y))
@@ -4393,6 +4396,7 @@ func _others_menu() -> bool:
 			3: await _mission_objectives()
 			4: await _recruitment_search()
 			5: await _hints_menu()
+			6: await PokedexUI.open(ui_root, self)       # the base's Pokédex, plus this floor / this dungeon
 		if TeamScreens.auto_on():
 			return false
 	return false

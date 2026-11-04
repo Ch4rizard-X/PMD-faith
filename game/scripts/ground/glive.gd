@@ -390,6 +390,10 @@ func _player_act(a1: int, d: int) -> void:      # sub_80AAAE8
 			_water_check()
 		6, 7, 8:
 			if d != -1:
+				# walking under your control: a scene that left the view parked on a marker or another actor hands it
+				# back to the leader (Red re-adds the player after a scene, which re-attaches the camera)
+				if not (G.camera.target_kind == 1 and G.camera.target_id == id) and not G.camera.moving():
+					G.camera.move_follow(2, 1, id, 12)
 				var unk := 0
 				walk_t = 4
 				var n := 1

@@ -591,11 +591,7 @@ class FLoc:
 static var _fa: Dictionary = {}
 static func _fa_data() -> Dictionary:
 	if _fa.is_empty():
-		var f := FileAccess.open("res://data/friend_areas.json", FileAccess.READ)
-		if f:
-			var d = JSON.parse_string(f.get_as_text())
-			if d is Dictionary:
-				_fa = d
+		_fa = Services.fa()                 # (with the Aged Chamber split)
 	return _fa
 
 ## IsFriendAreaShownOnMap: the base always, otherwise an owned Friend Area.

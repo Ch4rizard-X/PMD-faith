@@ -11,19 +11,40 @@ extends RefCounted
 const PER_PAGE := 8
 const FILTERS := ["All", "Seen", "Recruited", "By dungeon", "By Friend Area"]
 
-static func open(root: Control) -> void:
+## In a dungeon (dg = the Dungeon) two lists come first: the Pokémon on this floor and those of this dungeon,
+## so you can see at a glance which ones you've already recruited (cyan) before you try.
+static func open(root: Control, dg = null) -> void:
 	var fsel := 0
+	var extra: Array = []
+	if dg != null:
+		extra = ["On this floor", "This dungeon"]
 	while true:
 		var c := Pokedex.counts()
-		var lm := ListMenu.make("Pokédex  %d seen · %d recruited" % [c.seen, c.recruited], FILTERS + ["Close"])
+		var lm := ListMenu.make("Pokédex  %d seen · %d recruited" % [c.seen, c.recruited], extra + FILTERS + ["Close"])
 		root.add_child(lm)
 		lm.position = Vector2(8, 8)
 		lm._set_sel(fsel)
 		var f := await lm.choose()
-		if f < 0 or f >= FILTERS.size():
+		if f < 0 or f >= extra.size() + FILTERS.size():
 			return
 		fsel = f
 		var list: Array = []
+		if f < extra.size():
+			if f == 0:
+				for m in dg.fs.mons:
+					if m.hp > 0 and not m.is_team() and DB.species.has(str(m.sp).substr(0, 4)) and Pokedex.is_seen(str(m.sp).substr(0, 4)):
+						var k := str(m.sp).substr(0, 4)
+						if not k in list:
+							list.append(k)
+				list.sort()
+			else:
+				list = Pokedex.species_in(str(dg.dkey))
+			if list.is_empty():
+				await Dialog.say(root, "No Pokémon to show here yet.")
+				continue
+			await browse(root, list, str(extra[f]))
+			continue
+		f -= extra.size()
 		var title: String = FILTERS[f]
 		match f:
 			0:
