@@ -64,7 +64,7 @@ static func friend_area_mon(map: int, i: int) -> Dictionary:
 	var key := fa_key(fa)
 	var n := 0
 	for e in Game.friends:
-		if str(e.get("area", "")) == key:
+		if str(e.get("area", "")) == key and not Services._in_team(e):     # team members are out with you
 			if n == i:
 				return e
 			n += 1

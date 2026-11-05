@@ -2852,6 +2852,18 @@ func _ready() -> void:
 			print("DXC after peak friends=", Game.friends.map(func(e): return e.name))
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--agedmigtest"):   # old saves: O? Pokémon filed under AN move to O?
+		Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+		Game.friend_areas += ["agedchamberan", "agedchambero"]
+		for sp in ["0678", "0677", "0605", "0201"]:
+			var e: Dictionary = {"sp": sp, "name": DB.species[sp].name, "level": 10, "exp": 0, "moves": [], "iq": 0, "held": "", "bonus": {}}
+			e["area"] = "agedchamberan"
+			Game.friends.append(e)
+		Game.save_game(true)
+		Game.load_game()
+		print("AGEDMIG ", Game.friends.filter(func(e): return str(e.get("area","")).begins_with("aged")).map(func(e): return "%s:%s" % [e.name, e.area]))
+		get_tree().quit()
+		return
 	if OS.get_cmdline_user_args().has("--agedtest"):     # Aged Chamber AN / O? residents after the split
 		for k in ["agedchamberan", "agedchambero"]:
 			var A: Dictionary = Services.fa().areas[k]

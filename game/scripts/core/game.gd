@@ -311,6 +311,12 @@ func load_game() -> void:
 	for e in friends:
 		e.level = int(e.level)
 		e.exp = int(e.exp)
+		# v0.8.32 split the Aged Chambers: Pokémon recruited before then were all filed under AN
+		var ar := str(e.get("area", ""))
+		if ar == "agedchamberan" or ar == "agedchambero":
+			var now := Services.area_of(str(e.get("sp", "")))
+			if now != ar and now in friend_areas:
+				e.area = now
 	link_entries()
 	storage = d.get("storage", {})
 	nature = d.get("nature", "")

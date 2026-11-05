@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.35 (5 Nov 2026)
+
+- **Aged Chamber O? residents move in:** Pokémon recruited before the Aged Chambers were split (v0.8.32) were all filed under Aged Chamber AN, so Elgyem, Espurr, Meowstic and the others stayed there. When your save loads, they now move to Aged Chamber O? (if you own it).
+- **Your leader no longer stands in its own Friend Area:** after Make Leader picked a Pokémon from a Friend Area, it still appeared among the residents there while you walked around as it. Team members aren't shown in their Friend Areas any more: they're out with you.
+
 ## v0.8.34 (5 Nov 2026)
 
 - **DX recruiting: temporary members stay for the whole trip.** In trips made of two parts (Mt. Thunder and Mt. Thunder Peak, Mt. Blaze and its Peak, Frosty Forest and Frosty Grotto, Mt. Freeze and its Peak, Magma Cavern and its Pit, Sky Tower and its Summit, and the floors before a boss arena), the "had fun on the adventure ... join the team for good?" question and the nickname came at the end of the first part, and the temporary members were gone for the boss. They now come along into the next part and are asked once the whole trip is over, after the boss.
