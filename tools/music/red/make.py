@@ -51,27 +51,39 @@ def _norm(st, target_db, peak=0.97):
 def render_song(num, loops=2, tail=1.0):
     p = render.Player(num, loops=loops, tail=tail)
     L, R = p.run()
-    st = np.stack([L, R], axis=1).astype(np.float64)
+    # float32 (N, 2): the samples are float32 already and both resamplers read float32, so this is the same audio
+    # in half the memory of the old float64 copy
+    st = np.stack([L, R], axis=1)
+    del L, R
     spf = render.OUT_RATE / render.FRAME_RATE
     ls = p.loop_start_frame * spf / render.OUT_RATE if p.loop_start_frame is not None else None
     le = p.goto_frames[0] * spf / render.OUT_RATE if p.goto_frames else None
+    del p
     return st, ls, le
 
 
 def bgm(num, outdir):
     st, ls, le = render_song(num)
     y = resample(st, render.OUT_RATE, SR_OUT)
+    del st
     if ls is not None and le is not None and le > ls:
         S, E = int(round(ls * SR_OUT)), int(round(le * SR_OUT))
         Lp = E - S
-        body = y[E:E + Lp]
-        if len(body) < Lp:
-            body = np.concatenate([body, np.zeros((Lp - len(body), 2))])
+        if len(y) >= E + Lp:
+            body = y[E:E + Lp]          # the second pass (it starts with the first pass's echo in it)
+        else:
+            # only one pass was rendered (a loop too long for two in 15 minutes): loop on it. Padding the missing
+            # second pass with silence made these songs go quiet for minutes before looping
+            body = y[S:E]
+            if len(body) < Lp:
+                body = np.concatenate([body, np.zeros((Lp - len(body), 2))])
         out = np.concatenate([y[:S], body])
+        del body
         loop_start = S / SR_OUT
     else:
         out = _trim(y)
         loop_start = None
+    del y
     out = _norm(out, BGM_RMS_DB)
     encode(out, SR_OUT, os.path.join(outdir, "%03d.ogg" % num))
     return {"loop_start": None if loop_start is None else round(loop_start, 6), "length": round(len(out) / SR_OUT, 6)}
@@ -124,6 +136,12 @@ def main(argv=None):
             return
         stats = common.load_json(STATS) if os.path.exists(STATS) else {}
         want = ids or BGM_IDS
+        if os.environ.get("PYTHONHOME") and not ids:
+            # the phone's build stopped part-way earlier (closed, or out of memory): keep the songs it finished
+            have = [n for n in want if "%03d" % n in stats and os.path.exists(os.path.join(outdir, "%03d.ogg" % n))]
+            if have:
+                print("Music: %d of %d songs were already made, carrying on" % (len(have), len(want)), flush=True)
+                want = [n for n in want if n not in have]
         failed = []
 
         def got(num, r):

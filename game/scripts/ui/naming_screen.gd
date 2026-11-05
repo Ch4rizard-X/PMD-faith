@@ -247,7 +247,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			Audio.sfx("error")
 	else:
 		return
-	get_viewport().set_input_as_handled()
+	if is_inside_tree(): get_viewport().set_input_as_handled()
 
 ## Taps and clicks: this Control stops mouse input (so the screen under it can't be clicked), which means
 ## they arrive here as GUI input, never in _unhandled_input. Touch reaches it as an emulated mouse press.

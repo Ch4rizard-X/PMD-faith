@@ -1016,6 +1016,11 @@ class Player:
                     self.tempoC -= 150
                     if len(self.goto_frames) >= self.loops and end_frame is None:
                         end_frame = self.frame + int(round(self.tail * FRAME_RATE))
+                    elif (end_frame is None and len(self.goto_frames) == 1 and self.loop_start_frame is not None
+                          and 2 * self.frame - self.loop_start_frame + self.tail * FRAME_RATE > FRAME_RATE * 900):
+                        # a very long loop (the 10-minute ambient Friend Area songs): a second pass wouldn't fit in
+                        # the 15 minutes rendered, so stop after the first (make.py loops on that one)
+                        end_frame = self.frame + int(round(self.tail * FRAME_RATE))
                     if not any(t.exist for t in self.tracks):
                         self.finished = True
                         if end_frame is None:
@@ -1056,17 +1061,33 @@ class Player:
                 break
             if self.frame > FRAME_RATE * 900:
                 break
+        # memory: a long song is tens of millions of samples, and the phone build renders several at once, so each
+        # step frees what it no longer needs and the sample-and-hold works in blocks (same samples as before)
         L = np.concatenate(chunksL)
+        del chunksL
         R = np.concatenate(chunksR)
+        del chunksR
         if ZOH:
             # the m4a mixer outputs the DirectSound mix at 18157 Hz (sample-and-hold)
-            k = np.floor(np.floor(np.arange(len(L)) * (MIX_RATE / OUT_RATE)) * (OUT_RATE / MIX_RATE) + 0.5).astype(np.int64)
-            k = np.minimum(k, len(L) - 1)
-            L, R = L[k], R[k]
+            # in place, last block first: each output sample holds an earlier (or the same) input sample (k <= i),
+            # so nothing is read after it has been overwritten
+            n = len(L)
+            B = 1 << 20
+            for b0 in range(((n - 1) // B) * B, -1, -B):
+                b1 = min(n, b0 + B)
+                k = np.floor(np.floor(np.arange(b0, b1) * (MIX_RATE / OUT_RATE)) * (OUT_RATE / MIX_RATE) + 0.5).astype(np.int64)
+                k = np.minimum(k, n - 1)
+                L[b0:b1] = L[k]
+                R[b0:b1] = R[k]
         if self.reverb:     # m4a reverb works on the DirectSound buffer only
             L, R = apply_reverb(L, R, self.reverb)
-        L = L + np.concatenate(cgbL)
-        R = R + np.concatenate(cgbR)
+        c = np.concatenate(cgbL)
+        del cgbL
+        L += c
+        c = np.concatenate(cgbR)
+        del cgbR
+        R += c
+        del c
         if WIDTH != 1.0:
             M, S = (L + R) / 2, (L - R) / 2 * WIDTH
             L, R = M + S, M - S
@@ -1075,28 +1096,40 @@ class Player:
 
 def apply_reverb(L, R, rev):
     """m4a reverb: buffer slot is pre-filled with (L+R)[n-5 frames] + (L+R)[n-4 frames]
-    (the DMA ring holds 5 frames) times rev/512, i.e. a feedback comb on the final mix."""
+    (the DMA ring holds 5 frames) times rev/512, i.e. a feedback comb on the final mix.
+    Works in place on L and R (float32), keeping only the last 5 frames of the output in float64, which is all
+    the comb reads back: the same samples as the old whole-song float64 copies, in a fraction of the memory."""
     d5 = int(round(5 * OUT_RATE / FRAME_RATE))
     d4 = int(round(4 * OUT_RATE / FRAME_RATE))
     g = rev / 512.0
     n = len(L)
-    yL = L.astype(np.float64).copy()
-    yR = R.astype(np.float64).copy()
+    if not L.flags.writeable or L.dtype != np.float32:
+        L = L.astype(np.float32)
+    if not R.flags.writeable or R.dtype != np.float32:
+        R = R.astype(np.float32)
+    H = d5                                   # output history the comb reads: y[pos - d5 .. pos)
+    wL = np.zeros(H)
+    wR = np.zeros(H)
+    k0 = min(d4, n)                          # y[0:d4] = x
+    wL[H - k0:] = L[:k0].astype(np.float64)
+    wR[H - k0:] = R[:k0].astype(np.float64)
     pos = d4
     while pos < n:
         e = min(n, pos + d4)
-        a = pos - d5
-        fb = np.zeros(e - pos)
-        s5 = slice(max(a, 0), e - d5) if e - d5 > 0 else None
-        if s5 is not None and e - d5 > max(a, 0):
-            src = yL[max(a, 0):e - d5] + yR[max(a, 0):e - d5]
-            fb[(max(a, 0) - a):(max(a, 0) - a) + len(src)] += src
-        src4 = yL[pos - d4:e - d4] + yR[pos - d4:e - d4]
-        fb[:len(src4)] += src4
-        yL[pos:e] += fb * g
-        yR[pos:e] += fb * g
+        m = e - pos
+        fb = np.zeros(m)
+        fb += wL[H - d5:H - d5 + m] + wR[H - d5:H - d5 + m]
+        fb += wL[H - d4:H - d4 + m] + wR[H - d4:H - d4 + m]
+        yl = L[pos:e].astype(np.float64)
+        yr = R[pos:e].astype(np.float64)
+        yl += fb * g
+        yr += fb * g
+        L[pos:e] = yl
+        R[pos:e] = yr
+        wL = np.concatenate([wL[m:], yl])
+        wR = np.concatenate([wR[m:], yr])
         pos = e
-    return yL.astype(np.float32), yR.astype(np.float32)
+    return L, R
 
 
 def write_wav(path, L, R, gain=1.0):

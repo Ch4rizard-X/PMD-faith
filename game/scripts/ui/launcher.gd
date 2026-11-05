@@ -274,7 +274,7 @@ func _exit_tree() -> void:
 
 func _input(e: InputEvent) -> void:
 	if e.is_action_pressed("ui_cancel") and _page and _page.get_meta("sub", false):
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		_save()
 		_show_main()
 

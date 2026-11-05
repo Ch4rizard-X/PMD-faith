@@ -221,4 +221,4 @@ class PrepView extends PanelContainer:
 			_finish("cancel")
 		else:
 			return
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()

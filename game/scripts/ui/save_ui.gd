@@ -218,7 +218,7 @@ class KeyCatch extends Node:
 			k = "tap" if e.button_index == MOUSE_BUTTON_LEFT else ("b" if e.button_index == MOUSE_BUTTON_RIGHT else "")
 		if k != "":
 			q.append(k)
-			get_viewport().set_input_as_handled()
+			if is_inside_tree(): get_viewport().set_input_as_handled()
 
 ## Waits until A / B / Start are released (so the press that opened a screen doesn't also close it).
 static func release_keys(tree: SceneTree) -> void:

@@ -255,7 +255,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		_finish(-1)
 	else:
 		return
-	get_viewport().set_input_as_handled()
+	if is_inside_tree(): get_viewport().set_input_as_handled()
 
 func _gui_input(e: InputEvent) -> void:
 	# tap outside the rows (on the panel's edge) does nothing; right click cancels

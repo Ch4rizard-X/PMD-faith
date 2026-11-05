@@ -124,6 +124,18 @@ func start(key: String, team_entries: Array) -> void:
 		m.is_leader = i == 0
 		m.set_meta("story", i < 2)          # hero and partner: losing either ends the expedition (story rule)
 		team_mons.append(m)
+	if not carried_temps.is_empty():
+		# DX: the temporary members of the trip's earlier part come along into this part; if the team went
+		# somewhere else instead, they went home (with their thanks, as at an exit)
+		for m in carried_temps:
+			if key == carried_to:
+				m.is_leader = false
+				m.set_meta("join_turn", 0)
+				team_mons.append(m)
+			else:
+				Game.money += 10
+		carried_temps = []
+		carried_to = ""
 	terrain_view = TerrainView.new(); add_child(terrain_view)
 	obj_layer = Node2D.new(); obj_layer.z_index = 1; obj_layer.draw.connect(_draw_objects); add_child(obj_layer)
 	arrow_layer = Node2D.new(); arrow_layer.z_index = 4; arrow_layer.draw.connect(_draw_mode_arrows); add_child(arrow_layer)
@@ -1327,11 +1339,11 @@ func _unhandled_input(e: InputEvent) -> void:
 			Game.settings.vox_pack = (int(Game.settings.get("vox_pack", 1)) + 1) % names.size()
 			voxel_sync()
 			_msg("Shader pack: [color=#ffdc4a]%s[/color]." % names[int(Game.settings.vox_pack)])
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		return
 	if e is InputEventJoypadButton:
 		_pad_event(e)
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		return
 	if e is InputEventKey and e.is_action("act_turn") and not e.is_echo():     # keyboard: tap the turn key = face an enemy
 		if e.pressed:
@@ -1340,15 +1352,15 @@ func _unhandled_input(e: InputEvent) -> void:
 			_face_nearest_foe()
 	if e.is_action_pressed("act_setmove"):
 		use_set_move()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		return
 	if e.is_action_pressed("act_log"):
 		open_log()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		return
 	if e.is_action_pressed("act_auto"):
 		set_autoplay(not autoplay)
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		return
 	if autoplay and (e is InputEventKey or e is InputEventJoypadButton) and e.is_pressed():
 		set_autoplay(false)
@@ -1370,7 +1382,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		_toggle_map()
 	else:
 		return
-	get_viewport().set_input_as_handled()
+	if is_inside_tree(): get_viewport().set_input_as_handled()
 
 func on_hud_button(name: String) -> void:
 	if name == "auto":
@@ -1834,6 +1846,15 @@ func do_move(m: Mon, d: int, swap := false) -> bool:
 		HeldItems.goggles_reveal(self, m)
 	if not m.is_leader and fs.items.has(m.pos):
 		_mon_try_pick_up(m)
+	if not m.is_leader and m.is_team() and fs.traps.has(m.pos):
+		# dungeon_entity_movement.c: a teammate that walks onto a trap the team can see sets it off (Wonder
+		# Tiles included); a hidden one it walks over. Trap Seer only shows a hidden trap.
+		var tr: Dictionary = fs.traps[m.pos]
+		if AI.iq(m, "trap seer") and not bool(tr.get("seen", false)):
+			tr.seen = true
+			obj_layer.queue_redraw()
+		elif bool(tr.get("seen", false)):
+			await trigger_trap(m, m.pos)
 	if m.is_leader:
 		_flush_walks_nowait()       # the leader's step plays together with everyone else's this turn
 		await _after_leader_step()
@@ -2103,11 +2124,19 @@ func trigger_trap(m: Mon, p: Vector2i) -> void:
 				_walkers.erase(m.visual)
 			_msg("%s was warped by a Warp Trap!" % _nm(m))
 		"pitfall":
+			if not m.is_leader and BossScene.is_floorwide(fixed_no):
+				_msg("But nothing happened...")
+				return
 			_msg("%s fell into a pitfall!" % _nm(m))
 			if m.is_leader:
 				_hurt(m, maxi(1, m.max_hp / 4), null, true)
 				await get_tree().create_timer(0.6).timeout
 				await next_floor()
+			else:
+				# HandlePitfallTrap: anyone else who falls in is gone from the floor (HandleFaint, FELL_INTO_PITFALL)
+				m.hp = 0
+				m.set_meta("went_away", true)
+				await faint(m, null)
 		"summon":
 			_msg("A Summon Trap! Pokémon appeared!")
 			for i in 3:
@@ -2919,6 +2948,11 @@ func recruit_allowed(t: Mon) -> bool:
 ## Game Options "Recruiting: DX" (Rescue Team DX): a defeated Pokémon joins for this dungeon only (from up to 2
 ## tiles, Red's rate, its Friend Area needed as in Red, up to 8 members); at the exit you choose who stays.
 const DX_TEAM_MAX := 8
+## The second part of Red's trips in two (a checkpoint dungeon, then the boss part) for the DX temporary members.
+const PART_NEXT := {"mt_thunder": "mt_thunder_peak", "mt_blaze": "mt_blaze_peak", "frosty_forest": "frosty_grotto",
+	"mt_freeze": "mt_freeze_peak", "magma_cavern": "magma_cavern_pit", "sky_tower": "sky_tower_summit"}
+static var carried_temps: Array = []
+static var carried_to := ""
 const DX_RANGE := 2
 
 static func dx_recruiting() -> bool:
@@ -3199,7 +3233,17 @@ func _end(res: String) -> void:
 				var e: Dictionary = m.get_meta("entry")
 				Game.friends.append(e)
 				recruited_names.append(m.name)
-		await _dx_farewells()
+		# DX: a trip in parts (the floors before a boss arena, Mt. Thunder -> Mt. Thunder Peak ...) keeps its
+		# temporary members for the next part; they're asked to stay when the whole trip is over
+		var nxt := dkey if res == "boss_next" else (str(PART_NEXT.get(dkey, "")) if res == "cleared" else "")
+		var temps: Array = team_mons.filter(func(m): return is_temp(m) and m.hp > 0)
+		if nxt != "" and not temps.is_empty():
+			for m in temps:
+				m.visual = null
+			carried_temps = temps
+			carried_to = nxt
+		else:
+			await _dx_farewells()
 	finished.emit(res)
 
 ## DX recruiting, leaving the dungeon: each temporary member (still standing or not) may stay if you have its

@@ -83,9 +83,11 @@ def clean(steps):
     if "eos_music" in steps:
         rm += glob.glob(os.path.join(A, "music", "eos_*")) + [os.path.join(D, "eos_loops.json"),
                                                                os.path.join(common.TMP, "eos_bgm_cache", "_stats.json")]
-    if "red_music" in steps:
+    if "red_music" in steps and not os.environ.get("PYTHONHOME"):
         rm += [p for p in glob.glob(os.path.join(A, "music", "*")) if not os.path.basename(p).startswith("eos_")]
         rm.append(os.path.join(common.TMP, "red_music_stats.json"))
+    # (the phone keeps the songs an interrupted build finished: its build folder only ever holds one build, and
+    # tools/music/red/make.py carries on with the songs still missing)
     if "sfx" in steps:
         rm.append(os.path.join(A, "sfx"))
     for p in rm:

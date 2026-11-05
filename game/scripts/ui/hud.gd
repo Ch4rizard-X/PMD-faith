@@ -287,7 +287,7 @@ func _input(e: InputEvent) -> void:
 			var map := [2, 1, 0, 7, 6, 5, 4, 3]   # screen octant -> Red direction index
 			pad_dir = map[octant]
 		pad.queue_redraw()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 	elif not pressed and idx == _pad_touch:
 		_pad_touch = -1
 		pad_dir = -1

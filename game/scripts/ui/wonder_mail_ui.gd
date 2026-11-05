@@ -596,18 +596,18 @@ class CodeEntry extends PanelContainer:
 			var k: InputEventKey = e
 			if k.keycode == KEY_BACKSPACE:
 				_del()
-				get_viewport().set_input_as_handled()
+				if is_inside_tree(): get_viewport().set_input_as_handled()
 				return
 			if k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER:
 				if _len() == 24:
 					_end()
 				else:
 					_press()
-				get_viewport().set_input_as_handled()
+				if is_inside_tree(): get_viewport().set_input_as_handled()
 				return
 			if k.keycode == KEY_V and (k.ctrl_pressed or k.meta_pressed):
 				_paste()
-				get_viewport().set_input_as_handled()
+				if is_inside_tree(): get_viewport().set_input_as_handled()
 				return
 			if k.unicode > 32 and not k.echo:
 				var ch := WonderMail.normalize(char(k.unicode))
@@ -615,7 +615,7 @@ class CodeEntry extends PanelContainer:
 					_put(ch)
 				else:
 					Audio.sfx("error")
-				get_viewport().set_input_as_handled()
+				if is_inside_tree(): get_viewport().set_input_as_handled()
 				return
 		if e.is_action_pressed("ui_right"):
 			_move(1, 0)
@@ -634,7 +634,7 @@ class CodeEntry extends PanelContainer:
 				_finish("")
 		else:
 			return
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 
 # ============================================================================ scrolling pick list
 class PickList extends PanelContainer:
@@ -829,18 +829,18 @@ class PickList extends PanelContainer:
 			var k: InputEventKey = e
 			if k.keycode == KEY_TAB and toggle_text != "":
 				_finish(TOGGLE)
-				get_viewport().set_input_as_handled()
+				if is_inside_tree(): get_viewport().set_input_as_handled()
 				return
 			if _filter and not _filter.has_focus():
 				if k.keycode == KEY_BACKSPACE and _filter.text != "":
 					_filter.text = _filter.text.substr(0, _filter.text.length() - 1)
 					_apply_filter()
-					get_viewport().set_input_as_handled()
+					if is_inside_tree(): get_viewport().set_input_as_handled()
 					return
 				if k.unicode > 32 and not (k.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]):
 					_filter.text += char(k.unicode)
 					_apply_filter()
-					get_viewport().set_input_as_handled()
+					if is_inside_tree(): get_viewport().set_input_as_handled()
 					return
 		if e.is_action_pressed("ui_down", true):
 			_move(1)
@@ -861,7 +861,7 @@ class PickList extends PanelContainer:
 				_finish(null)
 		else:
 			return
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 
 	func _gui_input(e: InputEvent) -> void:
 		if not _blocked() and e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_RIGHT:
@@ -1011,4 +1011,4 @@ class ResultView extends PanelContainer:
 			_press()
 		else:
 			return
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()

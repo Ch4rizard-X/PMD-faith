@@ -273,7 +273,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		_press_b = true
 	else:
 		return
-	get_viewport().set_input_as_handled()
+	if is_inside_tree(): get_viewport().set_input_as_handled()
 
 ## Touch (no controller): tap an area to walk toward it, tap the area you're on to choose it, Back to leave.
 func _gui_input(e: InputEvent) -> void:

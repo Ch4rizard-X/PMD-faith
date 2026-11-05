@@ -496,7 +496,7 @@ class JobView extends PanelContainer:
 			_emit(-1)
 		else:
 			return
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 
 	func _row_input(e: InputEvent, idx: int) -> void:
 		if _blocked():
@@ -612,7 +612,7 @@ class InfoView extends PanelContainer:
 			return
 		if e.is_action_pressed("ui_accept") or e.is_action_pressed("act_attack") or e.is_action_pressed("ui_cancel") or e.is_action_pressed("act_menu"):
 			_close()
-			get_viewport().set_input_as_handled()
+			if is_inside_tree(): get_viewport().set_input_as_handled()
 
 	func _gui_input(e: InputEvent) -> void:
 		if e is InputEventMouseButton and e.pressed:

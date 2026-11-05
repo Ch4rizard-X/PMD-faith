@@ -645,7 +645,7 @@ func _input(e: InputEvent) -> void:
 
 func _unhandled_input(e: InputEvent) -> void:
 	if text.handle_input(e):
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 		return
 	if e is InputEventMouseButton and e.pressed and (e.button_index == MOUSE_BUTTON_WHEEL_UP or e.button_index == MOUSE_BUTTON_WHEEL_DOWN) \
 			and not demo and not (cur_map >= 223 and cur_map <= 227):

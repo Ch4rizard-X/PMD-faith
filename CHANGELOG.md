@@ -3,6 +3,15 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.34 (5 Nov 2026)
+
+- **DX recruiting: temporary members stay for the whole trip.** In trips made of two parts (Mt. Thunder and Mt. Thunder Peak, Mt. Blaze and its Peak, Frosty Forest and Frosty Grotto, Mt. Freeze and its Peak, Magma Cavern and its Pit, Sky Tower and its Summit, and the floors before a boss arena), the "had fun on the adventure ... join the team for good?" question and the nickname came at the end of the first part, and the temporary members were gone for the boss. They now come along into the next part and are asked once the whole trip is over, after the boss.
+- **Ho-Oh's arrival at Mt. Faraway:** the camera now glides down from the sky to just above your team, and Ho-Oh swoops down from the sky (dungeon_cutscene_hooh.c HoOhDropInEffect). Before, the camera stayed six tiles up for the whole scene, and Ho-Oh was standing there from the start. Latios's first scene at Northern Range gets its camera move too.
+- **Partners and traps, as in Red:** a teammate that walks onto a trap the team can see now sets it off, Wonder Tiles included; a hidden trap it walks over, and Trap Seer reveals it instead. A teammate that falls into a pitfall drops out of the dungeon. Partners already walk around the traps they can see.
+- **Menus closing during a scene change:** a menu or text box that closed just as the screen behind it changed (for example a dungeon ending into a rest stop) raised a script error. Fixed in every screen.
+- **Music build on phones no longer runs out of memory:** some of Red's songs (most of the Friend Area themes) are ambient tracks with loops of 10 minutes or more. Rendering one took about 2.5 GB, and with several songs at once the phone closed the app around the 25th song. They now take less than half that, the same audio comes out, a phone renders at most 3 songs at once (fewer with less free memory), and a setup that was closed part-way keeps the songs it already made.
+- **Those long songs no longer go silent:** they played for about 4.5 minutes and were then silent for up to 6 minutes before looping, because the loop was taken from a second play-through that didn't fit in the 15 minutes rendered. They now loop on the whole first play-through.
+
 ## v0.8.33 (5 Nov 2026)
 
 - **Buried Relic's Regis, as in Red** (dungeon_cutscene_regis.c): beating Regirock, Regice or Registeel now puts stairs on the floor and drops the part it was guarding where it fell ("Something fell from Regirock's body."). You pick the part up yourself ("... obtained the Rock Part that Regirock was guarding!") and take the stairs. Before, the part never dropped and the game went straight on to the next floor. With all three parts in the Toolbox, they fit together into the **Music Box**. A Regi can join your team on a later visit, once you have its part.

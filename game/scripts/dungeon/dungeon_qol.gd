@@ -378,7 +378,7 @@ func _input(e: InputEvent) -> void:
 		var m := _mon_at_screen(e.position)
 		if m and bool(opt("qol_info")):
 			show_info(m, true)
-			get_viewport().set_input_as_handled()
+			if is_inside_tree(): get_viewport().set_input_as_handled()
 		else:
 			_hide_info()
 

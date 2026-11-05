@@ -447,6 +447,8 @@ func _step(st: Array, visual: bool) -> void:
 			Audio.stop_music()
 		"sfx":
 			Audio.sfx("%03d" % int(st[1]))
+			if int(st[1]) == 504 and cutscene.begins_with("CUTSCENE_MT_FARAWAY"):
+				await _hooh_drop(visual)                 # HoOhDropInEffect (its sound is this 0x1F8)
 		"flash":
 			var order: Array = FLASH_ORDER.get(cutscene, [])
 			var fname: String = str(order[_flash_i]) if _flash_i < order.size() else ""
@@ -500,7 +502,8 @@ func _step(st: Array, visual: bool) -> void:
 		"hide":
 			var m5 := _mon_of(st[1])
 			if m5:
-				dg.cs_hide(m5, true)
+				# sub_8086A3C: Ho-Oh is out of sight up in the sky until it swoops down (HoOhDropInEffect)
+				dg.cs_hide(m5, true, str(st[1]) == "BEHAVIOR_HO_OH")
 				if cutscene.begins_with("CUTSCENE_MAGMA_CAVERN_MID") and m5.visual and m5.visual.has_method("play"):
 					m5.visual.play("Laying" if m5.visual.man and m5.visual.man.anims.has("Laying") else "Sleep")   # pose 0xE: lying hurt
 		"show":
@@ -618,9 +621,22 @@ func _tile_expr(e: String, axis: String):
 			off = -off
 	return base + off
 
+## The scenes' own camera spots ("PixelPos local_NN" in the decomp): [who, x offset, y offset] in pixels.
+const CAM_LOCALS := {
+	"CUTSCENE_MT_FARAWAY": {"&local_14": ["leader", 0, -16]},              # HoOhPreFightDialogue: leader - 0x1000
+	"CUTSCENE_MT_FARAWAY_POSTSTORY": {"&local_14": ["leader", 0, -16]},    # HoOhReFightDialogue
+	"CUTSCENE_NORTHERN_RANGE_ATTEMPT1": {"&local_18": ["BEHAVIOR_LATIOS", 0, 32]},   # Latios + (0x80 << 6)
+}
+
 func _cam_target(arg: String):
 	if arg == "&pos":
 		return _cam_pos
+	var loc = CAM_LOCALS.get(cutscene, {}).get(arg)
+	if loc != null:
+		var lm := _mon_of(str(loc[0]))
+		if lm and lm.visual:
+			return dg._px(lm.pos) + Vector2(float(loc[1]), float(loc[2]))
+		return null
 	var re := RegEx.new()
 	re.compile("&(\\w+)->pixelPos")
 	var m := re.search(arg)
@@ -895,3 +911,28 @@ func music_box_creation() -> void:
 	var nm: String = dg.fs.leader.name if dg.fs.leader else "The team"
 	await Dialog.say(dg.ui_root, "%s obtained\nthe %s!" % [nm, G % "Music Box"])
 	await Dialog.say(dg.ui_root, "The %s only needs\nto be in the Toolbox for it to\nattract a special something!" % (G % "Music Box"))
+
+## HoOhDropInEffect (dungeon_cutscene_hooh.c): Ho-Oh drops from 200 px up, 12 px a frame slowing by 0.375 a frame
+## (never under 0.08), until it lands.
+func _hooh_drop(visual: bool) -> void:
+	var m := _mon_of("BEHAVIOR_HO_OH")
+	if m == null:
+		return
+	dg.cs_hide(m, false)
+	m.set_meta("cs_hidden", true)                # still out of the fight until the scene ends (boss_hp)
+	m.side = "client"
+	if m.visual == null:
+		return
+	var h := 200.0
+	var v := 12.0
+	var animate: bool = visual and not Dialog.auto and not (dg.autoplay and dg.auto_answer)
+	while animate:
+		h -= v
+		v = maxf(0.08, v - 0.375)
+		if h < 0.0:
+			break
+		m.visual.bob = Vector2(0, -h)
+		m.visual.queue_redraw()
+		await dg.get_tree().process_frame
+	m.visual.bob = Vector2.ZERO
+	m.visual.queue_redraw()

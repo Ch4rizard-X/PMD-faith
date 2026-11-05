@@ -18,7 +18,13 @@ import threading
 import time
 
 MB = 1 << 20
-PER_WORKER = 700 * MB          # a worker peaks at ~420 MB (the longest songs' float64 buffers); room to spare
+PER_WORKER = 900 * MB          # what one worker may use: the longest songs peak at about 1.2 GB, most far below
+PER_WORKER_PHONE = 1250 * MB   # on a phone a worker that runs out takes the whole app with it: budget the worst song
+PHONE_MAX = 3
+
+
+def _phone():
+    return bool(os.environ.get("ANDROID_ROOT") or os.environ.get("ANDROID_DATA") or os.environ.get("PYTHONHOME"))
 
 
 def py_cmd():
@@ -49,7 +55,15 @@ def count(n_items):
     cpus = os.cpu_count() or 1
     j = min(max(1, cpus - 1) if cpus > 2 else cpus, 6)
     mem = _mem_available()
-    if mem:
+    if _phone():
+        # Android closes the whole app (and the build with it) when memory runs short, and its "available" figure
+        # is optimistic: at most 3 at once, each with room for the longest song, out of 75% of what is free
+        j = min(j, PHONE_MAX)
+        if mem:
+            j = min(j, max(1, int(mem * 0.75 // PER_WORKER_PHONE)))
+        else:
+            j = min(j, 2)
+    elif mem:
         j = min(j, max(1, int(mem // PER_WORKER)))
     return max(1, min(j, n_items))
 

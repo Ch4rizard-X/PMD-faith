@@ -207,9 +207,9 @@ class _Capture extends Node:
 			return
 		if not pad and e is InputEventKey and e.pressed and not e.echo:
 			_sent = true
-			get_viewport().set_input_as_handled()
+			if is_inside_tree(): get_viewport().set_input_as_handled()
 			done.emit(e.physical_keycode if e.physical_keycode != 0 else e.keycode)
 		elif pad and e is InputEventJoypadButton and e.pressed:
 			_sent = true
-			get_viewport().set_input_as_handled()
+			if is_inside_tree(): get_viewport().set_input_as_handled()
 			done.emit(e.button_index)

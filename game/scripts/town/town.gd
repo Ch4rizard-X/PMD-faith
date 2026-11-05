@@ -586,15 +586,15 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if e.is_action_pressed("act_attack"):
 		try_interact()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 	elif e.is_action_pressed("act_menu"):
 		menu.emit()
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 	elif e is InputEventScreenTouch and e.pressed:
 		if get_viewport().gui_get_hovered_control() != null:
 			return     # the touch landed on a button (Menu, A)
 		_tap(make_canvas_position_local(e.position))
-		get_viewport().set_input_as_handled()
+		if is_inside_tree(): get_viewport().set_input_as_handled()
 
 func _tap(m: Vector2) -> void:
 	var hit := {}

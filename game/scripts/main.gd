@@ -2572,15 +2572,22 @@ func _ready() -> void:
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
 			Dungeon.test_invincible = false
-			var bossmode := rp_.size() > 2
+			if OS.get_cmdline_user_args().has("--dx"):
+				Game.settings["qol_recruit"] = 1          # DX recruiting: joins for the trip, asked to stay at the end
+			var bossmode := rp_.size() > 2 and rp_[2] == "boss"
+			var postmode := rp_.size() > 2
 			Dungeon.test_invincible = bossmode
-			if bossmode:
+			if postmode:
 				for fl_ in Dungeon.RECRUIT_AFTER.values():
 					BossScene.set_flag(str(fl_))
 				GVars.reset_all()
 				GVars.set_arr(null, GVars.SCENARIO_MAIN, 0, 18)
 				GVars.set_arr(null, GVars.SCENARIO_MAIN, 1, 5)
 				print("RECRUIT can change leader=", GVars.quest(GVars.QUEST_CAN_CHANGE_LEADER))
+			if postmode:
+				if rp_.size() > 3:
+					GVars.set_val(null, GVars.DUNGEON_ENTER, int(rp_[3]))     # the script dungeon the story entered
+				Game.story["vars"] = GVars.save_b64()
 			start_dungeon(rp_[0], int(rp_[1]))
 			if bossmode:
 				var pump0 := {"on": true}
@@ -2743,6 +2750,106 @@ func _ready() -> void:
 				await d.leader_action({"type": "attack", "move": "", "dir": AI.dir_toward(L.pos, g.pos)})
 				await get_tree().create_timer(0.3).timeout
 			print("ROUGH after: gible on floor=", d.fs.mons.has(g), " leader hp=", L.hp, "/", L.max_hp)
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--partnertraptest"):   # a partner walking onto seen / hidden traps
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			start_dungeon("tiny_woods", 0)
+			for i in 60:
+				await get_tree().create_timer(0.2).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 3:
+					break
+			var d := dungeon
+			var P: Mon = null
+			for m in d.fs.team():
+				if not m.is_leader:
+					P = m
+			for case in [["slumber", true], ["slumber", false], ["wonder", true]]:
+				var dir := -1
+				for k in 8:
+					var q: Vector2i = P.pos + DB.DIRS[k]
+					if d.fs.walkable(q, P) and d.fs.mon_at(q) == null and not d.fs.traps.has(q) and not d.fs.items.has(q) and d.fs.can_step(P.pos, k, P):
+						dir = k
+						break
+				var q2: Vector2i = P.pos + DB.DIRS[dir]
+				d.fs.traps[q2] = {"id": case[0], "seen": case[1]}
+				P.stages.atk = 14
+				P.status.sleep = 0
+				await d.do_move(P, dir)
+				print("PTRAP %s seen=%s -> sleep=%d atk_stage=%d on=%s" % [case[0], case[1], int(P.status.get("sleep", 0)), int(P.stages.atk), P.pos == q2])
+				d.fs.traps.erase(q2)
+			get_tree().quit()).call_deferred()
+		return
+	for a_ in OS.get_cmdline_user_args():
+		if not a_.begins_with("--cutshots="):      # --cutshots=dungeon : the boss floor's opening scene, a shot every 0.5 s
+			continue
+		var ck_ := a_.substr(11)
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			for e in Game.team:
+				e.level = 60
+				e.exp = DB.exp_at(str(e.sp), 60)
+			Game.story.erase("cutscene_flags")
+			Dungeon.test_invincible = true
+			var n: int = DB.dungeons.dungeons[ck_].floors.size()
+			start_dungeon(ck_, n - 1)
+			var st_ := {"on": true}
+			(func():
+				while st_.on:
+					await get_tree().create_timer(1.2).timeout
+					var e1 := InputEventAction.new(); e1.action = "ui_accept"; e1.pressed = true
+					Input.parse_input_event(e1)
+					await get_tree().create_timer(0.05).timeout
+					var e2 := InputEventAction.new(); e2.action = "ui_accept"; e2.pressed = false
+					Input.parse_input_event(e2)).call()
+			for i in 60:
+				await get_tree().create_timer(0.5).timeout
+				get_viewport().get_texture().get_image().save_png("user://cut_%02d.png" % i)
+			st_.on = false
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--dxcarrytest"):   # DX temporary members carry from Mt. Thunder into the Peak
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Game.settings["qol_recruit"] = 1
+			Dialog.auto = true
+			Dungeon.test_invincible = true
+			start_dungeon("mt_thunder", 9)
+			for i in 60:
+				await get_tree().create_timer(0.2).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 3:
+					break
+			var d := dungeon
+			d.auto_answer = true
+			print("DXC start")
+			var L: Mon = d.fs.leader
+			var foe: Mon = null
+			for m in d.fs.mons:
+				var ar_ := Services.area_of(m.sp)
+				if not m.is_team() and ar_ != "":
+					if not ar_ in Game.friend_areas:
+						Game.friend_areas.append(ar_)
+					foe = m
+					break
+			DB.species[foe.sp]["recruit"] = 1000
+			foe.pos = d.fs.free_tile_near(L.pos + Vector2i(1, 0), foe, 3)
+			foe.hp = 0
+			await d.faint(foe, L)
+			print("DXC joined=", foe.is_team(), " temp=", Dungeon.is_temp(foe), " team=", d.fs.team().map(func(m): return m.name))
+			await d.next_floor()
+			await get_tree().create_timer(1.0).timeout
+			print("DXC carried=", Dungeon.carried_temps.map(func(m): return m.name), " to=", Dungeon.carried_to, " friends=", Game.friends.map(func(e): return e.name))
+			start_dungeon("mt_thunder_peak", 2)
+			for i in 60:
+				await get_tree().create_timer(0.2).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 3:
+					break
+			print("DXC peak team=", dungeon.fs.team().map(func(m): return m.name + ("(temp)" if Dungeon.is_temp(m) else "")))
+			dungeon._end("cleared")
+			await get_tree().create_timer(1.0).timeout
+			print("DXC after peak friends=", Game.friends.map(func(e): return e.name))
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--agedtest"):     # Aged Chamber AN / O? residents after the split
