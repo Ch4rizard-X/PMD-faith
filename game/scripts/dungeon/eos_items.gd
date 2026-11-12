@@ -204,7 +204,7 @@ static func on_ko(d, t: Mon, killer: Mon) -> void:
 
 # ======================================================================== where the new items turn up
 ## Not cosmetic key items (story treasures, instruments, Unown stones, tickets, boxes that need Xatu).
-const NO_DROP := ["wonderegg", "prizeticket", "silverticket", "goldticket", "prismticket", "mysterypart", "secretslab",
+const NO_DROP := ["wonderegg", "prizeticket", "eossilverticket", "eosgoldticket", "prismticket", "mysterypart", "secretslab",
 	"gracidea", "skygift", "lostloot", "coronetrock", "mossyrock"]
 const TREASURES := ["goldenmask", "ambertear", "icyflute", "fierydrum", "terracymbal", "aquamonica", "rockhorn",
 	"grasscornet", "skymelodica", "goldthorn", "rarefossil", "goldenapple"]
@@ -233,15 +233,33 @@ const BOX_RARE := ["goldenseed", "joyseed", "goldribbon", "rainbowgummi", "dxgum
 static func is_box(id: String) -> bool:
 	return id in BOXES
 
+## EoS's prize tickets (Recycle Shop lottery, not in the remake): the Kecleon shop trades one for a prize, the
+## better the ticket the better the prize: Prize 1★, Silver 2★, Gold 3★, Prism a rare item.
+const TICKETS := {"prizeticket": 1, "eossilverticket": 2, "eosgoldticket": 3, "prismticket": 4}
+
+static func is_ticket(id: String) -> bool:
+	return TICKETS.has(id)
+
+static func ticket_prize(id: String, rng: RandomNumberGenerator) -> String:
+	var tier := int(TICKETS.get(id, 1))
+	if tier >= 4:
+		var rare: Array = BOX_RARE.filter(func(k): return DB.items.has(k) and (k != "empowerseed" or Awaken.can_drop()))
+		if not rare.is_empty():
+			return str(rare[rng.randi_range(0, rare.size() - 1)])
+		tier = 3
+	return open_box(rng, tier)
+
 ## What a box holds: mostly an exclusive item (1★ 50%, 2★ 35%, 3★ 15%), usually one a Pokémon on the team
 ## or in a Friend Area can use; sometimes a rare item instead.
-static func open_box(rng: RandomNumberGenerator) -> String:
-	if rng.randi_range(0, 99) < 20:
+static func open_box(rng: RandomNumberGenerator, force_tier := 0) -> String:
+	if force_tier == 0 and rng.randi_range(0, 99) < 20:
 		var rare: Array = BOX_RARE.filter(func(k): return DB.items.has(k) and (k != "empowerseed" or Awaken.can_drop()))
 		if not rare.is_empty():
 			return str(rare[rng.randi_range(0, rare.size() - 1)])
 	var r := rng.randi_range(0, 99)
 	var tier := 1 if r < 50 else (2 if r < 85 else 3)
+	if force_tier > 0:
+		tier = force_tier
 	var sp := {}
 	var types := {}
 	for e in Game.team + Game.friends:

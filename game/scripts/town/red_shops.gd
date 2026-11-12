@@ -146,12 +146,12 @@ static func kecleon(root: Control, wares := false) -> void:
 		if _auto_spin():
 			return
 		var rows: Array = ["Buy", "Sell", "Sell All", "Info", "Cancel"]
-		var has_box := not wares and not asleep() and Game.bag.any(func(b): return EosItems.is_box(str(b.id)))
+		var has_box := not wares and not asleep() and Game.bag.any(func(b): return EosItems.is_box(str(b.id)) or EosItems.is_ticket(str(b.id)))
 		if has_box:
-			rows.insert(3, "Open Box")
+			rows.insert(3, "Open Box" if Game.bag.any(func(b): return EosItems.is_box(str(b.id))) else "Trade Ticket")
 		var c := await RedText.ask(root, K + ("00" if first else "01"), nm, sp, rows, v, mini(sel, rows.size() - 1))
 		first = false
-		if c >= 0 and rows[c] == "Open Box":
+		if c >= 0 and (rows[c] == "Open Box" or rows[c] == "Trade Ticket"):
 			sel = c
 			await _kec_open_box(root, nm, sp)
 			continue
@@ -205,16 +205,20 @@ static func kecleon(root: Control, wares := false) -> void:
 ## Treasure boxes (EoS: Xatu's appraisal, 150 Poké). The green Kecleon opens one box at a time.
 static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 	var fee := EosItems.APPRAISE_FEE
-	await RedText.say(root, " Oh! A treasure box!\nI can open it for you for {COLOR CYAN}{VALUE_0}{RESET} {POKE}〜♪", nm, sp, {"value0": fee})
+	if Game.bag.any(func(b): return EosItems.is_box(str(b.id))):
+		await RedText.say(root, " Oh! A treasure box!\nI can open it for you for {COLOR CYAN}{VALUE_0}{RESET} {POKE}〜♪", nm, sp, {"value0": fee})
+	else:
+		await RedText.say(root, " Oh! A prize ticket!\nI can trade it for a prize〜♪", nm, sp)
 	while true:
 		if _auto_spin():
 			return
 		var idx: Array = []
 		var rows: Array = []
 		for i in Game.bag.size():
-			if EosItems.is_box(str(Game.bag[i].id)):
+			var bid := str(Game.bag[i].id)
+			if EosItems.is_box(bid) or EosItems.is_ticket(bid):
 				idx.append(i)
-				rows.append({"text": DB.item_name(str(Game.bag[i].id)), "right": str(fee), "icon": TeamScreens.item_icon(str(Game.bag[i].id)), "item": str(Game.bag[i].id)})
+				rows.append({"text": DB.item_name(bid), "right": "Prize" if EosItems.is_ticket(bid) else str(fee), "icon": TeamScreens.item_icon(bid), "item": bid})
 		if idx.is_empty():
 			return
 		var mb := _money_box(root)
@@ -224,6 +228,25 @@ static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 			return
 		var bi: int = int(idx[int(r.i)])
 		var box := str(Game.bag[bi].id)
+		if EosItems.is_ticket(box):
+			var ct := await TeamScreens.submenu(root, null, ["Trade", "Info"])
+			if ct == "Info":
+				await TeamScreens.item_info(root, box)
+				continue
+			if ct != "Trade":
+				continue
+			if await RedText.ask(root, " Oh! A {COLOR GREEN}{MOVE_ITEM_0}{RESET}!\nShall I trade it for a prize?", nm, sp, _yn(), {"item0": DB.item_name(box)}) != 0:
+				continue
+			var rng_t := RandomNumberGenerator.new()
+			rng_t.randomize()
+			var prize := EosItems.ticket_prize(box, rng_t)
+			Game.bag[bi] = {"id": prize, "n": 1}
+			Audio.sfx("332")
+			await RedText.say(root, " Congratulations!\nThe {COLOR GREEN}{MOVE_ITEM_0}{RESET} won\n{COLOR GREEN}{MOVE_ITEM_1}{RESET}!", nm, sp, {"item0": DB.item_name(box), "item1": DB.item_name(prize)}, "Happy")
+			Game.save_game()
+			if not Game.bag.any(func(b): return EosItems.is_box(str(b.id)) or EosItems.is_ticket(str(b.id))):
+				return
+			continue
 		var c := await TeamScreens.submenu(root, null, ["Open", "Info"])
 		if c == "Info":
 			await TeamScreens.item_info(root, box)
@@ -243,7 +266,7 @@ static func _kec_open_box(root: Control, nm: String, sp: String) -> void:
 		Audio.sfx("332")
 		await RedText.say(root, " Here we go...!\nThe {COLOR GREEN}{MOVE_ITEM_0}{RESET} held\n{COLOR GREEN}{MOVE_ITEM_1}{RESET}!", nm, sp, {"item0": DB.item_name(box), "item1": DB.item_name(got)}, "Happy")
 		Game.save_game()
-		if not Game.bag.any(func(b): return EosItems.is_box(str(b.id))):
+		if not Game.bag.any(func(b): return EosItems.is_box(str(b.id)) or EosItems.is_ticket(str(b.id))):
 			return
 		if Game.spendable() < fee:
 			return

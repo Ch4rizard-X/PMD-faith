@@ -67,6 +67,21 @@ static func has_area_for(sp: String) -> bool:
 	var a := area_of(sp)
 	return a != "" and a in Game.friend_areas
 
+## Red's monster_data "unk12": these can join without their Friend Area, which opens when they do
+## (IsMonsterRecruitable / MonsterJoinSequence_Async: UnlockFriendArea + "gained access to the Friend Area").
+const AREA_ON_JOIN := ["0144", "0145", "0146", "0249", "0251", "0359", "0380", "0381", "0382", "0383", "0384", "0386"]
+
+static func can_join(sp: String) -> bool:
+	return has_area_for(sp) or (sp.substr(0, 4) in AREA_ON_JOIN and area_of(sp) != "")
+
+## When one of AREA_ON_JOIN joins without its area: open it. Returns the area's name, or "".
+static func open_area_on_join(sp: String) -> String:
+	var a := area_of(sp)
+	if a == "" or a in Game.friend_areas or not sp.substr(0, 4) in AREA_ON_JOIN:
+		return ""
+	Game.friend_areas.append(a)
+	return area_name(a)
+
 ## Unlock the next story dungeon after clearing one (until stage 3 adds the story scenes).
 static func on_cleared(key: String) -> Array:
 	var newly: Array = []

@@ -498,7 +498,7 @@ func recruit_text(m: Mon) -> String:
 		return "[color=#ff8070]Won't join[/color]"
 	if dg.legend_owned(m):
 		return "[color=#ff8070]Already a friend[/color]"
-	if not Services.has_area_for(m.sp):
+	if not Services.can_join(m.sp):
 		return "[color=#ff8070]Can't join: no Friend Area[/color]"
 	var base := int(S.get("recruit", 0))
 	var now: int = dg.recruit_rate(dg.fs.leader, m)

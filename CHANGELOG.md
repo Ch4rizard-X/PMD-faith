@@ -3,6 +3,13 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.36 (12 Nov 2026)
+
+- **Legendaries can join without their Friend Area, as in Red:** Articuno, Zapdos, Moltres, Lugia, Celebi, Absol, Latias, Latios, Kyogre, Groudon, Rayquaza and Deoxys (Red's monster data marks them) can be recruited even though their Friend Areas can't be bought, and their area opens when they join ("... gained access to the Friend Area Legendary Island!"). Before, none of them could ever join. Their other rules are unchanged (the bosses join on a rematch after their story fight).
+- **Sky Peak is one trip:** the 5th Station Clearing (the Carnivine fight) was listed as a dungeon of its own. It is now part of the trip, right after the 5th Station Pass, and the whole trip is listed as "Sky Peak" on the dungeon list and the Wonder Map. The Aegis Cave trip gets its EoS name the same way.
+- **Prize, Silver, Gold and Prism Tickets have a use:** the Kecleon shop's "Trade Ticket" swaps one for a prize, the better the ticket the better the prize (1★, 2★ and 3★ exclusive items, or a rare item for a Prism Ticket). EoS turns them in at its Recycle Shop, which the remake doesn't have, so these prizes are the remake's. They also no longer turn up in dungeons (the list that keeps them out had the Silver and Gold Tickets under the wrong names).
+- **A petrified leader is no longer stuck for good:** when a move petrified the team leader, it got the "until hit" time Red gives other Pokémon instead of Red's 20 to 30 turns for the leader (move_orb_effects_1.c), so the leader shook in place, unable to act, while the enemies kept attacking. A leader already stuck that way is freed on its next turn.
+
 ## v0.8.35 (5 Nov 2026)
 
 - **Aged Chamber O? residents move in:** Pokémon recruited before the Aged Chambers were split (v0.8.32) were all filed under Aged Chamber AN, so Elgyem, Espurr, Meowstic and the others stayed there. When your save loads, they now move to Aged Chamber O? (if you own it).

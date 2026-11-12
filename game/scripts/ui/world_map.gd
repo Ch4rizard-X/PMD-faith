@@ -342,7 +342,7 @@ func _trip(from: Vector2, to: Vector2, key: String) -> bool:
 	var auto := ListMenu.auto or Dialog.auto
 	await _frames(1 if auto else 60)
 	await _walk(from, to, auto)
-	var nm := str(DB.dungeons.get("dungeons", {}).get(key, {}).get("name", key))
+	var nm := Story.eos_trip_name(key) if key.begins_with("eos_") else str(DB.dungeons.get("dungeons", {}).get(key, {}).get("name", key))
 	_show_name(nm, 12, 16)
 	await _frames(1 if auto else 60)
 	var req := requirements(key)

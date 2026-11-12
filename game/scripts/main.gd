@@ -2617,9 +2617,9 @@ func _ready() -> void:
 			var foe: Mon = null
 			for m in d.fs.mons:
 				var ar_ := Services.area_of(m.sp)
-				if ar_ != "" and not ar_ in Game.friend_areas:
+				if ar_ != "" and not ar_ in Game.friend_areas and not OS.get_cmdline_user_args().has("--noarea"):
 					Game.friend_areas.append(ar_)
-				if not m.is_team() and Services.has_area_for(m.sp) and not d.legend_owned(m) and (not bossmode or m.has_meta("behavior")):
+				if not m.is_team() and Services.can_join(m.sp) and not d.legend_owned(m) and (not bossmode or m.has_meta("behavior")):
 					foe = m
 					break
 			if foe == null:
@@ -2645,6 +2645,9 @@ func _ready() -> void:
 					await get_tree().create_timer(0.05).timeout
 					var ev2 := InputEventAction.new(); ev2.action = "ui_accept"; ev2.pressed = false
 					Input.parse_input_event(ev2)).call()
+			if OS.get_cmdline_user_args().has("--noarea") and Game.friend_areas.is_empty():
+				Game.friend_areas.append(Services.area_of("0001"))     # recruiting needs some Friend Area
+			print("RECRUIT why: ok_here=", d.recruit_ok_here(), " recruit_ok=", foe.recruit_ok, " unlocked=", d.recruiting_unlocked(), " allowed=", d.recruit_allowed(foe), " owned=", d.legend_owned(foe), " can_join=", Services.can_join(foe.sp), " rate=", d.recruit_rate(L, foe))
 			foe.hp = 1
 			var mv: String = str(L.moves[0].name)
 			for k_ in 12:
@@ -2660,7 +2663,7 @@ func _ready() -> void:
 				print("RECRUIT hit ", k_, " foe hp=", foe.hp, " on=", d.fs.mons.has(foe), " side=", foe.side, " pos ", foe.pos, " L ", L.pos, " face ", L.facing, " busy ", d.busy)
 				foe.hp = mini(foe.hp, 1)
 				await get_tree().create_timer(0.3).timeout
-			print("RECRUIT joined=", foe.is_team(), " name=", foe.name, " team=", d.fs.team().map(func(m): return m.name))
+			print("RECRUIT joined=", foe.is_team(), " name=", foe.name, " team=", d.fs.team().map(func(m): return m.name), " areas=", Game.friend_areas)
 			await get_tree().create_timer(1.0).timeout
 			get_viewport().get_texture().get_image().save_png("user://recruit_after.png")
 			print("RECRUIT -> next_floor")
@@ -2863,6 +2866,56 @@ func _ready() -> void:
 		Game.load_game()
 		print("AGEDMIG ", Game.friends.filter(func(e): return str(e.get("area","")).begins_with("aged")).map(func(e): return "%s:%s" % [e.name, e.area]))
 		get_tree().quit()
+		return
+	for a_ in OS.get_cmdline_user_args():
+		if not a_.begins_with("--eostriptest="):   # the base's "Explorers of Sky dungeons" pick -> trip -> dungeon starts?
+			continue
+		var keys_: PackedStringArray = a_.substr(14).split(",")
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			GVars.reset_all()
+			GVars.set_arr(null, GVars.SCENARIO_MAIN, 0, 18)
+			GVars.set_arr(null, GVars.SCENARIO_MAIN, 1, 5)
+			Game.story["vars"] = GVars.save_b64()
+			Dialog.auto = true
+			for k in keys_:
+				Story.eos_pick = k
+				GVars.set_val(null, GVars.START_MODE, 5)
+				GVars.set_val(null, GVars.DUNGEON_RESULT, 5)
+				GVars.set_val(null, GVars.DUNGEON_ENTER, -1)
+				_on_ground_finished(16)
+				for i in 40:
+					await get_tree().create_timer(0.25).timeout
+					if is_instance_valid(dungeon) and dungeon.fs != null:
+						break
+				print("EOSTRIP %s -> dungeon=%s key=%s floor=%s ground=%s" % [k, is_instance_valid(dungeon), dungeon.dkey if is_instance_valid(dungeon) else "-", dungeon.floor_i if is_instance_valid(dungeon) else -1, is_instance_valid(ground)])
+				_clear()
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--petrifytest"):   # a petrified leader gets Red's 20-30 turns, then moves again
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			Dialog.auto = true
+			Dungeon.test_invincible = true
+			start_dungeon("tiny_woods", 0)
+			for i in 60:
+				await get_tree().create_timer(0.2).timeout
+				if is_instance_valid(dungeon) and dungeon.fs and not dungeon.busy and i > 3:
+					break
+			var d := dungeon
+			var L: Mon = d.fs.leader
+			var foe: Mon = null
+			for m in d.fs.mons:
+				if not m.is_team():
+					foe = m
+			d._apply_eff(foe, L, {"status": "petrify"}, true)
+			print("PETRIFY leader petrified=", L.status.get("petrified", 0))
+			var n := 0
+			while int(L.status.get("petrified", 0)) > 0 and n < 60:
+				await d.leader_action({"type": "wait"})
+				n += 1
+			print("PETRIFY wore off after ", n, " turns: ", int(L.status.get("petrified", 0)) == 0)
+			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--agedtest"):     # Aged Chamber AN / O? residents after the split
 		for k in ["agedchamberan", "agedchambero"]:
@@ -3111,6 +3164,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--boxtest"):
 		_boxtest.call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--tickettest"):
+		_tickettest.call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--abtest"):
 		_abtest.call_deferred()
@@ -5406,6 +5462,37 @@ func _boxtest() -> void:
 	keys.call(["ui_down", "ui_down", "ui_down", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_cancel", "ui_cancel", "ui_cancel", "ui_accept", "ui_accept"])
 	await RedShops.kecleon(root, false)
 	print("BOXTEST bag after: ", Game.bag.map(func(b): return DB.item_name(str(b.id))), " money ", Game.money)
+	get_tree().quit()
+
+## --tickettest: EoS prize tickets traded at the Kecleon shop
+func _tickettest() -> void:
+	Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	for t in EosItems.TICKETS:
+		var got := {}
+		for i in 300:
+			var x := EosItems.ticket_prize(str(t), rng)
+			var r := int(DB.items.get(x, {}).get("rarity", 0)) if DB.items.get(x, {}).get("excl") != null else 9
+			got[r] = int(got.get(r, 0)) + 1
+		print("TICKET %s -> rarity counts %s (9 = rare item)" % [t, got])
+	print("TICKET in drop pool: ", EosItems._drop_pool().filter(func(e): return EosItems.is_ticket(str(e[0]))).map(func(e): return e[0]))
+	Game.bag = [{"id": "oranberry", "n": 1}, {"id": "eosgoldticket", "n": 1}]
+	var keys := func(seq: Array) -> void:
+		var i := 0
+		for k in seq:
+			await get_tree().create_timer(0.9).timeout
+			get_viewport().get_texture().get_image().save_png("user://ticket_%02d.png" % i)
+			i += 1
+			for pr in [true, false]:
+				var ev := InputEventAction.new()
+				ev.action = k
+				ev.pressed = pr
+				Input.parse_input_event(ev)
+				await get_tree().process_frame
+	keys.call(["ui_down", "ui_down", "ui_down", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_accept", "ui_cancel", "ui_cancel", "ui_cancel", "ui_accept", "ui_accept"])
+	await RedShops.kecleon(root, false)
+	print("TICKET bag after: ", Game.bag.map(func(b): return DB.item_name(str(b.id))))
 	get_tree().quit()
 
 ## --eostest: Explorers of Sky / Remixed items (exclusives in the bag, held effects) and a Remixed dungeon floor

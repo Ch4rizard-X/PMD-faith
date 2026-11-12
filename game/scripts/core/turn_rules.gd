@@ -485,6 +485,8 @@ static func tick_status(m: Mon, fs: FloorState) -> Array[String]:
 		if k in _NOT_TIMERS or k == "perish":
 			continue
 		var v = s[k]
+		if v is float:
+			v = int(v)                 # a timer that came back as a float must still run down
 		if not (v is int) or v <= 0 or v == INFINITE:
 			continue
 		s[k] = v - 1

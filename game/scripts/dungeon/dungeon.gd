@@ -1417,6 +1417,9 @@ func leader_blocked() -> String:
 	if AI.st(L, "wrapped") > 0:
 		return "%s is wrapped by the foe!" % nm
 	if AI.st(L, "petrified") > 0:
+		if int(L.status.get("petrified", 0)) >= TurnRules.INFINITE:
+			# petrified as a teammate (until hit), then made leader (or an old suspend): Red's leader range
+			L.status.petrified = TurnRules.red_turns("petrified", fs.rng, L, 25)
 		return " "
 	if AI.st(L, "paused") > 0:
 		return "%s can't move!" % nm
@@ -2641,7 +2644,9 @@ func _apply_eff(m: Mon, t: Mon, e: Dictionary, guaranteed: bool) -> bool:
 				_msg("%s is already affected." % _nm(t))
 			return false
 		var turns := 0
-		turns = int(TurnRules.status_turns(key, fs.rng, t))
+		# red_turns: the leader gets Red's own petrified range (gPetrifiedLeaderTurnRange, 20-30 turns); the
+		# plain range is "until hit", which left a petrified leader unable to act for good
+		turns = int(TurnRules.red_turns(key, fs.rng, t, 0))
 		if turns <= 0:
 			turns = {"sleep": fs.rng.randi_range(3, 6), "para": 20, "burn": 20, "poison": 20, "badpoison": 20, "confused": fs.rng.randi_range(7, 12),
 				"frozen": fs.rng.randi_range(3, 5), "slow": fs.rng.randi_range(5, 8), "cringe": 1, "infatuated": 10, "petrified": 20}.get(key, 5)
@@ -2983,7 +2988,7 @@ func recruit_candidate(t: Mon) -> bool:
 		return false
 	if int(DB.species.get(t.sp, {}).get("recruit", 0)) == -999 or recruit_rate(L, t) <= 0:
 		return false
-	if not Services.has_area_for(t.sp):
+	if not Services.can_join(t.sp):
 		return false
 	if dx:
 		return fs.team().size() < DX_TEAM_MAX
@@ -3005,7 +3010,7 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 		return false
 	if legend_owned(t):
 		return false
-	if not Services.has_area_for(t.sp):          # Red and DX: only with the species' Friend Area
+	if not Services.can_join(t.sp):              # Red and DX: only with the species' Friend Area (or a legendary's)
 		return false
 	if dx:
 		if fs.team().size() >= DX_TEAM_MAX:
@@ -3079,6 +3084,11 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 	if t.visual:
 		t.visual.set_species(t.sp)     # team marker colour
 	await _join_sequence(t)
+	if t.is_team():
+		var opened := Services.open_area_on_join(t.sp)
+		if opened != "":
+			Audio.sfx("join")
+			_msg("%s gained access to the Friend Area [color=#7fe0ff]%s[/color]!" % [_nm(t), opened])
 	if t.sp.substr(0, 4) == "0151" and not is_temp(t):
 		set_meta("mew_exit", true)
 	return true

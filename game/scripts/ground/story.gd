@@ -390,7 +390,7 @@ const EOS_CHAINS := [
 	["eos_world_abyss", "eos_world_abyss_pit"],
 	["eos_sky_stairway", "eos_sky_stairway_apex"],
 	["eos_mystery_jungle", "eos_deep_mystery_jungle"],
-	["eos_1st_station_pass", "eos_2nd_station_pass", "eos_3rd_station_pass", "eos_4th_station_pass", "eos_5th_station_pass", "eos_6th_station_pass", "eos_7th_station_pass", "eos_8th_station_pass", "eos_9th_station_pass", "eos_sky_peak_summit_pass", "eos_sky_peak_summit"],
+	["eos_1st_station_pass", "eos_2nd_station_pass", "eos_3rd_station_pass", "eos_4th_station_pass", "eos_5th_station_pass", "eos_5th_station_clearing", "eos_6th_station_pass", "eos_7th_station_pass", "eos_8th_station_pass", "eos_9th_station_pass", "eos_sky_peak_summit_pass", "eos_sky_peak_summit"],
 	["eos_star_cave", "eos_deep_star_cave", "eos_star_cave_depths", "eos_star_cave_pit"],
 	["eos_fortune_ravine", "eos_fortune_ravine_depths", "eos_fortune_ravine_pit"],
 	["eos_barren_valley", "eos_deep_barren_valley", "eos_barren_valley_clearing"],
@@ -407,6 +407,13 @@ static func eos_chain_of(k: String) -> Array:
 		if k in c:
 			return c
 	return []
+
+## The name the dungeon list and the Wonder Map give a whole trip, where EoS names it after the place
+## rather than its first part.
+const EOS_TRIP_NAMES := {"eos_1st_station_pass": "Sky Peak", "eos_ice_aegis_cave": "Aegis Cave"}
+
+static func eos_trip_name(k: String) -> String:
+	return str(EOS_TRIP_NAMES.get(k, DB.dungeons.get("dungeons", {}).get(k, {}).get("name", k)))
 
 ## The part after k in its chain ("" at the end or when it stands alone).
 static func eos_chain_next(k: String) -> String:
@@ -1045,7 +1052,7 @@ static func _dungeon_list(root: Control, G = null) -> int:
 		var icons: Array = []
 		for k in eos:
 			var d: Dictionary = DB.dungeons.dungeons[k]
-			labels.append("%s  [Lv %d]" % [str(d.name), int(d.get("eos_level", 1))])
+			labels.append("%s  [Lv %d]" % [eos_trip_name(str(k)), int(d.get("eos_level", 1))])
 			icons.append("ENVELOPE_OPEN" if DungeonList.jobs_in_key(str(k)) > 0 else "")
 		var j := await DungeonList.pick(root, labels, eos.map(func(_k): return -1), "Explorers of Sky", icons, eos)
 		if j < 0 or G == null:
