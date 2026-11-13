@@ -1533,6 +1533,7 @@ func lives_select_map(map: int, grp: int, sec: int) -> void:
 		return
 	for d in S.lives:
 		lives_add(-1, d, grp, sec)
+	_fa_extra_residents(map, S, grp, sec)
 	# remake: Croagunk's Swap Shop stands in Pokémon Square whenever the Kecleon shop there is open
 	# remake: the Debug NPC at the team base (off unless Game Options -> Debug NPC is on)
 	if DebugNpc.enabled() and grp == 0 and sec >= 1 and sec <= 6 and cur_map == GData.map_id("MAP_TEAM_BASE"):
@@ -1542,6 +1543,39 @@ func lives_select_map(map: int, grp: int, sec: int) -> void:
 			if int(d.kind) == 71 and d.scripts[2] != null:
 				lives_add(-1, {"kind": GData.croagunk_kind, "u1": SwapShop.DIR, "pos": SwapShop.spot(), "scripts": [null, null, null, null]}, grp, sec)
 				break
+
+## remake: a Friend Area can hold more Pokémon than Red's (up to 16 living kinds, 14-29), but its script only
+## places as many as Red's own capacity, so the ones past that couldn't be met (or taken into the team). Place
+## the rest beside the scripted ones, with the same wandering and talk scripts.
+func _fa_extra_residents(map: int, S, grp: int, sec: int) -> void:
+	if GData.fa_of_map(map) == 0:
+		return
+	var placed: Array = []
+	for d in S.lives:
+		if int(d.kind) >= 14 and int(d.kind) <= 29:
+			placed.append(d)
+	if placed.is_empty():
+		return
+	var used := {}
+	for d in placed:
+		used[int(d.kind)] = true
+	var offs := [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 2], [-2, -2], [2, -2], [-2, 2]]
+	var n_extra := 0
+	for k in range(14, 30):
+		if used.has(k):
+			continue
+		if Story.friend_area_mon(map, k - 14).is_empty():
+			break
+		var base: Dictionary = placed[n_extra % placed.size()]
+		var o: Array = offs[(n_extra / placed.size()) % offs.size()]
+		var p: Array = (base.pos as Array).duplicate()
+		p[0] = int(p[0]) + int(o[0])
+		p[1] = int(p[1]) + int(o[1])
+		var d2: Dictionary = base.duplicate()
+		d2.kind = k
+		d2.pos = p
+		lives_add(-1, d2, grp, sec)
+		n_extra += 1
 
 func lives_cancel(grp: int, sec: int) -> void:
 	for i in N_LIVES:
@@ -1957,6 +1991,21 @@ func event_player_trigger(id1: int, ev: int) -> bool:
 		return false
 	return _player_script(lives[id1], null, {"ptr": e.script, "state": 2, "group": e.group, "sector": e.sector})
 
+## The base's morning mail (group 2 sector 1: Pelipper's "Flap! Flap!" ... "Clunk!"): Red only holds the
+## hero while its text boxes are up, so you could walk off mid-scene; the remake keeps the hero still until Pelipper
+## has flown off (its script ends and removes it).
+var _mail_hold := 0
+func _mail_delivery_on() -> bool:
+	var on := false
+	if cur_map == GData.map_id("MAP_TEAM_BASE"):
+		for i in range(1, N_LIVES):
+			var o: GLive = lives[i]
+			if o.kind_id != -1 and o.group == 2 and o.sector == 1 and str(o.species).begins_with("0279"):
+				on = true
+				break
+	_mail_hold = _mail_hold + 1 if on else 0
+	return on and _mail_hold < 1200          # (never more than ~20 s, whatever happens)
+
 func _lives_action() -> void:
 	for i in N_LIVES:
 		var L: GLive = lives[i]
@@ -1967,7 +2016,9 @@ func _lives_action() -> void:
 			_lives_delete(i)
 			continue
 		if r == GAction.RET_00:
-			if L.flags & 0x800:
+			if L.flags & 0x800 and _mail_delivery_on():
+				pass                                 # (remake) Pelipper's morning delivery plays out before you walk off
+			elif L.flags & 0x800:
 				var c := L._controller()
 				match int(c[0]):
 					1, 2, 5, 8:

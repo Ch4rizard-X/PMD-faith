@@ -204,6 +204,18 @@ static func _moves_common(a: Dictionary, b: Dictionary) -> int:
 			n += 1
 	return n
 
+## v0.8.32 split the Aged Chambers: Pokémon recruited before then were all filed under AN. Every listing of
+## them (Friend Area and team copies) goes to the chamber it belongs in, if the team owns that one.
+func fix_aged_areas() -> void:
+	for e in friends + team:
+		if not (e is Dictionary):
+			continue
+		var ar := str(e.get("area", ""))
+		if ar == "agedchamberan" or ar == "agedchambero":
+			var now := Services.area_of(str(e.get("sp", "")))
+			if now != ar and (now == "agedchamberan" or now == "agedchambero") and now in friend_areas:
+				e["area"] = now
+
 func link_entries() -> void:
 	var dropped: Array = []
 	var i := 0
@@ -311,13 +323,8 @@ func load_game() -> void:
 	for e in friends:
 		e.level = int(e.level)
 		e.exp = int(e.exp)
-		# v0.8.32 split the Aged Chambers: Pokémon recruited before then were all filed under AN
-		var ar := str(e.get("area", ""))
-		if ar == "agedchamberan" or ar == "agedchambero":
-			var now := Services.area_of(str(e.get("sp", "")))
-			if now != ar and now in friend_areas:
-				e.area = now
 	link_entries()
+	fix_aged_areas()
 	storage = d.get("storage", {})
 	nature = d.get("nature", "")
 	gender = d.get("gender", "")

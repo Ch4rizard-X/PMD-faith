@@ -95,7 +95,9 @@ func start(key: String, root: Control, arrive_at := "") -> void:
 	map_key = key
 	M = d.maps[key]
 	if key == "base":
-		var sp: String = Game.team[0].sp if Game.team.size() > 0 else "0025"
+		# main_loops.c sBaseKindTable: the base looks like the HERO's, whoever leads the team now
+		var sp: String = str(Game.hero.get("sp", "")) if not Game.hero.is_empty() else (str(Game.team[0].sp) if Game.team.size() > 0 else "0025")
+		sp = Story.starter_of(sp, Story.BASE_KIND_OF)          # an evolved hero keeps its starter's base
 		I = d.bases[base_shape(sp)]
 	else:
 		I = M

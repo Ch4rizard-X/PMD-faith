@@ -2788,7 +2788,8 @@ func _ready() -> void:
 	for a_ in OS.get_cmdline_user_args():
 		if not a_.begins_with("--cutshots="):      # --cutshots=dungeon : the boss floor's opening scene, a shot every 0.5 s
 			continue
-		var ck_ := a_.substr(11)
+		var ck_ := a_.substr(11).get_slice(":", 0)
+		var nshots_ := int(a_.substr(11).get_slice(":", 1)) if a_.contains(":") else 60
 		(func():
 			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
 			for e in Game.team:
@@ -2807,9 +2808,12 @@ func _ready() -> void:
 					await get_tree().create_timer(0.05).timeout
 					var e2 := InputEventAction.new(); e2.action = "ui_accept"; e2.pressed = false
 					Input.parse_input_event(e2)).call()
-			for i in 60:
+			for i in nshots_:
 				await get_tree().create_timer(0.5).timeout
-				get_viewport().get_texture().get_image().save_png("user://cut_%02d.png" % i)
+				if i == 4 and is_instance_valid(dungeon) and dungeon.fs:
+					print("CUT team=", dungeon.fs.team().map(func(m): return [m.name, m.pos]), " bosses=", dungeon.fs.mons.filter(func(m): return m.has_meta("behavior")).map(func(m): return [m.name, m.pos, m.get_meta("behavior")]))
+				if i >= nshots_ - 60:
+					get_viewport().get_texture().get_image().save_png("user://cut_%02d.png" % i)
 			st_.on = false
 			get_tree().quit()).call_deferred()
 		return
@@ -2915,6 +2919,68 @@ func _ready() -> void:
 				await d.leader_action({"type": "wait"})
 				n += 1
 			print("PETRIFY wore off after ", n, " turns: ", int(L.status.get("petrified", 0)) == 0)
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--faextratest"):   # a Friend Area holding more than its script places
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			GVars.reset_all()
+			Game.story["vars"] = GVars.save_b64()
+			var mp := 105
+			var key := Story.fa_key(GData.fa_of_map(mp))
+			Game.friend_areas.append(key)
+			var sps: Array = Services.fa().get("species", {}).keys().filter(func(k): return Services.area_of(k) == key)
+			for i in 14:
+				var sp: String = str(sps[i % sps.size()])
+				Game.friends.append({"sp": sp, "name": "%s%d" % [DB.species[sp].name, i], "level": 5, "exp": 0, "moves": [], "iq": 0, "held": "", "bonus": {}, "area": key})
+			_clear()
+			Story.host = self
+			ground = Ground.new()
+			ground.host = self
+			ground.ui_root = root
+			add_child(ground)
+			await get_tree().process_frame
+			GVars.set_val(null, GVars.GROUND_MAP, mp)
+			ground._load_map(mp)
+			ground.lives_select_map(mp, 1, 0)
+			await get_tree().create_timer(1.0).timeout
+			var ks: Array = []
+			for L in ground.lives:
+				if L.kind_id >= 14 and L.kind_id <= 29:
+					ks.append(L.kind_id)
+			print("FAEXTRA area=%s residents=14 shown=%d kinds=%s" % [key, ks.size(), ks])
+			get_viewport().get_texture().get_image().save_png("user://faextra.png")
+			get_tree().quit()).call_deferred()
+		return
+	if OS.get_cmdline_user_args().has("--bonslytest"):   # all Training Mazes cleared -> the Bonsly Doll at the base
+		(func():
+			Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+			GVars.reset_all()
+			Game.story["vars"] = GVars.save_b64()
+			for i in Dojo.N_BASIC:
+				if not OS.get_cmdline_user_args().has("--nomaze"): GVars.set_arr(null, GVars.TRAINING_CONQUEST_LIST, i, 1)
+			print("BONSLY quest=", GVars.quest(GVars.QUEST_COMPLETED_ALL_MAZES))
+			_clear()
+			Story.host = self
+			ground = Ground.new()
+			ground.host = self
+			ground.ui_root = root
+			add_child(ground)
+			await get_tree().process_frame
+			var mp := GData.map_id("MAP_TEAM_BASE")
+			GVars.set_val(null, GVars.GROUND_MAP, mp)
+			ground._load_map(mp)
+			ground.objects_select_map(mp, 0, 0)
+			await get_tree().create_timer(1.5).timeout
+			var n := 0
+			var kinds: Array = []
+			for T in ground.objects:
+				if T.kind != -1 and T.sprite != null and T.sprite.visible:
+					n += 1
+					kinds.append(T.kind)
+			print("BONSLY kinds=", kinds)
+			print("BONSLY objects shown=", n)
+			get_viewport().get_texture().get_image().save_png("user://bonsly.png")
 			get_tree().quit()).call_deferred()
 		return
 	if OS.get_cmdline_user_args().has("--agedtest"):     # Aged Chamber AN / O? residents after the split

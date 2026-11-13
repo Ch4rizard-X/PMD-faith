@@ -23,15 +23,28 @@ const BASE_KIND_OF := {"0025": 0, "0052": 1, "0133": 2, "0300": 3, "0007": 4, "0
 	"0004": 8, "0255": 9, "0155": 10, "0104": 11, "0066": 12, "0001": 13, "0152": 14, "0252": 15}
 const TALK_KIND_OF := {"0007": 1, "0158": 1, "0255": 3, "0152": 3}
 
+## Red keeps the STARTER's species (StarterID) for these, so an evolved hero keeps its base: walk back down
+## the evolution line to the species the tables know.
+static func starter_of(sp: String, table: Dictionary) -> String:
+	var s := sp.substr(0, 4)
+	for i in 4:
+		if table.has(s):
+			return s
+		var pre := str(DB.species.get(s, {}).get("pre", ""))
+		if pre == "":
+			break
+		s = pre.substr(0, 4)
+	return sp.substr(0, 4)
+
 static func sync_base_kind() -> void:
 	if not Game.story.has("vars") or Game.hero.is_empty():
 		return
-	var kind := int(BASE_KIND_OF.get(hero_species().substr(0, 4), 0))
+	var kind := int(BASE_KIND_OF.get(starter_of(hero_species(), BASE_KIND_OF), 0))
 	if DebugNpc.style_override() >= 0:
 		kind = DebugNpc.style_override()          # the Debug NPC's base style, for this session
 	GVars.set_val(null, GVars.BASE_KIND, kind)
 	if not Game.partner.is_empty():
-		GVars.set_val(null, GVars.PARTNER_TALK_KIND, int(TALK_KIND_OF.get(partner_species().substr(0, 4), 2)))
+		GVars.set_val(null, GVars.PARTNER_TALK_KIND, int(TALK_KIND_OF.get(starter_of(partner_species(), BASE_KIND_OF), 2)))
 
 static func leader_species() -> String:
 	return str(Game.team[0].sp) if Game.team.size() > 0 else hero_species()
@@ -63,6 +76,8 @@ static func friend_area_mon(map: int, i: int) -> Dictionary:
 		return {}
 	var key := fa_key(fa)
 	var n := 0
+	if i == 0 and key.begins_with("agedchamber"):
+		Game.fix_aged_areas()
 	for e in Game.friends:
 		if str(e.get("area", "")) == key and not Services._in_team(e):     # team members are out with you
 			if n == i:

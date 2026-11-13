@@ -83,8 +83,13 @@ func walkable(p: Vector2i, m: Mon = null) -> bool:
 	return false
 
 ## Mobile status (Mobile Orb) or a Mobile Scarf: moves through walls, water and lava.
+## Red's MOVEMENT_TYPE_WALL Pokémon (CanCrossWalls) always do: Gastly, Haunter, Gengar, Misdreavus, Shedinja, Shuppet,
+## Banette, Duskull, foes and teammates alike.
+const WALL_WALKERS := ["0092", "0093", "0094", "0200", "0292", "0353", "0354", "0355"]
+
 func is_mobile(m: Mon) -> bool:
-	return int(m.status.get("mobile", 0)) > 0 or m.held == "mobilescarf" or EosItems.has(m, "mobile")
+	return int(m.status.get("mobile", 0)) > 0 or m.held == "mobilescarf" or EosItems.has(m, "mobile") \
+			or m.sp.left(4) in WALL_WALKERS
 
 func mon_at(p: Vector2i) -> Mon:
 	for m in mons:

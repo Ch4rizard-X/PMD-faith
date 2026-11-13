@@ -54,16 +54,22 @@ static func open(root: Control, dg = null) -> void:
 			2:
 				list = Pokedex.species_list().filter(func(k): return Pokedex.is_recruited(k))
 			3:
-				var dks: Array = Pokedex.dungeon_keys().filter(func(k): return k in Game.unlocked)
+				var dks: Array = Pokedex.dungeon_keys().filter(func(k): return k in Game.unlocked and not str(k).begins_with("eos_"))
+				# the Explorers of Sky dungeons open by their own rules (Story.eos_unlocked), one entry a trip
+				var eos_open: Array = Story.eos_unlocked()
+				for k in Pokedex.dungeon_keys():
+					if str(k) in eos_open:
+						dks.append(k)
 				if dks.is_empty():
 					await Dialog.say(root, "You haven't been to any dungeons yet.")
 					continue
-				var names: Array = dks.map(func(k): return Services.dname(k))
+				var dn := func(k): return Story.eos_trip_name(str(k)) if str(k).begins_with("eos_") else Services.dname(k)
+				var names: Array = dks.map(dn)
 				var di := await IQ.paged_choose(root, "Which dungeon?", names)
 				if di < 0:
 					continue
-				title = Services.dname(dks[di])
-				list = Pokedex.species_in(dks[di])
+				title = str(dn.call(dks[di]))
+				list = Pokedex.trip_species(dks[di]) if str(dks[di]).begins_with("eos_") else Pokedex.species_in(dks[di])
 			4:
 				var areas: Array = Services.fa().get("areas", {}).keys()
 				areas.sort_custom(func(a, b): return Services.area_name(a) < Services.area_name(b))

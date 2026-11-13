@@ -267,17 +267,18 @@ static func dungeon_keys() -> Array:
 static func recruit_rate(sp: String) -> int:
 	return int(DB.species.get(base(sp), {}).get("recruit", 0))
 
-## Rate with the current leader's level bonus (Dungeon.RECRUIT_BY_LEVEL), per mille, 0..1000.
+## Rate with the current leader's level bonus (Dungeon.RECRUIT_BY_LEVEL) and the launcher's Recruit rate, per mille.
 static func recruit_now(sp: String) -> int:
 	var r := recruit_rate(sp)
 	if r == -999:
 		return 0
 	var lv := int(Game.team[0].get("level", 1)) if not Game.team.is_empty() else 1
+	var base := r
 	for e in Dungeon.RECRUIT_BY_LEVEL:
 		if lv >= int(e[0]):
 			r += int(e[1])
 			break
-	return clampi(r, 0, 1000)
+	return clampi(Dungeon.boost_recruit(base, r), 0, 1000)
 
 static func recruit_text(sp: String) -> String:
 	var r := recruit_rate(sp)

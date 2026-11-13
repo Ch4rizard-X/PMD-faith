@@ -2894,8 +2894,18 @@ func recruit_rate(r: Mon, t: Mon) -> int:
 			break
 	if fs != null and bool(fs.get_meta("inviting", false)):
 		rate *= 2                                        # Inviting Orb
-	if LCFG.active() and rate > 0:
-		rate = int(round(rate * LCFG.f("recruit")))      # launcher: Recruit rate
+	return boost_recruit(int(DB.species.get(t.sp, {}).get("recruit", 0)), rate)
+
+## The launcher's Recruit rate on a rate: a positive one is multiplied; for a species Red gives a penalty
+## (Kecleon -33.9%, ...) the penalty is divided instead, so a boost helps those too (it never made them possible).
+static func boost_recruit(base: int, rate: int) -> int:
+	if not LCFG.active() or base == -999:
+		return rate
+	var f := float(LCFG.f("recruit"))
+	if base < 0 and f > 0.0:
+		return int(round(base / f)) + (rate - base)
+	if rate > 0:
+		return int(round(rate * f))
 	return rate
 
 ## Red: each legendary joins only once. Shinies: a shiny one may still join when you only have the normal one.

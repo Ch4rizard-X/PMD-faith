@@ -24,7 +24,9 @@ func _ready() -> void:
 const ONE_SHOT := ["040", "043", "045", "046", "050", "051", "052"]
 
 func play_music(id: String) -> void:
+	_kill_fade()                 # a fade still running from the last scene would mute/stop this new song
 	if id == current and music.playing:
+		music.volume_db = linear_to_db(maxf(0.001, float(Game.settings.music)))
 		return
 	current = id
 	var path := "res://assets/music/%s.mp3" % id
@@ -67,14 +69,23 @@ func _eos_loops() -> Dictionary:
 func is_bgm_playing_id(id: int) -> bool:
 	return music.playing and current == "%03d" % id
 
+var _fade: Tween
+
+func _kill_fade() -> void:
+	if _fade and _fade.is_valid():
+		_fade.kill()
+	_fade = null
+
 func fade_out_music(frames: int) -> void:
 	if not music.playing:
 		return
-	var tw := create_tween()
-	tw.tween_property(music, "volume_db", -60.0, maxf(frames / 60.0, 0.05))
-	tw.tween_callback(stop_music)
+	_kill_fade()
+	_fade = create_tween()
+	_fade.tween_property(music, "volume_db", -60.0, maxf(frames / 60.0, 0.05))
+	_fade.tween_callback(stop_music)
 
 func stop_music() -> void:
+	_kill_fade()
 	current = ""
 	music.stop()
 

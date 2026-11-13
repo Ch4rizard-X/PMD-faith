@@ -396,6 +396,12 @@ static func quest(q: int) -> bool:
 			return after(SCENARIO_SUB7, 49, -1)
 		QUEST_LEGEND_CELEBI:
 			return rescue_conquered(GData.rescue_id("RESCUE_DUNGEON_PURITY_FOREST"))
+		QUEST_COMPLETED_ALL_MAZES:
+			# HasCompletedAllMazes: every basic course cleared (the team base's Bonsly Doll checks this)
+			for i in Dojo.N_BASIC:
+				if not Dojo.maze_done(i):
+					return false
+			return true
 	return false
 
 # ------------------------------------------------------------------ rescue scenario lists (rescue_scenario.c)

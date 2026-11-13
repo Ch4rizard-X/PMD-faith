@@ -374,9 +374,15 @@ func run_setup() -> void:
 		_regi_stairs(str(REGI_PART[cutscene]))         # sub_808AD48 & co.: already recruited -> stairs (+ its part)
 
 func run_prefight() -> void:
+	var pf: Array = scene.get("prefight", [])
 	if cutscene in INTRO_WALK:
 		await _intro_walk()
-	await _run(scene.get("prefight", []), true)
+	elif SIDE_WALK.has(cutscene):
+		if not pf.is_empty() and str(pf[0][0]) == "flash":
+			await _step(pf[0], true)             # (Moltres's opening flash comes first)
+			pf = pf.slice(1)
+		await _side_walk(int(SIDE_WALK[cutscene]))
+	await _run(pf, true)
 	if _quake_off != null or (dg.get("quake") is Dictionary and dg.quake.on):
 		_quake_stop()
 	if not floor_over:                       # (a scene that ends the floor keeps its view until the next floor)
@@ -447,8 +453,10 @@ func _step(st: Array, visual: bool) -> void:
 			Audio.stop_music()
 		"sfx":
 			Audio.sfx("%03d" % int(st[1]))
-			if int(st[1]) == 504 and cutscene.begins_with("CUTSCENE_MT_FARAWAY"):
-				await _hooh_drop(visual)                 # HoOhDropInEffect (its sound is this 0x1F8)
+			var dk := _drop_key()
+			if dk != "" and not _dropped and int(st[1]) == int(DROP_IN[dk][0]):
+				_dropped = true
+				await _drop_in(dk, visual)               # <Boss>DropInEffect (it plays this very sound)
 		"flash":
 			var order: Array = FLASH_ORDER.get(cutscene, [])
 			var fname: String = str(order[_flash_i]) if _flash_i < order.size() else ""
@@ -460,6 +468,8 @@ func _step(st: Array, visual: bool) -> void:
 		"camera_at":
 			var tp = _cam_expr(st[1], st[2] if st.size() > 2 else "0")
 			if tp != null:
+				if cutscene == "CUTSCENE_MT_BLAZE_PEAK_POSTSTORY":
+					tp.y -= 16.0                     # sub_8087848: then the camera 0x1000 higher
 				dg.cs_cam_lock = true
 				dg.cs_cam_pos = tp
 				dg.cam.position = tp
@@ -503,12 +513,16 @@ func _step(st: Array, visual: bool) -> void:
 			var m5 := _mon_of(st[1])
 			if m5:
 				# sub_8086A3C: Ho-Oh is out of sight up in the sky until it swoops down (HoOhDropInEffect)
-				dg.cs_hide(m5, true, str(st[1]) == "BEHAVIOR_HO_OH")
+				# (unk15E = 1 skips drawing it: out of sight until its entrance; Magma Cavern's pair lies in the dark)
+				dg.cs_hide(m5, true, not cutscene.begins_with("CUTSCENE_MAGMA_CAVERN_MID"))
 				if cutscene.begins_with("CUTSCENE_MAGMA_CAVERN_MID") and m5.visual and m5.visual.has_method("play"):
 					m5.visual.play("Laying" if m5.visual.man and m5.visual.man.anims.has("Laying") else "Sleep")   # pose 0xE: lying hurt
 		"show":
 			var m6 := _mon_of(st[1])
-			if m6:
+			var dk2 := _drop_key()
+			if m6 and dk2 != "" and not _dropped and str(DROP_IN[dk2][1]) == str(st[1]):
+				pass                                     # JirachiDropInEffect shows it itself, up in the air
+			elif m6:
 				dg.cs_hide(m6, false)
 				if visual:
 					await _wait(30)
@@ -683,6 +697,34 @@ func _intro_walk() -> void:
 			m.visual.position.y -= 1.0
 		if dg.cs_cam_lock:
 			dg.cs_cam_pos.y += 1.0
+			dg.cam.position = dg.cs_cam_pos
+		await dg.get_tree().process_frame
+	for m in team:
+		m.visual.position = dg._px(m.pos)
+		m.visual.play("Idle")
+
+## sub_8086500 / sub_808654C (Mt. Blaze Peak): the team walks in from the right, a pixel a frame, while the camera
+## scrolls along with them. (Red's ATTEMPT walk stops 48 px short of their tiles, 32 px up; here they end on them.)
+const SIDE_WALK := {"CUTSCENE_MT_BLAZE_PEAK_ATTEMPT1": 72, "CUTSCENE_MT_BLAZE_PEAK_ATTEMPT2": 72,
+	"CUTSCENE_MT_BLAZE_PEAK_POSTSTORY": 120}
+
+func _side_walk(px: int) -> void:
+	var team: Array = dg.fs.team().filter(func(m): return m.visual != null and is_instance_valid(m.visual))
+	if team.is_empty():
+		return
+	var animate: bool = not Dialog.auto and not (dg.autoplay and dg.auto_answer)
+	for m in team:
+		m.facing = 6
+		if animate:
+			m.visual.position = dg._px(m.pos) + Vector2(px, 0)
+			m.visual.play("Walk")
+	if not animate:
+		return
+	for i in px:
+		for m in team:
+			m.visual.position.x -= 1.0
+		if dg.cs_cam_lock:
+			dg.cs_cam_pos.x += 1.0
 			dg.cam.position = dg.cs_cam_pos
 		await dg.get_tree().process_frame
 	for m in team:
@@ -912,10 +954,29 @@ func music_box_creation() -> void:
 	await Dialog.say(dg.ui_root, "%s obtained\nthe %s!" % [nm, G % "Music Box"])
 	await Dialog.say(dg.ui_root, "The %s only needs\nto be in the Toolbox for it to\nattract a special something!" % (G % "Music Box"))
 
-## HoOhDropInEffect (dungeon_cutscene_hooh.c): Ho-Oh drops from 200 px up, 12 px a frame slowing by 0.375 a frame
-## (never under 0.08), until it lands.
-func _hooh_drop(visual: bool) -> void:
-	var m := _mon_of("BEHAVIOR_HO_OH")
+## The bosses' DropInEffects: [sound, who, start height, speed, slow-down a frame, slowest, (under this height, speed)].
+const DROP_IN := {
+	"CUTSCENE_MT_BLAZE_PEAK": [504, "BEHAVIOR_MOLTRES", 200.0, 5.0, 0.0, 5.0],          # MoltresDropInEffect
+	"CUTSCENE_MT_THUNDER_PEAK": [490, "BEHAVIOR_ZAPDOS", 200.0, 5.0, 0.0, 5.0],         # ZapdosDropInEffect
+	"CUTSCENE_FROSTY_GROTTO": [490, "BEHAVIOR_ARTICUNO", 250.0, 5.0, 0.0, 5.0],         # sub_8088484
+	"CUTSCENE_MT_FARAWAY": [504, "BEHAVIOR_HO_OH", 200.0, 12.0, 0.375, 0.08],          # HoOhDropInEffect
+	"CUTSCENE_NORTHWIND_FIELD": [504, "BEHAVIOR_SUICUNE", 200.0, 12.0, 0.375, 0.08],   # SuicuneDropInEffect
+	"CUTSCENE_WESTERN_CAVE": [504, "BEHAVIOR_MEWTWO", 200.0, 4.0, 0.045, 0.12],        # MewtwoDropInEffect
+	"CUTSCENE_SKY_TOWER_SUMMIT": [504, "BEHAVIOR_RAYQUAZA", 200.0, 6.0, 0.09375, 0.08],   # RayquazaDropInEffect
+	"CUTSCENE_JIRACHI": [504, "BEHAVIOR_JIRACHI", 160.0, 2.0, 0.0, 2.0, 24.0, 1.0],    # JirachiDropInEffect
+}
+var _dropped := false
+
+func _drop_key() -> String:
+	for k in DROP_IN:
+		if cutscene == k or cutscene.begins_with(k + "_"):
+			return k
+	return ""
+
+## Drops the scene's boss in from up in the sky, frame by frame (unk174 = its height above the floor).
+func _drop_in(key: String, visual: bool) -> void:
+	var p: Array = DROP_IN[key]
+	var m := _mon_of(str(p[1]))
 	if m == null:
 		return
 	dg.cs_hide(m, false)
@@ -923,12 +984,17 @@ func _hooh_drop(visual: bool) -> void:
 	m.side = "client"
 	if m.visual == null:
 		return
-	var h := 200.0
-	var v := 12.0
+	var h := float(p[2])
+	var v := float(p[3])
 	var animate: bool = visual and not Dialog.auto and not (dg.autoplay and dg.auto_answer)
+	if animate:
+		m.visual.bob = Vector2(0, -h)
+		m.visual.queue_redraw()
 	while animate:
 		h -= v
-		v = maxf(0.08, v - 0.375)
+		v = maxf(float(p[5]), v - float(p[4]))
+		if p.size() > 7 and h < float(p[6]):
+			v = float(p[7])
 		if h < 0.0:
 			break
 		m.visual.bob = Vector2(0, -h)

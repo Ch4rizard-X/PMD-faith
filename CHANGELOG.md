@@ -3,6 +3,20 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.37 (13 Nov 2026)
+
+- **Boss entrances, as in Red:** a boss that Red keeps out of sight until its entrance (sub_8086A3C) is now hidden until then, instead of standing in view for the whole scene. Moltres, Zapdos, Articuno, Suicune, Mewtwo, Rayquaza, Ho-Oh and Jirachi then drop in from the sky at the moment their entrance sound plays, each at its own speed from Red's DropInEffect.
+- **Mt. Blaze Peak's camera:** the team now walks in from the right while the camera scrolls along with them (sub_8086500 / sub_808654C), so the scene ends with Moltres in the middle of the screen and the team below it. Before, the camera stayed where the scene starts, with the team off to one side and a wall filling the rest. The post-game rematch gets its camera height too.
+- **Wall-walking Pokémon:** Gastly, Haunter, Gengar, Misdreavus, Shedinja, Shuppet, Banette and Duskull (Red's MOVEMENT_TYPE_WALL) walk through walls, water and lava, as wild Pokémon and on your team. Before, none of them could.
+- **No music on the first floor after a rest stop:** the rest stop's music fade-out kept running into the next floor and stopped its music, so it only started on the second floor. A new song now cancels any fade still running.
+- **Pelipper's morning delivery:** your character now stays put until Pelipper has dropped the mail and flown off, instead of being free to walk away between its text boxes.
+- **Recruit rate setting and hard-to-recruit Pokémon:** a boosted Recruit rate only helped Pokémon whose chance was already above zero, so Kecleon (-33.9% in Red) stayed at 0% even at the maximum. The boost now also shrinks a Pokémon's starting penalty, and the Pokédex shows the chance with the setting applied. Nothing changes at the default setting.
+- **Pokédex "By dungeon":** the Explorers of Sky dungeons you've unlocked are listed too, not only Red's.
+- **Your base matches your starter:** the house took its shape from whatever species your hero was at that moment, so changing leader or evolving could turn it into another Pokémon's house overnight. It now follows the species you started as.
+- **Aged Chamber O? move, finished:** Pokémon recruited before the split that were still in Aged Chamber AN (whether on your team or not) now move to Aged Chamber O?, on load and whenever you enter an Aged Chamber.
+- **Friend Areas with more residents than Red's maps hold:** Pokémon past the number a Friend Area's map places were never shown. They now appear in the area too.
+- **The Bonsly statue:** Red's "all training mazes done" check was missing, so the statue at the Dojo never appeared. It now shows up once every training maze is cleared.
+
 ## v0.8.36 (12 Nov 2026)
 
 - **Legendaries can join without their Friend Area, as in Red:** Articuno, Zapdos, Moltres, Lugia, Celebi, Absol, Latias, Latios, Kyogre, Groudon, Rayquaza and Deoxys (Red's monster data marks them) can be recruited even though their Friend Areas can't be bought, and their area opens when they join ("... gained access to the Friend Area Legendary Island!"). Before, none of them could ever join. Their other rules are unchanged (the bosses join on a rematch after their story fight).
