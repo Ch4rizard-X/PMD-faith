@@ -159,6 +159,17 @@ def level_table(mon_id):
     return _levels[mon_id]
 
 
+# ---------------------------------------------------------------- Unown's forms
+def unown_key(red_index):
+    """Species key of one of Red's 28 Unown (monster 201-226 = A-Z, 415 = !, 416 = ?), or None.
+    A keeps the plain key; the others are '0201U' + letter ('0201UEX' for !, '0201UQU' for ?)."""
+    if red_index == 201:
+        return "0201"
+    if 202 <= red_index <= 226:
+        return "0201U" + chr(ord("A") + red_index - 201)
+    return {415: "0201UEX", 416: "0201UQU"}.get(red_index)
+
+
 # ---------------------------------------------------------------- Red monster id -> national dex key
 def red_mon_map():
     """{red monster index: '%04d' national dex} (same mapping as tools/ground/gen_ground_extra.py red_mon)."""
@@ -181,5 +192,5 @@ def red_mon_map():
                 if low.startswith(base):
                     k = by_name.get(base)
         if k:
-            out[i] = k
+            out[i] = unown_key(i) or k
     return out

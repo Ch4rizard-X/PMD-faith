@@ -3,6 +3,17 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.38 (13 Nov 2026)
+
+- **Unown's 28 forms, as in Red:** every Unown was an Unown A, because the game data kept only one Unown. Red keeps A to Z, ! and ? apart, and so does the remake now:
+  - Unown Relic spawns the letters Red lists for each floor.
+  - Each form has Red's recruit rate (1.8%, or 0.1% for ! and ?).
+  - A to N live in Aged Chamber AN; O to Z, ! and ? live in Aged Chamber O?, beside the newer residents moved there.
+  - Each form has its own sprite and portrait from PMD Sprite Collab.
+  - The Explorers of Sky dungeons' Unown (their lists only say "Unown") come in any form.
+  - The Pokédex still counts them as one Pokémon.
+  - Run the setup again to get the forms: it downloads just the new Unown sprites and keeps the rest. Until then, the new forms use Unown A's sprite.
+
 ## v0.8.37 (13 Nov 2026)
 
 - **Boss entrances, as in Red:** a boss that Red keeps out of sight until its entrance (sub_8086A3C) is now hidden until then, instead of standing in view for the whole scene. Moltres, Zapdos, Articuno, Suicune, Mewtwo, Rayquaza, Ho-Oh and Jirachi then drop in from the sky at the moment their entrance sound plays, each at its own speed from Red's DropInEffect.

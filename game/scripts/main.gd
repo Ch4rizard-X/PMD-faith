@@ -2811,6 +2811,7 @@ func _ready() -> void:
 			for i in nshots_:
 				await get_tree().create_timer(0.5).timeout
 				if i == 4 and is_instance_valid(dungeon) and dungeon.fs:
+					print("CUT wild=", dungeon.fs.mons.filter(func(m): return not m.is_team()).map(func(m): return m.sp), " areas UB/UO/UQU/O?=", Services.area_of("0201UB"), "/", Services.area_of("0201UO"), "/", Services.area_of("0201UQU"), "/", Services.fa().areas.get("agedchambero", {}).get("species", []).size())
 					print("CUT team=", dungeon.fs.team().map(func(m): return [m.name, m.pos]), " bosses=", dungeon.fs.mons.filter(func(m): return m.has_meta("behavior")).map(func(m): return [m.name, m.pos, m.get_meta("behavior")]))
 				if i >= nshots_ - 60:
 					get_viewport().get_texture().get_image().save_png("user://cut_%02d.png" % i)

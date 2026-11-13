@@ -155,6 +155,11 @@ def main():
         k = room[0] if room else min(ranked[:12], key=lambda a: (load[a] + len(new)) / target[a])
         areas[k]["species"].extend(new)
         load[k] += len(new)
+    # Unown B-Z, ! and ? (Red's monsters 202-226, 415, 416) live in the Aged Chambers like Unown A
+    for i, m in enumerate(redsrc.load("data/monster/monster_data.json")):
+        uk = redsrc.unown_key(i)
+        if uk and uk != "0201" and m.get("friendArea") in by_enum:
+            areas[by_enum[m["friendArea"]]]["species"].append(uk)
     for a in areas.values():
         if len(a["species"]) > a["cap"]:
             a["red_cap"] = a["cap"]

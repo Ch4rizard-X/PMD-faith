@@ -31,7 +31,8 @@ def form_path(key):
     num, suf = split_key(key)
     if not suf:
         return num
-    want = SUFFIX.get(suf)
+    # Unown's forms: '0201UB' .. '0201UZ', '0201UEX' (!), '0201UQU' (?) -> subgroups named B .. Z, Exclamation, Question
+    want = {'EX': 'Exclamation', 'QU': 'Question'}.get(suf[1:], suf[1:]) if num == '0201' and suf.startswith('U') else SUFFIX.get(suf)
     for sid, sub in tracker().get(num, {}).get('subgroups', {}).items():
         if sub.get('name') == want:
             return f'{num}/{sid}'

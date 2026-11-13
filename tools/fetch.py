@@ -28,8 +28,15 @@ REPOS = {
                       "/sprite/*/000[1-6]/*-Anim.png", "/sprite/*/000[1-6]/AnimData.xml",
                       "/sprite/*/0000/0001/Idle-Anim.png", "/sprite/*/000[1-6]/0001/*-Anim.png",
                       "/portrait/*/*.png", "/portrait/*/000[1-6]/*.png",
-                      "/portrait/*/0000/0001/Normal.png"]),
+                      "/portrait/*/0000/0001/Normal.png",
+                      # Unown's 27 other forms (subgroups 0001-0027)
+                      "/sprite/0201/00[0-2][0-9]/*-Anim.png", "/sprite/0201/00[0-2][0-9]/AnimData.xml",
+                      "/portrait/0201/00[0-2][0-9]/*.png"]),
 }
+
+# what a finished download's mark says; a mark from before a folder's list grew makes it fetch what's missing
+# (files already there are kept)
+MARK = {"SpriteCollab": "ok unown\n"}
 
 
 ABOUT = {
@@ -105,16 +112,19 @@ def fetch_repo_http(name, url, sparse, dst, mark):
         if os.path.isdir(dst):
             shutil.rmtree(dst)
         http_fetch.archive(owner, repo, dst, sparse, label=name)
-    open(mark, "w").write("ok\n")
+    open(mark, "w").write(MARK.get(name, "ok\n"))
     print(f"{name}: done ({_folder_mb(dst):.0f} MB)", flush=True)
 
 
 def fetch_repo(name, url, sparse):
     dst = os.path.join(EXT, name)
     mark = os.path.join(dst, ".mdr_complete")      # written only once the download really finished
-    if os.path.isfile(mark):
+    if os.path.isfile(mark) and open(mark).read() == MARK.get(name, open(mark).read()):
         print(f"{name}: already downloaded")
         return
+    if os.path.isfile(mark):
+        os.remove(mark)
+        print(f"{name}: fetching the files added since it was downloaded", flush=True)
     if not use_git():
         os.makedirs(dst, exist_ok=True)
         return fetch_repo_http(name, url, sparse, dst, mark)
@@ -124,7 +134,7 @@ def fetch_repo(name, url, sparse):
             if sparse:
                 git("sparse-checkout", "set", "--no-cone", *sparse, cwd=dst, watch=dst, label=name)
             git("checkout", "-f", "HEAD", cwd=dst, watch=dst, label=name)
-            open(mark, "w").write("ok\n")
+            open(mark, "w").write(MARK.get(name, "ok\n"))
             print(f"{name}: done ({_folder_mb(dst):.0f} MB)", flush=True)
             return
         except subprocess.CalledProcessError:
@@ -142,7 +152,7 @@ def fetch_repo(name, url, sparse):
         git("sparse-checkout", "set", "--no-cone", *sparse, cwd=dst, watch=dst, label=name)
     else:
         git("clone", "--progress", "--depth", "1", url, dst, watch=dst, label=name)
-    open(mark, "w").write("ok\n")
+    open(mark, "w").write(MARK.get(name, "ok\n"))
     print(f"{name}: done ({_folder_mb(dst):.0f} MB)", flush=True)
 
 

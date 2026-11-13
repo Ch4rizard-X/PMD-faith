@@ -19,16 +19,16 @@ static func fa() -> Dictionary:
 			_split_aged_chambers(_fa)
 	return _fa
 
-## Red keeps Unown's 28 forms apart: A-N live in Aged Chamber AN, O-Z, ! and ? in Aged Chamber O?. The remake has one
-## Unown, so the data put every newer resident in AN and left O? empty. Half of AN's newer residents (whole
-## evolution families) move to O?, which holds Red's 14.
+## Red keeps Unown's 28 forms apart: A-N live in Aged Chamber AN, O-Z, ! and ? in Aged Chamber O?. The data put
+## every newer resident in AN (and, before the forms were kept apart, left O? empty). Half of AN's newer residents
+## (whole evolution families) move to O?, beside its Unown.
 static func _split_aged_chambers(d) -> void:
 	if not d is Dictionary or not d.has("areas"):
 		return
 	var A: Dictionary = d.areas.get("agedchamberan", {})
 	var O: Dictionary = d.areas.get("agedchambero", {})
-	if A.is_empty() or O.is_empty() or not (O.get("species", []) as Array).is_empty():
-		return
+	if A.is_empty() or O.is_empty() or not (O.get("species", []) as Array).all(func(sp): return str(sp).begins_with("0201")):
+		return                        # (O? holding only Unown O-Z, ! and ?: the newer residents are still all in AN)
 	var newer: Array = (A.species as Array).filter(func(sp): return not _red_species(str(sp)))
 	if newer.size() < 2:
 		return
@@ -46,7 +46,7 @@ static func _split_aged_chambers(d) -> void:
 	if moved.is_empty():
 		return
 	A.species = (A.species as Array).filter(func(sp): return not sp in moved)
-	O.species = moved
+	O.species = (O.species as Array) + moved
 	for k in [A, O]:
 		var red_cap := int(k.get("red_cap", k.get("cap", 14)))
 		k["cap"] = maxi(mini(red_cap, 14), (k.species as Array).size())
@@ -58,7 +58,8 @@ static func _red_species(sp: String) -> bool:
 	return (r is bool and r) or ((r is int or r is float) and float(r) != 0.0) or (r is String and r.is_valid_float() and float(r) != 0.0)
 
 static func area_of(sp: String) -> String:
-	return str(fa().get("species", {}).get(sp.substr(0, 4), ""))
+	var S: Dictionary = fa().get("species", {})
+	return str(S.get(sp, S.get(sp.substr(0, 4), "")))     # (Unown's forms have their own: O-Z, ! and ? in O?)
 
 static func area_name(k: String) -> String:
 	return str(fa().get("areas", {}).get(k, {}).get("name", k))

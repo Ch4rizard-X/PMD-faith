@@ -930,7 +930,13 @@ func _spawn_wild(p: Vector2i) -> Mon:
 		return null
 	if str(e[0]).substr(0, 4) == "0151":
 		fs.set_meta("mew_spawned", true)            # one Mew a floor (gDungeon->unk37FF)
-	var m := DB.make_mon(str(e[0]), Difficulty.wild_level(self, maxi(1, int(e[1]))), "enemy")
+	var wsp := str(e[0])
+	if wsp == "0201" and bool(ddata.get("eos", false)):
+		# Explorers of Sky's Unown come in any of the 28 forms (their lists only say "Unown"); Red's own lists name
+		# each form (Unown Relic, Aged Chambers)
+		var forms: Array = DB.species.keys().filter(func(k): return str(k).begins_with("0201"))
+		wsp = str(forms[fs.rng.randi_range(0, forms.size() - 1)])
+	var m := DB.make_mon(wsp, Difficulty.wild_level(self, maxi(1, int(e[1]))), "enemy")
 	if Shiny.roll(fs.rng):
 		m.set_meta("shiny", true)                    # DX: a rare shiny
 	LCFG.strengthen(m)                               # launcher: Enemy strength

@@ -189,6 +189,14 @@ def main():
                         'learn': lv, 'tm': tms, 'exp': d['expYield'], 'recruit': d['recruitRate'], 'size': d['bodySize'],
                         'shadow': d['shadowSize'], 'regen': d['regenSpeed'], 'asleep': d['chanceAsleep'], 'speed': d['movementSpeed'],
                         'move': d['canMove'], 'red': 1, 'friend': d['friendArea'].replace('FRIEND_AREA_', '').lower()}
+    # Unown's other 27 forms (Red keeps them apart: own Friend Area, own recruit rate, own sprite)
+    for i, d in enumerate(mons):
+        uk = redsrc.unown_key(i)
+        if uk and uk != '0201' and '0201' in species:
+            u = dict(species['0201'])
+            u.update({'recruit': d['recruitRate'], 'friend': d['friendArea'].replace('FRIEND_AREA_', '').lower(),
+                      'form': uk[5:]})
+            species[uk] = u
     for k, v in RS.items():
         if k in species:
             continue

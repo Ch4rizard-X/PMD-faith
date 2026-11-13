@@ -29,6 +29,7 @@ mdata = J(D + '/data/monster/monster_data.json')
 def mon_key(c):
     i = mon_ids.get(c)
     if i is None or i >= len(mdata): return None
+    if redsrc.unown_key(i) and redsrc.unown_key(i) in species: return redsrc.unown_key(i)   # Unown B-Z, !, ?
     nm = mon_names.get(mdata[i]['name'], '')
     return sp_by_norm.get(norm(nm))
 # ITEM_X -> item id
