@@ -16,6 +16,7 @@
    gen_megas_dx       species.json   Rescue Team DX Megas / Primals and real Mega abilities (PokeAPI)
    gen_swap_shop      swap_shop.json Croagunk's Swap Shop recipes (Explorers Remixed item descriptions)
    gen_move_growth    move_growth.json Remixed's Move Growth table (BALANCE/mgrowth.bin)
+   gen_eos_wm         eos_wm.json    vanilla EoS monster / item ids -> this game's keys (Wonder Mail S)
    fixed_rooms        eos_fixed.json the boss rooms the EoS dungeons use
 3. move animations -> WORK_DIR/tmp/eos/moveanim/ (sheets, moves.json, moves_data.json, learnsets.json)
    -> game/assets/fx/fx_NNNN.png, game/data/fx.json, game/data/move_fx.json
@@ -52,7 +53,7 @@ def main():
     common.need(common.POKEAPI_CSV, 'PokeAPI CSV data (run tools/fetch.py)')
     need_data('dungeons.json', 'items.json', 'species.json', 'moves.json')
     import extract, tilesets, convert_dungeons, fixed_rooms  # noqa: E401
-    import gen_eos_items, convert_remix, gen_extra_spread, gen_megas_dx, gen_swap_shop, gen_move_growth  # noqa: E401
+    import gen_eos_items, convert_remix, gen_extra_spread, gen_megas_dx, gen_swap_shop, gen_move_growth, gen_eos_wm  # noqa: E401
     import export_fx, build_game  # noqa: E401
 
     # 1. extraction
@@ -70,6 +71,7 @@ def main():
     step('gen_megas_dx (species)', gen_megas_dx.main)
     step('gen_swap_shop', gen_swap_shop.main)
     step('gen_move_growth', gen_move_growth.main)
+    step('gen_eos_wm (Wonder Mail S ids)', gen_eos_wm.main)
     step('data/eos_fixed.json', lambda: fixed_rooms.game(common.load_json(os.path.join(common.DATA, 'dungeons.json')), fixed))
 
     # 3. move animations

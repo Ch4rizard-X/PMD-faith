@@ -324,6 +324,10 @@ func build_floor() -> void:
 	DungeonSave.autosave(self)          # crash-safe resume point at each floor start
 	await _floor_banner()
 	_announce_jobs_here()
+	if await Missions.on_guide_floor(self):
+		menu_open = false
+		if result_sent:
+			return
 	if not eos_arena.is_empty() and not eos_arena.get("_talked", false):
 		eos_arena["_talked"] = true
 		menu_open = true
@@ -675,6 +679,8 @@ func _announce_jobs_here() -> void:
 				line = "%s is waiting on this floor for the [color=#ffdc4a]%s[/color]!" % [cn, DB.item_name(str(j.get("item", "")))]
 			"escort":
 				line = "%s's friend, %s, is somewhere on this floor!" % [cn, tn]
+			"guide":
+				continue                         # (on_guide_floor says it)
 			"target":
 				line = "%s is somewhere on this floor!" % tn
 			_:
@@ -4547,6 +4553,7 @@ func _mission_objectives() -> void:
 			"deliver": what = "Bring [color=#7fff7f]%s[/color]" % DB.item_name(str(j.get("item", "")))
 			"find": what = "Find [color=#7fff7f]%s[/color]" % DB.item_name(str(j.get("item", "")))
 			"escort": what = "Escort to [color=#ffdc4a]%s[/color]" % Missions.sp_name(str(j.get("target", "")))
+			"guide": what = "Guide [color=#ffdc4a]%s[/color]" % Missions.sp_name(str(j.get("client", "")))
 			_: what = "Rescue [color=#ffdc4a]%s[/color]" % Missions.sp_name(str(j.get("target", "")))
 		lines.append({"table": 2, "cells": ["%s  " % fl if fl != "" else "", what]})
 	var parts: Array = []

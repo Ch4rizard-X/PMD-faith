@@ -17,7 +17,7 @@ extends Control
 ## two windows closer together. ♂ / ♀ are stored as the real symbols (as in species names).
 ## Controls: D-pad moves, A types, B deletes, Start jumps to END, L / R move the letter cursor; taps work too.
 
-enum { SELF, TEAM, POKEMON, PARTNER, PASSWORD1, PASSWORD2 }
+enum { SELF, TEAM, POKEMON, PARTNER, PASSWORD1, PASSWORD2, PASSWORD3 }
 
 signal _done(result)
 
@@ -70,7 +70,19 @@ const PW2_POS := [[32, 18], [46, 18], [60, 18], [74, 18], [88, 20], [102, 20], [
 	[172, 18], [186, 18], [32, 36], [46, 36], [60, 36], [74, 36], [88, 38], [102, 38], [116, 38], [130, 38], [144, 36], [158, 36],
 	[172, 36], [186, 36]]
 const PROMPTS := ["What is your name?", "What is your team's name?", "What is this Pokémon's nickname?",
-	"What is your partner's nickname?", "Please enter the password.", "Please enter the password."]
+	"What is your partner's nickname?", "Please enter the password.", "Please enter the password.",
+	"Please enter the password."]
+## PASSWORD3 (the remake's Wonder Mail S, 34 symbols): two rows of 5 / 7 / 5 like Explorers of Sky's screen.
+## Explorers of Sky has & # = % @ where Red's set has ? … ! ♀ ♂ (the same symbol slots): those keys type them here.
+const PW3_SWAP := {"?": "&", "…": "#", "!": "=", "♀": "%", "♂": "@"}
+static func _pw3_pos() -> Array:
+	var out: Array = []
+	for r in 2:
+		for c in 17:
+			var g := 0 if c < 5 else (1 if c < 12 else 2)
+			out.append([6 + c * 12 + g * 4, 18 + r * 18 + (2 if g == 1 else 0)])
+	return out
+static var PW3_POS: Array = _pw3_pos()
 ## font palette 15 entries used here (fontpal[16..31])
 const C_RED := Color8(255, 135, 95)
 const C_GREEN := Color8(95, 255, 95)
@@ -147,6 +159,9 @@ func _setup(def: String) -> void:
 		PASSWORD2:
 			max_letters = 24
 			input_pos = 9
+		PASSWORD3:
+			max_letters = 34
+			input_pos = 9
 		_:
 			max_letters = 10
 			input_pos = 6
@@ -180,6 +195,10 @@ static func letter_text(code: int) -> String:
 	if SPECIAL_CHARS.has(code):
 		return SPECIAL_CHARS[code]
 	return char(code)
+
+## The symbol a key types in this mode (PASSWORD3: Explorers of Sky's & # = % @ in Red's ? … ! ♀ ♂ slots).
+func _pw_letter(s: String) -> String:
+	return str(PW3_SWAP.get(s, s)) if mode == PASSWORD3 else s
 
 func _valid_pw(code: int) -> bool:
 	return code <= 0xFF and PASSWORD_CHARS.contains(letter_text(code))
@@ -309,7 +328,7 @@ func _press_a() -> void:
 			if insert:
 				for i in range(max_letters - 2, letter_pos - 1, -1):
 					text[i + 1] = text[i]
-			text[letter_pos] = letter_text(letter)
+			text[letter_pos] = _pw_letter(letter_text(letter))
 			if letter_pos < max_letters - 1:
 				letter_pos += 1
 			else:
@@ -374,6 +393,8 @@ func _slot_pos(i: int) -> Vector2:
 		return Vector2(PW1_POS[i][0], PW1_POS[i][1])
 	if mode == PASSWORD2:
 		return Vector2(PW2_POS[i][0], PW2_POS[i][1])
+	if mode == PASSWORD3:
+		return Vector2(PW3_POS[i][0], PW3_POS[i][1])
 	var x := 38.0
 	for k in i:
 		x += _w(text[k]) if text[k] != "" else 8.0
@@ -391,13 +412,13 @@ func _draw() -> void:
 	match mode:
 		PASSWORD1:
 			_str(no, 54, 2, PROMPTS[mode], C_WHITE)
-		PASSWORD2:
+		PASSWORD2, PASSWORD3:
 			_str(no, 48, 4, PROMPTS[mode], C_WHITE)
 		_:
 			_str(no, 8, 5, PROMPTS[mode], C_WHITE)
 	if is_password():
-		var pos: Array = PW1_POS if mode == PASSWORD1 else PW2_POS
-		var uw := 11 if mode == PASSWORD1 else 12
+		var pos: Array = PW1_POS if mode == PASSWORD1 else (PW3_POS if mode == PASSWORD3 else PW2_POS)
+		var uw := 11 if mode == PASSWORD1 else (10 if mode == PASSWORD3 else 12)
 		for i in pos.size():
 			_hline(no, pos[i][0], pos[i][1] + 11, uw, C_CYAN)
 			_hline(no, pos[i][0], pos[i][1] + 12, uw, C_SHADOW)
@@ -407,6 +428,8 @@ func _draw() -> void:
 			var c := C_WHITE
 			if mode == PASSWORD1:
 				c = C_YELLOW if (i >= 5 and i <= 12) or (i >= 23 and i <= 30) or (i >= 41 and i <= 48) else C_WHITE
+			elif mode == PASSWORD3:
+				c = C_YELLOW if (i % 17) >= 5 and (i % 17) < 12 else C_WHITE
 			else:
 				c = C_YELLOW if (i >= 4 and i <= 7) or (i >= 16 and i <= 19) else C_WHITE
 			_char12(no, pos[i][0], pos[i][1], text[i], c)
@@ -455,7 +478,7 @@ func _draw() -> void:
 			_vline(io, L[4] + 10, L[5] + 7, 3, c)
 			_hline(io, L[4] + 1, L[5] + 9, 10, c)
 		else:
-			_char12(io, L[4], L[5], letter_text(letter), c)
+			_char12(io, L[4], L[5], _pw_letter(letter_text(letter)), c)
 	if _in_frames & 8:
 		var cl: Array = LAYOUT[input_pos]
 		_sprite(io + Vector2(cl[4] - 5, cl[5] + 1), 4, 1)

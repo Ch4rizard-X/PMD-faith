@@ -3,6 +3,17 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.40 (14 Nov 2026)
+
+- **Wonder Mail S for the Explorers of Sky dungeons:** Explorers of Sky's own 34-symbol passwords. Both the Wonder Mail screen and "Make Wonder Mail" now ask whether you want Wonder Mail or Wonder Mail S.
+  - The entry screen has 34 slots in two rows of 5 / 7 / 5, like Explorers of Sky's. Its & # = % @ symbols are typed with the ? … ! ♀ ♂ keys, which sit in the same places on Red's screen.
+  - The maker makes jobs in the Explorers dungeons you have unlocked (or all of them).
+  - The password format is the game's own: the symbol set, the symbol swap and the encryption table come from the Explorers of Sky (US) ROM, with a CRC-32 checksum, and the fields follow pmdsky-debug's mission struct. A real Explorers of Sky password decodes correctly.
+  - The setup now makes data/eos_wm.json from your vanilla Explorers of Sky ROM (tools/eos/gen_eos_wm.py). It matches EoS's Pokémon and item numbers to this game's, Unown's 28 forms included. Run the setup again to get it.
+  - Job kinds: rescue the client, rescue a target, escort, find an item, deliver an item, and Explorers of Sky's **Guide client**. For a guide job the client comes along like an escort client, and the job is done when you reach its floor ("You've reached a destination floor!").
+  - Rewards: money, money + ?, item, item + ?, and Explorers of Sky's special reward: when thanking you, the client asks to join. It joins if you have its Friend Area with room, at the level of the wild Pokémon on the job's floor. EoS can also give an egg for that reward; this game has no eggs.
+  - Jobs use this game's difficulty and reward amounts for the floor. Explorers of Sky's other job kinds (explore, prospect, search, take an item from an outlaw, arrest, challenge letters, treasure hunts) are refused, and the game says why.
+
 ## v0.8.39 (14 Nov 2026)
 
 - **Swapping places with the shop's Kecleon, as in Red:** walking into the shopkeeper now swaps places with him, as with a teammate (sub_805EC4C). Before, he only said his line and blocked the way. Pressing A still talks to him. The swap doesn't happen while either of you is asleep, confused or held in place, or while he's charging a move, and he stays where he ends up.

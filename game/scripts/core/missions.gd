@@ -276,7 +276,7 @@ static func _occupied(existing: Array, key: String, fl: int) -> bool:
 	for j in existing:
 		if str(j.get("dungeon", "")) != key:
 			continue
-		if str(j.get("kind", "")) == "escort" or int(j.get("floor", 0)) == fl:
+		if str(j.get("kind", "")) in ["escort", "guide"] or int(j.get("floor", 0)) == fl:
 			return true
 	return false
 
@@ -522,6 +522,11 @@ static func describe(j: Dictionary) -> void:
 			else:
 				title = _pool_line("escort_title", b2, tn)
 				text = _pool_line("escort_desc1", b2, tn) + "\n" + _pool_line("escort_desc2", b3, tn)
+		"guide":
+			# EoS's lines for MISSION_GUIDE_CLIENT (Wonder Mail S jobs only)
+			obj = "Guide [color=%s]%s[/color]." % [HL, sp_name(j.client)]
+			title = "Take me!"
+			text = "Please take me there!"
 		"find", "deliver":
 			obj = _fmt(txt("obj_find" if j.kind == "find" else "obj_deliver"), iname)
 			title = _fmt(txt("find_title" if j.kind == "find" else "deliver_title"), iname)
@@ -747,7 +752,7 @@ static func suspend(job: Dictionary) -> void:
 static func jobs_for_floor(dungeon_key: String, fl: int) -> Array:
 	var out: Array = []
 	for j in Game.jobs:
-		if j.state == "taken" and j.dungeon == dungeon_key and int(j.floor) == fl and j.kind != "find":
+		if j.state == "taken" and j.dungeon == dungeon_key and int(j.floor) == fl and not j.kind in ["find", "guide"]:
 			out.append(j)
 	return out
 
@@ -761,9 +766,31 @@ static func count_jobs_in_dungeon(dungeon_key: String) -> int:
 
 static func escort_job(dungeon_key: String) -> Dictionary:
 	for j in Game.jobs:
-		if j.state == "taken" and j.kind == "escort" and j.dungeon == dungeon_key:
+		if j.state == "taken" and j.kind in ["escort", "guide"] and j.dungeon == dungeon_key:
 			return j
 	return {}
+
+## Wonder Mail S "Guide client" (EoS MISSION_GUIDE_CLIENT): the client comes along like an escort client and the
+## job is done on reaching its floor with the client still there ("You've reached a destination floor!").
+## Call once the floor has started (after the banner). Returns true if the job finished here.
+static func on_guide_floor(dungeon: Dungeon) -> bool:
+	var j := escort_job(dungeon.dkey)
+	if j.is_empty() or j.kind != "guide" or int(j.floor) != dungeon.floor_i + 1 or dungeon.result_sent:
+		return false
+	var guest: Mon = null
+	for t in dungeon.fs.mons:
+		if t.hp > 0 and str(t.get_meta("escort_job", "")) == str(j.id):
+			guest = t
+	if guest == null:
+		return false
+	dungeon.menu_open = true
+	await say_pages(dungeon.ui_root, "You've reached a destination floor!")
+	j.state = "done_pending"
+	_remove_mon(dungeon, guest)
+	dungeon.obj_layer.queue_redraw()
+	await dungeon.rescue_beam([guest])
+	await _done_leave_prompt(dungeon)
+	return true
 
 # ============================================================================ dungeon hooks
 ## Call after Dungeon.start() built team_mons and before the first build_floor(): an escort client joins.
@@ -918,7 +945,11 @@ static func on_talk(dungeon: Dungeon, m: Mon) -> void:
 		_remove_mon(dungeon, escorted)
 	dungeon.obj_layer.queue_redraw()
 	await dungeon.rescue_beam([m, escorted])      # sub_8042A34: light beam + sound 850, waited for
-	# "A mission has been completed! Would you like to leave now?"
+	await _done_leave_prompt(dungeon)
+
+## "A mission has been completed! Would you like to leave now?"
+static func _done_leave_prompt(dungeon: Dungeon) -> void:
+	var root: Control = dungeon.ui_root
 	while true:
 		if dungeon.autoplay or dungeon.auto_answer:
 			break
@@ -989,7 +1020,10 @@ static func _reward_one(root: Control, j: Dictionary, rng: RandomNumberGenerator
 	var k := {"rescue": "thanks_rescue", "target": "thanks_target", "escort": "thanks_escort", "deliver": "thanks_deliver", "find": "thanks_find"}
 	if j.kind == "find":
 		_bag_take(str(j.item))
-	await Dialog.say(root, cname + _sub(txt(k.get(j.kind, "thanks_rescue")), subs), sp)
+	if j.kind == "guide":
+		await Dialog.say(root, cname + "Thanks for guiding me!", sp)          # EoS's line
+	else:
+		await Dialog.say(root, cname + _sub(txt(k.get(j.kind, "thanks_rescue")), subs), sp)
 	var r: Dictionary = j.reward
 	# money
 	if int(r.money) > 0:
@@ -1032,6 +1066,9 @@ static func _reward_one(root: Control, j: Dictionary, rng: RandomNumberGenerator
 				where = "\nThe Toolbox is full, so it was sent to storage."
 			Audio.sfx("pickup")
 			await say_pages(root, "[color=%s]%s[/color] received\n[color=%s]%s[/color].%s" % [HL, leader if solo else leader + "'s team", IT, _qty_name(id), where])
+	# Wonder Mail S special reward: the client asks to join (EoS's "Hey! ... wants to join your team!")
+	if bool(r.get("join", false)):
+		await _client_joins(root, j)
 	# rescue points / rank
 	var pts := int(r.get("rank_points", 0))
 	if pts > 0:
@@ -1046,6 +1083,45 @@ static func _reward_one(root: Control, j: Dictionary, rng: RandomNumberGenerator
 			subs["{POKEMON_3}"] = str(RANKS[after][0]) + " Rank"
 			Audio.sfx("levelup")
 			await say_pages(root, _sub(txt("rank_up"), subs))
+
+## The client of a Wonder Mail S with the special reward joins, if the team has its Friend Area with room
+## (like any recruit). It joins at the level of the wild Pokémon on the job's floor (EoS's own level for it isn't
+## known here).
+static func _client_joins(root: Control, j: Dictionary) -> void:
+	var sp := str(j.client)
+	var nm := sp_name(sp)
+	var who := "[color=%s]%s[/color]" % [HL, nm]
+	if await Dialog.ask(root, "Hey! %s wants to join your team!\nWill you accept %s as a member?" % [who, who], ["Yes", "No"]) != 0:
+		return
+	var area := Services.area_of(sp)
+	if area == "" or not area in Game.friend_areas:
+		await Dialog.say(root, "But there's no Friend Area for %s.\n%s can't join..." % [who, who])
+		return
+	var cap := int(Services.fa().get("areas", {}).get(area, {}).get("cap", 99))
+	var n := 0
+	for e in Game.friends + Game.team:
+		if str(e.get("area", "")) == area:
+			n += 1
+	if n >= cap:
+		await Dialog.say(root, "But %s is full.\n%s can't join..." % [_area_name(area), who])
+		return
+	var lv := 1
+	var fl: Array = ddb(str(j.dungeon)).get("floors", [])
+	var fi := int(j.floor) - 1
+	if fi >= 0 and fi < fl.size():
+		var tot := 0
+		var c := 0
+		for e in fl[fi].get("pk", []):
+			if e is Array and e.size() > 1:
+				tot += int(e[1])
+				c += 1
+		lv = maxi(1, tot / c) if c > 0 else 1
+	var ent: Dictionary = Game._entry(sp, nm, lv)
+	ent["area"] = area
+	Game.friends.append(ent)
+	Pokedex.mark_seen(sp)
+	Audio.sfx("join")
+	await Dialog.say(root, "%s joined the team!\n%s went to %s." % [who, who, _area_name(area)])
 
 static func _qty_name(id: String) -> String:
 	if _thrown(id):

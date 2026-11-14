@@ -13,12 +13,18 @@ const CYAN := "#7fe0ff"
 const GRID := "12345678" + "90CFHJKM" + "NPQRSTWX" + "Y?!+-…♂♀"
 const GRID_COLS := 8
 const CMDS := ["Del", "Paste", "Cancel", "End"]
-const KIND_NAMES := {"rescue": "Rescue client", "target": "Rescue target", "escort": "Escort client", "find": "Find item", "deliver": "Deliver item"}
+const KIND_NAMES := {"rescue": "Rescue client", "target": "Rescue target", "escort": "Escort client", "guide": "Guide client", "find": "Find item", "deliver": "Deliver item"}
 
 # ============================================================================ entry
 ## Password entry. On a correct password the mail is shown and added to the Job List (Red's checks: already in
 ## the list, already completed, list full). Returns the received job ({} if none).
 static func enter_code(root: Control) -> Dictionary:
+	if WonderMailS.available():
+		var w := await Dialog.ask(root, "Which [color=%s]Wonder Mail[/color]?" % CYAN, ["Wonder Mail", "Wonder Mail S", "Cancel"])
+		if w == 1:
+			return await enter_code_s(root)
+		if w != 0:
+			return {}
 	# Red: "Please enter the Wonder Mail password." -> naming screen in password mode (NAMING_PASSWORD2,
 	# scripts/ui/naming_screen.gd) -> "This password is incorrect. Would you like to enter it again?"
 	var got := {}
@@ -41,6 +47,41 @@ static func enter_code(root: Control) -> Dictionary:
 		if why == "":
 			Audio.sfx("join")
 			await Dialog.say(root, WonderMail.MSG_RECEIVED)
+			await Dialog.say(root, WonderMail.MSG_ADDED)
+			got = Missions.find_job(str(job.id))
+		else:
+			Audio.sfx("error")
+			await Dialog.say(root, why)
+		break
+	return got
+
+## Wonder Mail S (Explorers of Sky's 34-symbol passwords, for the Explorers of Sky dungeons): the same steps.
+static func enter_code_s(root: Control) -> Dictionary:
+	var got := {}
+	var code := ""
+	await Dialog.say(root, "Please enter the\n[color=%s]Wonder Mail S password[/color]." % CYAN)
+	while true:
+		code = await NamingScreen.ask(root, NamingScreen.PASSWORD3, code, true)
+		if code == "":
+			break
+		var r: Dictionary = WonderMailS.decode(code)
+		if not r.ok:
+			Audio.sfx("error")
+			var msg := str(r.error)
+			if str(r.reason) != "" and r.error == WonderMailS.ERR_UNSUPPORTED:
+				msg += "\n(%s)" % str(r.reason)
+				await Dialog.say(root, msg)
+				break
+			var again := await Dialog.ask(root, msg + "\nWould you like to enter it again?", ["Yes", "No"])
+			if again == 0:
+				continue
+			break
+		var job: Dictionary = r.job
+		await Board.show_info(root, job)
+		var why := WonderMail.receive(job)
+		if why == "":
+			Audio.sfx("join")
+			await Dialog.say(root, WonderMail.MSG_RECEIVED.replace("Wonder Mail", "Wonder Mail S"))
 			await Dialog.say(root, WonderMail.MSG_ADDED)
 			got = Missions.find_job(str(job.id))
 		else:
@@ -86,8 +127,14 @@ static func enter_code_panel(root: Control) -> Dictionary:
 ## Make Wonder Mail: job type -> dungeon -> floor -> client -> target / item -> reward -> code.
 ## Cancel on any step goes back one step.
 static func maker(root: Control) -> void:
+	var sky := false
+	if WonderMailS.available():
+		var w := await Dialog.ask(root, "Make which kind of mail?", ["Wonder Mail", "Wonder Mail S", "Cancel"])
+		if w == 2 or w < 0:
+			return
+		sky = w == 1
 	var st := {"step": 0, "all": false, "kind": "", "d": -1, "floor": 0, "client": "", "target": "", "item": "",
-		"rtype": "", "ritem": "", "area": ""}
+		"rtype": "", "ritem": "", "area": "", "sky": sky, "dk": ""}
 	var steps := ["kind", "dungeon", "floor", "client", "target", "item", "reward", "ritem", "area", "result"]
 	var back: Array = []
 	var i := 0
@@ -110,6 +157,8 @@ static func maker(root: Control) -> void:
 
 ## One step; returns null (back), "skip" (not needed), "again" (redo) or a value.
 static func _maker_step(root: Control, s: String, st: Dictionary) -> Variant:
+	if st.get("sky", false):
+		return await _maker_step_s(root, s, st)
 	match s:
 		"kind":
 			var items: Array = []
@@ -224,6 +273,107 @@ static func _maker_step(root: Control, s: String, st: Dictionary) -> Variant:
 			return null if r == "back" else "exit"
 	return null
 
+## The same steps for a Wonder Mail S (Explorers of Sky dungeons; this game's job kinds and rewards).
+static func _maker_step_s(root: Control, s: String, st: Dictionary) -> Variant:
+	match s:
+		"kind":
+			var items: Array = []
+			for k in WonderMailS.KINDS:
+				items.append({"text": KIND_NAMES[k], "value": k})
+			var v = await _pick(root, "Make Wonder Mail S: job type", items, items.map(func(x): return x.value).find(st.kind))
+			if v != null:
+				st.kind = v
+			return v
+		"dungeon":
+			var items: Array = []
+			var cur := 0
+			var unl: Array = Story.eos_unlocked()
+			for key in WonderMailS.dungeons():
+				if not st.all and not key in Game.unlocked and not key in unl:
+					continue
+				if key == st.dk:
+					cur = items.size()
+				var fl: Array = WonderMailS.floors(key)
+				items.append({"text": Story.eos_trip_name(key) if key in unl else Missions.dungeon_name(key), "value": key,
+					"hint": "%d-%dF" % [fl.front(), fl.back()]})
+			var tog := "All dungeons: %s" % ("On" if st.all else "Off")
+			if items.is_empty() and not st.all:
+				items.append({"text": "(no Explorers dungeon unlocked)", "value": "", "disabled": true})
+			var v = await _pick(root, "Dungeon", items, cur, true, tog)
+			if v is String and v == PickList.TOGGLE:
+				st.all = not st.all
+				return "again"
+			if v != null:
+				st.dk = str(v)
+			return v
+		"floor":
+			var items: Array = []
+			var cur := 0
+			for fl in WonderMailS.floors(st.dk):
+				if fl == st.floor:
+					cur = items.size()
+				var diff := Missions.mission_difficulty(st.dk, fl, st.kind)
+				items.append({"text": Missions.floor_label(st.dk, fl), "value": fl, "hint_bb": Missions.difficulty_bb(Missions.DIFF_LETTERS[Missions.letter_index(diff)])})
+			var v = await _pick(root, Missions.dungeon_name(st.dk), items, cur)
+			if v != null:
+				st.floor = int(v)
+			return v
+		"client", "target":
+			if s == "target" and st.kind != "target" and st.kind != "escort":
+				st.target = ""
+				return "skip"
+			var title := "Client" if s == "client" else ("Target (who to save)" if st.kind == "target" else "Escort to")
+			var items: Array = []
+			var ci := 0
+			for k in WonderMailS.species_list():
+				if k == st[s]:
+					ci = items.size()
+				items.append({"text": "%s %s" % [str(k).substr(1), Missions.sp_name(k)], "value": k})
+			var v = await _pick(root, title, items, ci, true)
+			if v != null:
+				st[s] = v
+			return v
+		"item":
+			if st.kind != "find" and st.kind != "deliver":
+				st.item = ""
+				return "skip"
+			var v = await _pick_item(root, "Item to find" if st.kind == "find" else "Item to deliver", WonderMailS.target_items(st.dk, st.kind), st.item)
+			if v != null:
+				st.item = v
+			return v
+		"reward":
+			var diff := Missions.mission_difficulty(st.dk, st.floor, st.kind)
+			var li := Missions.letter_index(diff)
+			var m1 := (li + 1) * 100
+			var items := [
+				{"text": "%d Poké" % m1, "value": "money"},
+				{"text": "%d Poké + ?" % m1, "value": "money_extra"},
+				{"text": "Item", "value": "item"},
+				{"text": "Item + ?", "value": "item_extra"},
+				{"text": "? (the client asks to join)", "value": "join"},
+			]
+			var cur: int = maxi(0, items.map(func(x): return x.value).find(st.rtype))
+			var v = await _pick(root, "Reward  (%s, %d pts)" % [Missions.DIFF_LETTERS[li], Missions.RANK_POINTS[diff]], items, cur)
+			if v != null:
+				st.rtype = v
+			return v
+		"ritem":
+			if not st.rtype in ["money_extra", "item", "item_extra"]:
+				st.ritem = ""
+				return "skip"
+			var v = await _pick_item(root, "Reward item", WonderMailS.reward_items(), st.ritem)
+			if v != null:
+				st.ritem = v
+			return v
+		"area":
+			return "skip"
+		"result":
+			var fields := {"kind": st.kind, "dungeon": st.dk, "floor": st.floor, "client": st.client, "target": st.target,
+				"item": st.item, "reward": {"type": st.rtype, "item": st.ritem}}
+			var r := await _show_result(root, fields, true)
+			return null if r == "back" else "exit"
+	return null
+
 static func _pick(root: Control, title: String, items: Array, cur := 0, search := false, toggle := "") -> Variant:
 	var p := PickList.new()
 	p.title = title
@@ -255,8 +405,9 @@ static func _pick_item(root: Control, title: String, keys: Array, cur: String) -
 	return await _pick(root, title, items, ci, true)
 
 ## The code page. Returns "back" (edit the mission again) or "done".
-static func _show_result(root: Control, fields: Dictionary) -> String:
+static func _show_result(root: Control, fields: Dictionary, sky := false) -> String:
 	var v := ResultView.new()
+	v.sky = sky
 	v.fields = fields
 	root.add_child(v)
 	var out := "done"
@@ -337,31 +488,42 @@ class CodeView extends Control:
 	var row_h := 28
 	signal slot_tapped(i: int)
 
-	func _init(px := 2) -> void:
+	var slots := 24                # 24 (Red: rows of 4 / 4 / 4) or 34 (Wonder Mail S: rows of 5 / 7 / 5)
+
+	func _init(px := 2, n := 24) -> void:
 		scale_px = px
+		slots = n
 		cell_w = 11 * px
 		group_gap = 4 * px
 		row_h = 13 * px
-		custom_minimum_size = Vector2(12 * cell_w + 2 * group_gap, 2 * row_h + 2 * px)
+		custom_minimum_size = Vector2(_per_row() * cell_w + 2 * group_gap, 2 * row_h + 2 * px)
 		mouse_filter = Control.MOUSE_FILTER_STOP
+
+	func _per_row() -> int:
+		return slots / 2
+
+	func _group(c: int) -> int:
+		if slots == 34:
+			return 0 if c < 5 else (1 if c < 12 else 2)
+		return c / 4
 
 	func set_code(c: String) -> void:
 		code = c
 		queue_redraw()
 
 	func _slot_pos(i: int) -> Vector2:
-		var r := i / 12
-		var c := i % 12
-		var x := (size.x - custom_minimum_size.x) / 2.0 + c * cell_w + (c / 4) * group_gap
-		var y := r * row_h + (scale_px if (c / 4) == 1 else 0)
+		var r := i / _per_row()
+		var c := i % _per_row()
+		var x := (size.x - custom_minimum_size.x) / 2.0 + c * cell_w + _group(c) * group_gap
+		var y := r * row_h + (scale_px if _group(c) == 1 else 0)
 		return Vector2(x, y)
 
 	func _draw() -> void:
 		var f := UITheme.font()
 		var fs := 11 * scale_px
-		for i in 24:
+		for i in slots:
 			var p := _slot_pos(i)
-			var col := UITheme.GOLD if (i % 12) / 4 == 1 else UITheme.INK
+			var col := UITheme.GOLD if _group(i % _per_row()) == 1 else UITheme.INK
 			if i == cursor:
 				draw_rect(Rect2(p + Vector2(scale_px, 0), Vector2(cell_w - 2 * scale_px, row_h - scale_px)), Color(0.25, 0.4, 0.85, 0.85))
 			# Red's double underscore under every slot
@@ -375,7 +537,7 @@ class CodeView extends Control:
 
 	func _gui_input(e: InputEvent) -> void:
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
-			for i in 24:
+			for i in slots:
 				if Rect2(_slot_pos(i), Vector2(cell_w + 2, row_h)).has_point(e.position):
 					slot_tapped.emit(i)
 					accept_event()
@@ -871,6 +1033,7 @@ class PickList extends PanelContainer:
 # ============================================================================ result (code) page
 class ResultView extends PanelContainer:
 	signal chosen(a: String)
+	var sky := false               # Wonder Mail S
 	var fields: Dictionary = {}
 	var job: Dictionary = {}
 	var code := ""
@@ -906,7 +1069,7 @@ class ResultView extends PanelContainer:
 		_info = Board.rich("")
 		_info.custom_minimum_size.y = 3 * UITheme.LINE
 		vb.add_child(_info)
-		_view = CodeView.new(3)
+		_view = CodeView.new(2 if sky else 3, 34 if sky else 24)
 		_view.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		vb.add_child(_view)
 		var hb := HBoxContainer.new()
@@ -928,18 +1091,22 @@ class ResultView extends PanelContainer:
 		_build()
 
 	func _build() -> void:
-		var e: Dictionary = WonderMail.encode_ex(fields)
+		var e: Dictionary = WonderMailS.encode_ex(fields) if sky else WonderMail.encode_ex(fields)
 		if not e.ok:
 			code = ""
 			job = {}
-			_title.text = "[color=#ff8070]Red would refuse this mail:[/color]"
+			_title.text = "[color=#ff8070]%s[/color]" % ("This Wonder Mail S can't be made:" if sky else "Red would refuse this mail:")
 			_info.text = str(e.error)
 			_view.set_code("")
 			refresh_buttons()
 			return
 		code = e.code
-		fields["seed"] = int(e.raw.seed)
-		job = WonderMail.decode(code).job
+		if sky:
+			fields["flavor"] = int(e.raw.flavor)
+			job = WonderMailS.decode(code).job
+		else:
+			fields["seed"] = int(e.raw.seed)
+			job = WonderMail.decode(code).job
 		added = false
 		_title.text = "[color=%s]%s[/color]  %s" % [Missions.HL, str(job.title), Missions.difficulty_bb(str(job.difficulty))]
 		var who := "[color=%s]%s[/color]" % [Missions.HL, Missions.sp_name(str(job.client))]
@@ -949,7 +1116,10 @@ class ResultView extends PanelContainer:
 		refresh_buttons()
 
 	func reroll() -> void:
-		fields["seed"] = randi() & 0xffffff
+		if sky:
+			fields["flavor"] = 300000 + randi() % 100000
+		else:
+			fields["seed"] = randi() & 0xffffff
 		Audio.sfx("confirm")
 		_build()
 

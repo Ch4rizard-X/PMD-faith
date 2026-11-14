@@ -3233,6 +3233,9 @@ func _ready() -> void:
 			get_viewport().get_texture().get_image().save_png("user://shiny_ground.png")
 			get_tree().quit()).call_deferred()
 		return
+	if OS.get_cmdline_user_args().has("--wmstest"):
+		_wmstest.call_deferred()
+		return
 	if OS.get_cmdline_user_args().has("--shinytest"):
 		_shinytest.call_deferred()
 		return
@@ -5458,6 +5461,114 @@ func _shinytest() -> void:
 	t.get_image().save_png("user://shiny_por.png")
 	Dialog.portrait_tex("0007").get_image().save_png("user://normal_por.png")
 	await get_tree().create_timer(1.0).timeout
+	get_tree().quit()
+
+## --wmstest: Wonder Mail S passwords (real Explorers of Sky passwords decode; made ones decode back)
+func _wmstest() -> void:
+	Game.new_game("0004", "Charmander", "0007", "Squirtle", "Q")
+	var fails := 0
+	print("WMS available=", WonderMailS.available(), " dungeons=", WonderMailS.dungeons().size(), " species=", WonderMailS.species_list().size())
+	# EoS passwords posted by players (GameFAQs): Beach Cave 1F rescue Charmander; Amp Plains 8F arrest (Magnezone);
+	# Waterfall Cave 4F guide Krabby; a typo'd one
+	for c in ["=N@QP 92@7X-F SKYQ4 T2K9H T9#PKN3 FJQ32", "23#T4KRN6C9RY140R35Y-XP0KR#%3NT#S6",
+			"Q216+F=@MK5Q0C%+F0N%MPQ5Y9HMKRYX4K", "YWN354T8N0JNTNY+XQS#+QXSY81J6C6Q0="]:
+		var r: Dictionary = WonderMailS.decode(c)
+		print("WMS decode ", c, " -> ok=", r.ok, " reason=", r.reason, " raw=", r.raw)
+		if r.ok:
+			print("   job ", r.job.kind, " ", r.job.dungeon, " F", r.job.floor, " client=", r.job.client, " ", r.job.title, " / ", r.job.objective, " reward ", Missions.reward_text(r.job))
+	var r0: Dictionary = WonderMailS.decode("=N@QP 92@7X-F SKYQ4 T2K9H T9#PKN3 FJQ32")
+	if not (r0.ok and r0.job.kind == "rescue" and r0.job.dungeon == "eos_beach_cave" and int(r0.job.floor) == 1 and r0.job.client == "0004"):
+		fails += 1
+		print("WMS BAD beach cave code")
+	# Red-screen symbols type the same code
+	if not WonderMailS.decode("=N@QP 92@7X-F SKYQ4 T2K9H T9#PKN3 FJQ32".replace("&", "?").replace("#", "…")).ok:
+		fails += 1
+		print("WMS BAD red symbols")
+	# made passwords
+	var cases := [
+		{"kind": "rescue", "dungeon": "eos_beach_cave", "floor": 2, "client": "0025", "reward": {"type": "item", "item": "apple"}},
+		{"kind": "target", "dungeon": "eos_mt_bristle", "floor": 3, "client": "0001", "target": "0201UQU", "reward": {"type": "money"}},
+		{"kind": "escort", "dungeon": "eos_drenched_bluff", "floor": 4, "client": "0007", "target": "0004", "reward": {"type": "money_extra", "item": "oran"}},
+		{"kind": "find", "dungeon": "eos_beach_cave", "floor": 3, "client": "0016", "item": str(WonderMailS.target_items("eos_beach_cave", "find").front()), "reward": {"type": "item_extra", "item": "goldenseed"}},
+		{"kind": "deliver", "dungeon": "eos_mt_bristle", "floor": 2, "client": "0447", "item": "oran", "reward": {"type": "item", "item": "reviver"}},
+	]
+	for f in cases:
+		var e: Dictionary = WonderMailS.encode_ex(f)
+		if not e.ok:
+			fails += 1
+			print("WMS BAD encode ", f, " ", e.error)
+			continue
+		var d: Dictionary = WonderMailS.decode(e.code)
+		var j: Dictionary = d.job
+		var same: bool = d.ok and j.kind == f.kind and j.dungeon == f.dungeon and int(j.floor) == int(f.floor) and j.client == f.client \
+			and (not f.has("target") or j.target == f.target) and (not f.has("item") or j.item == f.item) \
+			and j.reward.type == f.reward.type and (str(f.reward.get("item", "")) == "" or j.reward.item == f.reward.item)
+		print("WMS ", "ok  " if same else "BAD ", WonderMailS.pretty(e.code).replace("\n", " / "), "  ", f.kind, " ", j.get("title", ""), " reward ", Missions.reward_text(j) if d.ok else d.reason)
+		if not same:
+			fails += 1
+		if same and f.kind == "rescue":
+			var why := WonderMail.receive(j)
+			print("WMS receive -> '", why, "' in list=", Missions.find_job(str(j.id)).size() > 0, " again -> '", WonderMail.receive(j), "'")
+	# guide + the client-joins reward
+	var gf := {"kind": "guide", "dungeon": "eos_drenched_bluff", "floor": 2, "client": "0098", "reward": {"type": "join"}}
+	var ge: Dictionary = WonderMailS.encode_ex(gf)
+	var gd: Dictionary = WonderMailS.decode(ge.code) if ge.ok else {"ok": false, "reason": ge.error}
+	print("WMS guide ", ge.get("code", ""), " -> ", gd.ok, " ", gd.get("reason", ""), " ", gd.job.get("objective", "") if gd.ok else "", " reward=", gd.job.reward if gd.ok else "")
+	if not (gd.ok and gd.job.kind == "guide" and bool(gd.job.reward.get("join", false))):
+		fails += 1
+	if gd.ok:
+		WonderMail.receive(gd.job)
+		var gj: Dictionary = Missions.find_job(str(gd.job.id))
+		Missions.take(gj)
+		Dialog.auto = true
+		await start_dungeon("eos_drenched_bluff", 0)
+		await get_tree().create_timer(2.0).timeout
+		dungeon.auto_answer = true
+		var guest := dungeon.fs.mons.any(func(m): return m.has_meta("escort_job"))
+		print("WMS guide guest on 1F=", guest, " state=", gj.state)
+		await dungeon.next_floor()
+		await get_tree().create_timer(4.0).timeout
+		print("WMS guide on 2F state=", gj.state, " guest left=", not dungeon.fs.mons.any(func(m): return m.has_meta("escort_job")) if is_instance_valid(dungeon) and dungeon.fs else "-")
+		if gj.state != "done_pending" and gj.state != "done":
+			fails += 1
+		# the reward: the client asks to join (Krabby's area owned)
+		var area := Services.area_of("0098")
+		if not area in Game.friend_areas:
+			Game.friend_areas.append(area)
+		var nf := Game.friends.size()
+		gj.state = "done"
+		ListMenu.auto = true
+		await Missions.complete_rewards(root)
+		ListMenu.auto = false
+		print("WMS joined=", Game.friends.size() == nf + 1, " ", Game.friends.back().get("sp", "") if Game.friends.size() > 0 else "", " lv ", Game.friends.back().get("level", 0) if Game.friends.size() > 0 else 0)
+		if Game.friends.size() != nf + 1:
+			fails += 1
+		Dialog.auto = false
+	# refused kinds
+	var raw := WonderMailS.raw_from_fields(cases[0])
+	raw.mission = 10
+	print("WMS arrest -> ", WonderMailS.check_raw(raw))
+	print("WMSTEST fails=", fails)
+	if OS.get_cmdline_user_args().has("--wmsui"):
+		var ns := NamingScreen.new()
+		ns.mode = NamingScreen.PASSWORD3
+		ns._setup("=N@QP92@7X-FSKYQ4T2K9HT9#PKN3FJQ32".substr(0, 30))
+		root.add_child(ns)
+		await get_tree().create_timer(1.0).timeout
+		get_viewport().get_texture().get_image().save_png("user://wms_entry.png")
+		ns.queue_free()
+		var rv := WonderMailUI.ResultView.new()
+		rv.sky = true
+		rv.fields = cases[3]
+		root.add_child(rv)
+		await get_tree().create_timer(1.0).timeout
+		get_viewport().get_texture().get_image().save_png("user://wms_result.png")
+		rv.queue_free()
+		var rv2 := WonderMailUI.ResultView.new()
+		rv2.fields = {"kind": "rescue", "dungeon": "tiny_woods", "floor": 2, "client": "0025", "reward": {"type": "money"}}
+		root.add_child(rv2)
+		await get_tree().create_timer(1.0).timeout
+		get_viewport().get_texture().get_image().save_png("user://wm_result_red.png")
 	get_tree().quit()
 
 ## --megatest: Empowerment Seed / Awakened / Mega Evolution
