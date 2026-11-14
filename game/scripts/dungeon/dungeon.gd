@@ -915,6 +915,14 @@ func _pick_trap(table_i: int) -> String:
 	var t = _pick_weighted(pairs)
 	return "" if t == null else str(t)
 
+## sub_805EC4C's checks on both Pokémon before the leader swaps places with one.
+func _can_swap_with(a: Mon, b: Mon) -> bool:
+	for x in [a, b]:
+		for k in ["shadow_hold", "frozen", "constriction", "ingrain", "wrap", "wrapped", "confused", "sleep", "napping", "nightmare"]:
+			if int(x.status.get(k, 0)) > 0:
+				return false
+	return str(b.status.get("charge_move", "")) == ""
+
 func _spawn_wild(p: Vector2i) -> Mon:
 	# SpawnWildMon fails on a tile someone already stands on (the team is placed first)
 	if fs.mon_at(p) != null:
@@ -1830,12 +1838,16 @@ func do_move(m: Mon, d: int, swap := false) -> bool:
 		if m.is_leader and Missions.is_client(o):
 			await Missions.on_talk(self, o)
 			return false
-		if m.is_leader and bool(o.get_meta("shopkeeper", false)) and shop:
-			await shop.talk(o)                       # Red: walking into Kecleon talks to it
+		if m.is_leader and bool(o.get_meta("shopkeeper", false)) and shop and not shop_stole:
+			# sub_805EC4C: walking into the shopkeeper swaps places with it, like a teammate (A talks to it) -
+			# unless either of them is held, asleep or confused, or it is charging a move
+			if not _can_swap_with(m, o) or not fs.walkable(m.pos, o):
+				return false
+		elif m.is_leader and bool(o.get_meta("shopkeeper", false)) and shop:
 			return false
 		if swap and PartnerAI.debug and not (o.is_team() and not o.is_leader and not Missions.is_client(o)):
 			print("PARTNERDBG swap refused (occupant %s side %s leader %s) %s" % [o.name, o.side, o.is_leader, m.name])
-		if (m.is_leader and o.is_team()) or (swap and o.is_team() and not o.is_leader and not Missions.is_client(o) and fs.walkable(m.pos, o)):
+		if (m.is_leader and (o.is_team() or (bool(o.get_meta("shopkeeper", false)) and shop and not shop_stole))) or (swap and o.is_team() and not o.is_leader and not Missions.is_client(o) and fs.walkable(m.pos, o)):
 			# swap places with a teammate (partners too, with the smarter partner AI)
 			var oold := o.pos
 			o.set_meta("swapped_by", [m.uid, fs.turn])

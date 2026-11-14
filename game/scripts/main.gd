@@ -2134,6 +2134,16 @@ func _ready() -> void:
 			for i in 50:
 				if HeldItems.throw_hits(d, L, k) == "hit": hit_k += 1
 			check.call("thrown items never hit the shopkeeper", hit_k == 0)
+			# walking into the shopkeeper swaps places with it (sub_805EC4C)
+			var lp0 := L.pos
+			var kp0 := k.pos
+			var adjk := kp0 + Vector2i(0, 1)
+			if fs.mon_at(adjk) == null and fs.walkable(adjk, L):
+				L.pos = adjk
+				await d.do_move(L, 4)
+				check.call("walking into Kecleon swaps places", L.pos == kp0 and k.pos == adjk, "L %s K %s" % [L.pos, k.pos])
+				k.pos = kp0
+			L.pos = lp0
 			check.call("attacks ignore the shopkeeper", not d.fs.is_foe(L, k) and not d.targets_for(L, DB.moves.get("Regular Attack", {"r": "front"}), AI.dir_toward(L.pos, k.pos)).has(k) or FloorState.cheb(L.pos, k.pos) > 1)
 			# pick up a ware (unpaid)
 			var price1 := int(fs.items[w1].price)
@@ -6064,6 +6074,29 @@ func _storytest() -> void:
 			if a == "--newmail" and t == 2:          # tests: today's mail not delivered yet
 				Game.flags["mailbox_day"] = -1
 				Game.flags["news_day"] = -1
+			if a == "--wakeuptest" and is_instance_valid(ground):    # tests: the base's morning mail + Lucario Rank statue
+				var bm := GData.map_id("MAP_TEAM_BASE")
+				if ground.cur_map == bm and not has_meta("wake_go") and ground.text != null and not ground.text.is_open():
+					set_meta("wake_go", t)
+					Game.rank_points = 100000000
+					Game.flags["mailbox_day"] = -1
+					Game.flags["news_day"] = -1
+					print("WAKE at base t=", t)
+					if OS.get_cmdline_user_args().has("--viamailbox"):
+						Missions.refresh_mailbox_if_new_day()      # the mailbox path: no morning scene
+						PokemonNews.refresh_if_new_day(Missions.mailbox().size())
+						set_meta("wake_go", t - 20)
+					else:
+						GAction.trace = true
+						ground.map_execute_station(bm, 8, 0, false)
+				if has_meta("wake_go") and t == int(get_meta("wake_go")) + 25:
+					print("WAKE statue flag=", GVars.get_arr(null, GVars.var_id("EVENT_B01P01"), 3), " news=", PokemonNews.letters(), " has36=", PokemonNews._has(0x36))
+					print("WAKE objects now=", ground.objects.filter(func(o): return o.kind != -1).map(func(o): return o.kind))
+					ground.ground_request(bm, 0, 1)
+				if has_meta("wake_go") and t == int(get_meta("wake_go")) + 40:
+					print("WAKE flag after reload=", GVars.get_arr(null, GVars.var_id("EVENT_B01P01"), 3), " map=", ground.cur_map, " objects after reload=", ground.objects.filter(func(o): return o.kind != -1).map(func(o): return [o.kind, o.get("pos") if "pos" in o else ""]))
+					get_viewport().get_texture().get_image().save_png("user://wake_base.png")
+					get_tree().quit()
 			if a.begins_with("--runevent=") and t == 3 and is_instance_valid(ground):   # tests: --runevent=EVENT_X
 				ground.map_execute_event(GData.fn_id(a.substr(11)), false)
 			if a.begins_with("--substation=") and t == 3 and is_instance_valid(ground):   # tests: --substation=map,group

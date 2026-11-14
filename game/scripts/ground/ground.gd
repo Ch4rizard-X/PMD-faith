@@ -985,6 +985,8 @@ func select_map(m: int, is_map: bool) -> void:
 		station_map = m
 	GVars.set_val(null, GVars.GROUND_MAP, cur_map)
 	GVars.set_val(null, GVars.GROUND_PLACE, int(GData.map_conv(cur_map).place))
+	if is_map and m == GData.map_id("MAP_TEAM_BASE"):
+		_lucario_statue()
 	camera.reset()
 	_delete_all_entities()
 	_load_map(vis_map)
@@ -992,6 +994,14 @@ func select_map(m: int, is_map: bool) -> void:
 	links = GData.maps[vis_map].links if GData.maps[vis_map] else []
 	lives_select_map(vis_map, 0, 0)
 	objects_select_map(vis_map, 0, 0)
+
+## The Lucario Rank statue (EVENT_B01P01[3]): Red places it in the morning scene (s_gs9_g2_s0: Pelipper's delivery,
+## then special 0xF = the Lucario Rank news has come). The remake can also deliver the day's mail when you open the
+## mailbox without that scene, so the statue was never placed; it now is once that news has come.
+func _lucario_statue() -> void:
+	var v := GVars.var_id("EVENT_B01P01")
+	if GVars.get_arr(null, v, 3) == 0 and PokemonNews._has(0x36):
+		GVars.set_arr(null, v, 3, 1)
 
 func select_dungeon_map(m: int, sdun: int, floor_n: int, _b: int) -> void:
 	cur_map = m

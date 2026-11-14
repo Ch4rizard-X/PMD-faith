@@ -3,6 +3,11 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.39 (14 Nov 2026)
+
+- **Swapping places with the shop's Kecleon, as in Red:** walking into the shopkeeper now swaps places with him, as with a teammate (sub_805EC4C). Before, he only said his line and blocked the way. Pressing A still talks to him. The swap doesn't happen while either of you is asleep, confused or held in place, or while he's charging a move, and he stays where he ends up.
+- **The Lucario Rank statue:** Red puts it outside your base in the morning scene, once the Lucario Rank letter has come. The remake can also deliver the day's mail when you open the mailbox, without that scene, so the statue never went up. It now does the next time you arrive at your base after that letter has come.
+
 ## v0.8.38 (13 Nov 2026)
 
 - **Unown's 28 forms, as in Red:** every Unown was an Unown A, because the game data kept only one Unown. Red keeps A to Z, ! and ? apart, and so does the remake now:
