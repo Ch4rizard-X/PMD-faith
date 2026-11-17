@@ -1021,7 +1021,7 @@ static func consider_move(m: Mon, fs: FloorState, name: String) -> Dictionary:
 				var t := fs.mon_at(m.pos + DIRS[d])
 				if t == null:
 					continue
-				if rf != T_FRONTAL_CONE and rf != T_AROUND and not fs.can_attack_dir(m.pos, d):
+				if rf != T_FRONTAL_CONE and rf != T_AROUND and not fs.can_attack_dir(m.pos, d, m):
 					continue
 				_try_add(cands, used, flags, m, fs, t, name, sc)
 	elif rf == T_ROOM:
@@ -1030,7 +1030,7 @@ static func consider_move(m: Mon, fs: FloorState, name: String) -> Dictionary:
 				_try_add(cands, used, flags, m, fs, t, name, sc)
 	elif rf == T_2_TILES:
 		for d in 8:
-			if not fs.can_attack_dir(m.pos, d):
+			if not fs.can_attack_dir(m.pos, d, m):
 				continue
 			var t1 := fs.mon_at(m.pos + DIRS[d])
 			if t1 != null:
@@ -1197,7 +1197,7 @@ static func target_regular_attack(m: Mon, fs: FloorState, check_petrified := tru
 	for i in limit:
 		d &= 7
 		var t := fs.mon_at(m.pos + DIRS[d])
-		if t != null and fs.can_attack_dir(m.pos, d) and treatment(m, t, false, check_petrified) == TREAT_ENEMY \
+		if t != null and fs.can_attack_dir(m.pos, d, m) and treatment(m, t, false, check_petrified) == TREAT_ENEMY \
 				and (not sc or st(t, "frozen") == 0):
 			if not targeting_iq:
 				return [true, d]

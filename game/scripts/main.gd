@@ -2957,7 +2957,7 @@ func _ready() -> void:
 			await get_tree().create_timer(1.0).timeout
 			var ks: Array = []
 			for L in ground.lives:
-				if L.kind_id >= 14 and L.kind_id <= 29:
+				if GData.fa_index(L.kind_id) >= 0:
 					ks.append(L.kind_id)
 			print("FAEXTRA area=%s residents=14 shown=%d kinds=%s" % [key, ks.size(), ks])
 			get_viewport().get_texture().get_image().save_png("user://faextra.png")

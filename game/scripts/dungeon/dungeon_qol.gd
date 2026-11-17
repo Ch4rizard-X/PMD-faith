@@ -412,7 +412,7 @@ func tap(sp: Vector2) -> void:
 	var o := fs.mon_at(tile)
 	if o and fs.is_foe(L, o) and FloorState.cheb(L.pos, tile) == 1 and _seen(tile):
 		var d := DB.dir_index(tile - L.pos)
-		if not dg.busy and fs.can_attack_dir(L.pos, d):
+		if not dg.busy and fs.can_attack_dir(L.pos, d, L):
 			last_stop = "attack"
 			dg.leader_action({"type": "attack", "move": "", "dir": d})
 		return

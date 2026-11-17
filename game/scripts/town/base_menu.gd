@@ -144,9 +144,9 @@ static func friend_talk(G, act) -> int:
 	if li < 0 or li >= G.lives.size():
 		return 0
 	var k := int(G.lives[li].kind_id)
-	if k < 14 or k > 29:
+	if GData.fa_index(k) < 0:
 		return 0
-	var e: Dictionary = Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), k - 14)
+	var e: Dictionary = Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), GData.fa_index(k))
 	if e.is_empty():
 		return 0
 	G.text.special(G.SP_FRIEND_MENU, 0, 0, e)

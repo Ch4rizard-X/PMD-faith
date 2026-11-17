@@ -109,8 +109,16 @@ func can_step(from: Vector2i, d: int, m: Mon = null) -> bool:
 	return true
 
 ## Can an attack go from 'from' in direction d (same corner rule as walking, but water doesn't block)?
-func can_attack_dir(from: Vector2i, d: int) -> bool:
+## CanAttackInDirection: the attacker's own terrain decides - a Pokémon that crosses walls (Mobile status, Mobile
+## Scarf, the wall-walking Ghosts) attacks into and out of walls and across corners; only the dungeon's edge
+## (TERRAIN_TYPE_IMPASSABLE_WALL) stops it. Pass the attacker as m.
+func can_attack_dir(from: Vector2i, d: int, m: Mon = null) -> bool:
 	var dv: Vector2i = DB.DIRS[d]
+	if m != null and is_mobile(m):
+		var to := from + dv
+		if not vault.is_empty() and inb(to) and (flags[idx(to)] & (DungeonGen.FLAG_IMPASSABLE | DungeonGen.FLAG_KEY_DOOR)):
+			return false
+		return to.x >= 1 and to.y >= 1 and to.x < w - 1 and to.y < h - 1
 	if is_wall(from + dv):
 		return false
 	if dv.x != 0 and dv.y != 0:
@@ -168,7 +176,7 @@ func adjacent_foes(m: Mon) -> Array:
 	var out: Array = []
 	for d in 8:
 		var o := mon_at(m.pos + DB.DIRS[d])
-		if o and is_foe(m, o) and can_attack_dir(m.pos, d):
+		if o and is_foe(m, o) and can_attack_dir(m.pos, d, m):
 			out.append(o)
 	return out
 

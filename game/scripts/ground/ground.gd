@@ -20,7 +20,7 @@ enum { STARTMODE_NEW_GAME, STARTMODE_CONTINUE_GAME, STARTMODE_GROUND, STARTMODE_
 enum { REQ_NONE, REQ_GROUND, REQ_2, REQ_FRIEND_AREAS, REQ_WORLD_MAP, REQ_RESCUE, REQ_RESCUE_JOB, REQ_RESCUE_MAIL,
 	REQ_MAZE, REQ_GAME_END, REQ_GAME_CANCEL }
 
-const N_LIVES := 24
+const N_LIVES := 48              # Red: 24; the remake places every Friend Area resident (up to 41)
 const N_OBJECTS := 16
 const N_EFFECTS := 16
 const N_EVENTS := 32
@@ -1554,9 +1554,9 @@ func lives_select_map(map: int, grp: int, sec: int) -> void:
 				lives_add(-1, {"kind": GData.croagunk_kind, "u1": SwapShop.DIR, "pos": SwapShop.spot(), "scripts": [null, null, null, null]}, grp, sec)
 				break
 
-## remake: a Friend Area can hold more Pokémon than Red's (up to 16 living kinds, 14-29), but its script only
-## places as many as Red's own capacity, so the ones past that couldn't be met (or taken into the team). Place
-## the rest beside the scripted ones, with the same wandering and talk scripts.
+## remake: a Friend Area can hold more Pokémon than Red's, but its script only places as many as Red's own
+## capacity, so the ones past that couldn't be met (or taken into the team). Place the rest beside the scripted
+## ones, with the same wandering and talk scripts (Red's living kinds 14-29, then GData's extra kinds).
 func _fa_extra_residents(map: int, S, grp: int, sec: int) -> void:
 	if GData.fa_of_map(map) == 0:
 		return
@@ -1571,10 +1571,11 @@ func _fa_extra_residents(map: int, S, grp: int, sec: int) -> void:
 		used[int(d.kind)] = true
 	var offs := [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 2], [-2, -2], [2, -2], [-2, 2]]
 	var n_extra := 0
-	for k in range(14, 30):
+	for i in 16 + GData.FA_EXTRA_N:
+		var k := GData.fa_kind(i)
 		if used.has(k):
 			continue
-		if Story.friend_area_mon(map, k - 14).is_empty():
+		if Story.friend_area_mon(map, i).is_empty():
 			break
 		var base: Dictionary = placed[n_extra % placed.size()]
 		var o: Array = offs[(n_extra / placed.size()) % offs.size()]
@@ -1658,8 +1659,8 @@ func resolve_kind(k: int) -> Array:
 			if k - 10 >= Story.base_team().size():
 				return [-1, -1]
 			return [k, -1]
-		elif k >= 14 and k <= 29:
-			if Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), k - 14).is_empty():
+		elif GData.fa_index(k) >= 0:
+			if Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), GData.fa_index(k)).is_empty():
 				return [-1, -1]
 			return [k, -1]
 		return [-1, -1]
@@ -1691,8 +1692,8 @@ func species_of_resolved(k: int) -> String:
 	if k >= 10 and k <= 13:
 		var bt: Array = Story.base_team()
 		return bt[k - 10].sp if k - 10 < bt.size() else ""
-	if k >= 14 and k <= 29:
-		var e: Dictionary = Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), k - 14)
+	if GData.fa_index(k) >= 0:
+		var e: Dictionary = Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), GData.fa_index(k))
 		return str(e.get("sp", ""))
 	var types: Array = GData.extra.lives_types
 	if k == GData.croagunk_kind:
@@ -1710,8 +1711,8 @@ func shiny_of_resolved(k: int) -> bool:
 	if k >= 10 and k <= 13:
 		var bt: Array = Story.base_team()
 		return k - 10 < bt.size() and bool((bt[k - 10] as Dictionary).get("shiny", false))
-	if k >= 14 and k <= 29:
-		return bool(Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), k - 14).get("shiny", false))
+	if GData.fa_index(k) >= 0:
+		return bool(Story.friend_area_mon(GVars.get_val(null, GVars.GROUND_MAP), GData.fa_index(k)).get("shiny", false))
 	if k in [3, 8, 35] and not Game.team.is_empty() and not (Story.leader_is_hero() or Story.leader_is_partner()):
 		return bool(Game.team[0].get("shiny", false))
 	return false
@@ -1809,7 +1810,7 @@ func lives_add(slot: int, d: Dictionary, grp: int, sec: int) -> int:
 		L.follow_idx = cls if cls >= 0 else 0
 		if cls >= 0:
 			lives_meta.slots[cls] = {"i8": -1, "s0": 0, "s4": 0}
-		L.fa_dialog = randi_range(0, 20) if kk >= 14 and kk <= 29 else 0
+		L.fa_dialog = randi_range(0, 20) if GData.fa_index(kk) >= 0 else 0
 	L.event_id = events_find(0x20, L.p144, L.p14C) if (L.flags & 0x800) else -1
 	L.b_from = bounds_a
 	L.b_to = bounds_b

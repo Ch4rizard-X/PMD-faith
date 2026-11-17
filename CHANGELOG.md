@@ -3,6 +3,12 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.41 (17 Nov 2026)
+
+- **Attacking out of walls and into walls, as in Red:** CanAttackInDirection goes by the attacker's own terrain. A Pokémon that crosses walls attacks into and out of walls and across their corners; only the dungeon's edge stops it. That means Mobile status, a Mobile Scarf, or one of the wall-walking Ghosts (Gastly, Haunter, Gengar, Misdreavus, Shedinja, Shuppet, Banette, Duskull). Before, no attack could go into a wall tile, so a ghost and a Mobile Scarf holder inside walls couldn't hit each other. Two-tile moves also reach through walls for these Pokémon (sub_806977C), and the partner and wild Pokémon AI use the same rule.
+- **Helping Hand only helps allies:** Red's Helping Hand (targeting 0x36, room + TARGETING_FLAG_BOOST_TEAM) boosts only the user's allies in the room. The game data had it as "everyone in the room", so a partner's Helping Hand boosted the enemies too.
+- **Every Friend Area resident shows up:** residents past Red's 16 living kinds (14-29) now get extra kinds of their own, and a scene can hold 48 characters instead of Red's 24. Areas holding more than 16 (up to 41, Energetic Forest) show all their residents, who can be talked to and taken into the team like the others. Before, it stopped at 16.
+
 ## v0.8.40 (14 Nov 2026)
 
 - **Wonder Mail S for the Explorers of Sky dungeons:** Explorers of Sky's own 34-symbol passwords. Both the Wonder Mail screen and "Make Wonder Mail" now ask whether you want Wonder Mail or Wonder Mail S.

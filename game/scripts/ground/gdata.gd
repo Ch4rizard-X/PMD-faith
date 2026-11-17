@@ -19,6 +19,8 @@ static var _enum_rev := {}            # enum kind -> {NAME: value}
 static var _loaded := false
 static var croagunk_kind := -1
 static var debug_kind := -1         # remake: the Swap Shop's Croagunk (see Ground.lives_select_map)
+static var fa_extra_kind0 := -1     # remake: Friend Area residents past Red's 16 living kinds (see fa_index)
+const FA_EXTRA_N := 40              # Friend Areas hold up to 41 here (Energetic Forest)
 
 static func load_all() -> void:
 	if _loaded:
@@ -37,6 +39,10 @@ static func load_all() -> void:
 	extra.lives_types.append([5, 0, 2, 1])
 	debug_kind = extra.lives_types.size()          # remake: the Debug NPC (Game Options -> Debug NPC)
 	extra.lives_types.append([5, 0, 2, 1])
+	# remake: Friend Area residents past Red's 16 living kinds (14-29) get kinds of their own, shaped like kind 14
+	fa_extra_kind0 = extra.lives_types.size()
+	for i in FA_EXTRA_N:
+		extra.lives_types.append((extra.lives_types[14] as Array).duplicate())
 	GVars.init()
 
 static func _json(p: String) -> Variant:
@@ -121,6 +127,17 @@ static func red_of_species(key: String) -> int:
 	if key.length() > 4:          # a palette variant ("0352p", the purple Kecleon) is still that species
 		return red_of_species(key.substr(0, 4))
 	return 0
+
+## Resident index of a Friend Area living kind (Red's 14-29, then the remake's extra kinds), or -1.
+static func fa_index(k: int) -> int:
+	if k >= 14 and k <= 29:
+		return k - 14
+	if fa_extra_kind0 > 0 and k >= fa_extra_kind0 and k < fa_extra_kind0 + FA_EXTRA_N:
+		return 16 + k - fa_extra_kind0
+	return -1
+
+static func fa_kind(i: int) -> int:
+	return 14 + i if i < 16 else fa_extra_kind0 + i - 16
 
 static func fa_of_map(map: int) -> int:
 	for e in extra.fa_maps:

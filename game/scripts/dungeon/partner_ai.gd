@@ -532,12 +532,12 @@ func _attack_spot(m: Mon, tgt: Mon, plan: Dictionary) -> Vector2i:
 			continue
 		if FloorState.cheb(p, L.pos) > LEASH:
 			continue
-		if _can_hit_from(p, tgt, ranged):
+		if _can_hit_from(p, tgt, ranged, m):
 			best = p
 			bd = dd
 	return best
 
-func _can_hit_from(p: Vector2i, tgt: Mon, ranged: Array) -> bool:
+func _can_hit_from(p: Vector2i, tgt: Mon, ranged: Array, m: Mon = null) -> bool:
 	var fs: FloorState = dg.fs
 	var dx := tgt.pos.x - p.x
 	var dy := tgt.pos.y - p.y
@@ -548,7 +548,7 @@ func _can_hit_from(p: Vector2i, tgt: Mon, ranged: Array) -> bool:
 		return false
 	var d := AI.dir_toward(p, tgt.pos)
 	if dist == 1:
-		return fs.can_attack_dir(p, d)
+		return fs.can_attack_dir(p, d, m)
 	for md in ranged:
 		var rng := 2 if str(md.r) == "two_tiles" else Dungeon.LINE_RANGE
 		if dist > rng:
@@ -557,10 +557,10 @@ func _can_hit_from(p: Vector2i, tgt: Mon, ranged: Array) -> bool:
 		var q := p
 		for i in dist - 1:
 			q += DB.DIRS[d]
-			if fs.is_wall(q) or _occ.has(q):
+			if (fs.is_wall(q) and not (m != null and str(md.r) == "two_tiles" and fs.is_mobile(m))) or _occ.has(q):
 				clear = false
 				break
-		if clear and fs.can_attack_dir(p, d):
+		if clear and fs.can_attack_dir(p, d, m):
 			return true
 	return false
 

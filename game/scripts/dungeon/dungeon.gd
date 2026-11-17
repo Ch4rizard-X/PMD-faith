@@ -2445,18 +2445,20 @@ func targets_for(m: Mon, mv: Dictionary, d: int) -> Array:
 	var dv: Vector2i = DB.DIRS[d]
 	match r:
 		"front":
-			if fs.can_attack_dir(m.pos, d):
+			if fs.can_attack_dir(m.pos, d, m):
 				var o := fs.mon_at(m.pos + dv)
 				if o:
 					out.append(o)
 		"front_corners":
 			var o := fs.mon_at(m.pos + dv)
-			if o and not fs.is_wall(m.pos + dv):
+			if o and (not fs.is_wall(m.pos + dv) or fs.can_attack_dir(m.pos, d, m)):
 				out.append(o)
 		"two_tiles":
+			# sub_806977C / sub_80705F0: each tile by the attacker's own terrain (wall crossers reach through walls)
+			var crosses := fs.is_mobile(m)
 			for i in [1, 2]:
 				var p: Vector2i = m.pos + dv * i
-				if fs.is_wall(p):
+				if fs.is_wall(p) and not (crosses and p.x >= 1 and p.y >= 1 and p.x < fs.w - 1 and p.y < fs.h - 1):
 					break
 				var o := fs.mon_at(p)
 				if o:
@@ -2476,8 +2478,13 @@ func targets_for(m: Mon, mv: Dictionary, d: int) -> Array:
 						out.append(o)
 					break
 		"room", "room_all", "floor_all", "floor_foes":
+			# Helping Hand (MOVE_RANGE_ROOM_ONLY, targeting 0x36 = room + TARGETING_FLAG_BOOST_TEAM): only the
+			# user's allies in the room, never the user (SetNewTarget: treatment 0 and attacker != target)
+			var allies_only := str(mv.get("range_id", "")) == "room_only"
 			for o in fs.mons:
 				if o == m or o.hp <= 0:
+					continue
+				if allies_only and fs.is_foe(m, o):
 					continue
 				if r != "room_all" and not fs.is_foe(m, o):
 					continue
@@ -4240,7 +4247,7 @@ func _item_effect(user: Mon, m: Mon, id: String, thrown: bool) -> void:
 					await faint(m, user)
 			else:
 				var t := fs.mon_at(m.pos + DB.DIRS[m.facing])
-				if t and fs.can_attack_dir(m.pos, m.facing):
+				if t and fs.can_attack_dir(m.pos, m.facing, m):
 					var dmg2 := 30 if boss_floor else 45
 					_hurt(t, dmg2, m, true)
 					_msg("%s took %d damage!" % [_nm(t), dmg2])
