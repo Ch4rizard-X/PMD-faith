@@ -299,10 +299,13 @@ func build_floor() -> void:
 	if fixed_no != 0:
 		boss = BossScene.make(self, fixed_no)
 		if boss:
-			# story fights can't end in a recruitment; post-story re-fights can (Red's legend recruits)
-			if boss.cutscene.contains("POSTSTORY") or boss.cutscene in ["CUTSCENE_REGIROCK", "CUTSCENE_REGICE", "CUTSCENE_REGISTEEL"]:
+			# Red (TryRecruitMonster) lets any boss join but a rescue target; what keeps story bosses from joining
+			# mid-story is MonCutsceneCompleted (RECRUIT_AFTER: its flag is set when the fight ends, after the roll)
+			# and the species' rate. So Lugia, Kyogre, Deoxys and Jirachi can join the first time, as in Red.
+			# Dojo/rescue-team maze bosses stay out (Red: canRecruitRescueTeamMazeBosses and Deoxys recruited).
+			if boss.cutscene != "CUTSCENE_MAZE_BOSS":
 				for m in fs.mons:
-					if str(m.get_meta("behavior", "")) not in ["", "BEHAVIOR_FIXED_ENEMY"]:
+					if str(m.get_meta("behavior", "")) not in ["", "BEHAVIOR_FIXED_ENEMY"] and not str(m.get_meta("behavior", "")) in BossScene.NEUTRAL:
 						m.recruit_ok = true
 			await boss.run_setup()
 	spawn_timer = 0
@@ -1925,6 +1928,7 @@ func _mon_try_pick_up(m: Mon) -> void:
 
 func _place_team_slots(gen: Dictionary) -> void:
 	var slots: Dictionary = gen.get("team_slots", {})
+	fs.set_meta("team_slots", slots)             # gDungeon->unkE220 (keyed by unk4 - 1; Jirachi's wish warp is [7])
 	if slots.is_empty():
 		return
 	var order: Array = []

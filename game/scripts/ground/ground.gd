@@ -265,6 +265,11 @@ func _begin_loop() -> void:
 		STARTMODE_DUNGEON_FROM_WORLD_MAP:
 			script_id = GData.fn_id("EVENT_RESCUE")
 		STARTMODE_DUNGEON_WON, STARTMODE_10, STARTMODE_11, STARTMODE_DUNGEON_LOST:
+			# main_loops.c: EVENT_S08E01 is 1 after any won dungeon, 2 when Jirachi's "Something good!" wish came along
+			GVars.clear_arr(null, GVars.EVENT_S08E01)
+			if start_mode == STARTMODE_DUNGEON_WON:
+				GVars.set_arr(null, GVars.EVENT_S08E01, 0, 2 if BossScene.jirachi_good else 1)
+			BossScene.jirachi_good = false
 			GVars.set_val(null, GVars.DUNGEON_RESULT, start_mode)
 			GVars.set_val(null, GVars.WARP_LOCK, 0)
 			_day_reset()

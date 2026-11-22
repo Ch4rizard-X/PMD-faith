@@ -400,6 +400,8 @@ func on_faint(m: Mon, joined := false) -> void:
 		await _regi_faint(m, b)
 	else:
 		await _run(scene.get("faint", []), true)
+		if _wished:
+			_jirachi_warp()                            # EnableJirachiWishWarpTile, the last step of JirachiWish_Async
 	_faint_behavior = ""
 	# Safety net for scenes whose win condition lives in code we don't run (Regis, Jirachi wishes ...):
 	# a floor-wide arena without stairs ends once every hostile story Pokémon is down.
@@ -452,6 +454,9 @@ func _step(st: Array, visual: bool) -> void:
 		"bgm_stop":
 			Audio.stop_music()
 		"sfx":
+			if int(st[1]) == 664 and _wished:
+				await _jirachi_spin(visual)            # JirachiSpinEffect (it plays this very sound)
+				return
 			Audio.sfx("%03d" % int(st[1]))
 			var dk := _drop_key()
 			if dk != "" and not _dropped and int(st[1]) == int(DROP_IN[dk][0]):
@@ -752,6 +757,10 @@ func _before_say(name: String) -> void:
 		await _team_walk(48, Vector2(0, -2), 4)            # sub_80891F0: up to the fallen pair, 2 px a frame
 
 func _after_say(name: String, visual: bool) -> void:
+	if name == "gUnknown_81056DC" and cutscene in ["CUTSCENE_JIRACHI", "CUTSCENE_JIRACHI_POSTSTORY"]:
+		await _wait(10)
+		await _jirachi_wish(visual)
+		return
 	if cutscene != "CUTSCENE_MAGMA_CAVERN_MID":
 		return
 	if name == "MagmaCavernMidDialogue_5":
@@ -839,17 +848,203 @@ func _format(s: String) -> String:
 			out += "[color=%s]%s[/color]" % [NAME_COL, buf.get(n, "??")]
 		elif tag == "COLOR":
 			out += "[color=%s]" % ({"YELLOW": "#ffdc4a", "YELLOW_D": "#ffdc4a", "CYAN": "#7fe0ff", "GREEN": "#7fff7f",
-				"RED": "#ff7070", "LIGHT_BLUE": "#9fd0ff"}.get(arg, "#ffffff"))
+				"RED": "#ff7070", "LIGHT_BLUE": "#9fd0ff", "CYAN_M": "#7fe0ff", "GREEN_H": "#7fff7f"}.get(arg, "#ffffff"))
 		elif tag == "RESET":
 			out += "[/color]"
 		elif tag == "EXTRA_MSG" or tag == "WAIT_PRESS":
 			out += "\u0002"
+		elif tag == "MOVE_ITEM_0":
+			out += _item_buf
 		elif tag == "TEAM_NAME":
 			out += "[color=#ffdc4a]%s[/color]" % str(Game.team_name)
 		else:
 			pass
 	out += t.substr(last)
 	return out
+
+# ------------------------------------------------------------------ Jirachi's wish (dungeon_cutscene_jirachi.c, written out)
+## gDungeon->unk644.unk30: the "Something good!" wish. When the dungeon is won, Red sets EVENT_S08E01 to 2 instead
+## of 1 (main_loops.c) and the Wish Cave script back at the base (EVENT_S08E01A_L008) plays the surprise.
+static var jirachi_good := false
+var _wished := false
+var _item_buf := ""
+const WISH_MENU := ["Lots of money.", "Lots of items.", "A Friend Area.", "More strength.", "Something good!"]
+## JirachiWishGrantFlash: SetDungeonBGColorRGB 250->150, 250->200, 250->0 in steps of 10, white
+const WISH_FLASH := [["l", 250, 150, -10, [1, 1, 1]], ["w", 10], ["l", 250, 200, -10, [1, 1, 1]], ["w", 10],
+	["l", 250, 0, -10, [1, 1, 1]], ["w", 10], ["r"]]
+## sJirachiItems
+const WISH_STRENGTH := ["protein", "calcium", "iron", "zinc", "joyseed", "ginseng", "lifeseed", "sitrus"]
+## gUnknown_810A3F0 (dungeon_data.c): what a pile of Poké holds; sub_8046CE4 rolls an index and halves it until
+## the amount fits the floor's moneyUpperBound x 40
+const RED_POKE := [4, 6, 10, 14, 22, 26, 34, 38, 46, 58, 62, 74, 82, 86, 94, 106, 118, 122, 134, 142, 146, 158, 166,
+	178, 194, 202, 206, 214, 218, 226, 254, 262, 274, 278, 298, 302, 314, 326, 334, 346, 358, 362, 382, 386, 394, 398,
+	422, 446, 454, 458, 466, 478, 482, 502, 514, 526, 538, 542, 554, 562, 566, 586, 614, 622, 626, 634, 662, 674, 694,
+	698, 706, 718, 734, 746, 758, 768, 778, 794, 802, 818, 838, 842, 862, 866, 878, 886, 898, 914, 922, 926, 934, 958,
+	974, 982, 998, 1000, 1100, 1300, 1500, 20000]
+## gUnknown_80F4468's first block: where sub_804687C lands each item of a pile, around the tile
+const PILE_SPOTS := [Vector2i(0, 0), Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(-1, -1),
+	Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1), Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
+	Vector2i(2, -2), Vector2i(-2, -1), Vector2i(2, -1), Vector2i(-2, 0), Vector2i(2, 0), Vector2i(-2, 1), Vector2i(2, 1),
+	Vector2i(-2, 2), Vector2i(-1, 2), Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2)]
+
+## JirachiWish_Async from the menu on: Jirachi asks (no cancelling), grants the wish, and the data goes on with
+## "...I'm going back to sleep" and the spin; the warp then appears (_jirachi_warp).
+func _jirachi_wish(visual: bool) -> void:
+	_wished = true
+	var j := _mon_of("BEHAVIOR_JIRACHI")
+	var fs: FloorState = dg.fs
+	while true:
+		var c := 0
+		if Dialog.auto or dg.auto_answer:
+			c = fs.rng.randi_range(0, 4) if not dg.has_meta("test_wish") else int(dg.get_meta("test_wish"))
+		else:
+			c = -1
+			while c < 0:
+				c = await Dialog.ask(dg.ui_root, _format("{COLOR YELLOW}{POKEMON_2}{RESET}: What is your \nwish?"), WISH_MENU, "", "Normal", false)
+		if Dialog.auto:
+			print("  BOSS Jirachi wish: ", WISH_MENU[c])
+		await _wait(10)
+		match c:
+			0:
+				await say("gUnknown_810581C")
+				await _wait(10)
+				await _wish_grant(j, visual)
+				await _wish_piles(j, 6, 9, func(): return {"id": "poke", "n": _red_poke(), "price": 0}, "332")
+			1:
+				await say("gUnknown_8105974")
+				await _wait(10)
+				await _wish_grant(j, visual)
+				await _wish_piles(j, 6, 9, _wish_floor_item, "400")
+			2:
+				var opts: Array = []
+				for k in Services.fa().get("areas", {}):
+					var a: Dictionary = Services.fa().areas[k]
+					if not str(a.get("how", "")) in ["Legendary Request", "Wonder Mail"] and not k in Game.friend_areas:
+						opts.append(k)
+				if opts.is_empty():
+					await say("gUnknown_8105A08")          # "...Don't you already have many Friend Areas?"
+					await _wait(10)
+					continue
+				var area: String = opts[fs.rng.randi_range(0, opts.size() - 1)]
+				await say("gUnknown_8105AD4")
+				await _wait(10)
+				await _wish_grant(j, visual)
+				await say("gUnknown_8105B20")
+				Game.friend_areas.append(area)
+				Audio.sfx("212")
+				_item_buf = Services.area_name(area)
+				await say("gUnknown_8105B68")
+			3:
+				await say("gUnknown_8105BA8")
+				await _wait(10)
+				await _wish_grant(j, visual)
+				await _wish_piles(j, 5, 4, func(): return {"id": WISH_STRENGTH[fs.rng.randi_range(0, WISH_STRENGTH.size() - 1)], "n": 1, "price": 0}, "400")
+				await say("gUnknown_8105BF4")
+				await _wait(10)
+			4:
+				await say("gUnknown_8105D2C")
+				await _wait(10)
+				await _wish_grant(j, visual)
+				await say("gUnknown_8105D80")
+				await _wait(10)
+				if j and fs.leader:
+					var dv := (fs.leader.pos - j.pos).sign()
+					for d in 8:
+						if Vector2i(DB.DIRS[d]) == dv:
+							j.facing = d
+					if j.visual:
+						j.visual.queue_redraw()
+				await _wait(10)
+				await say("gUnknown_8105D9C")
+				await _wait(10)
+				jirachi_good = true
+		break
+
+## JirachiWishGrantDialogue: "Nnnnnnnnnn!", the charge-up sounds, "Taaaaaaaah!", then the white flash.
+func _wish_grant(_j: Mon, visual: bool) -> void:
+	await say("gUnknown_81058A8")
+	Audio.sfx("885")
+	Audio.sfx("680")
+	await say("gUnknown_81058C4")
+	await _wait(10)
+	Audio.sfx("705")
+	await _run_flash(WISH_FLASH, visual)
+
+## The piles: each lands on a random tile next to Jirachi (none if that's a wall), its items spread out from there.
+func _wish_piles(j: Mon, piles: int, per: int, make: Callable, snd: String) -> void:
+	var fs: FloorState = dg.fs
+	var at: Vector2i = j.pos if j else fs.leader.pos
+	for c in piles:
+		var batch: Array = []
+		for i in per:
+			batch.append(make.call())
+		var p := at + Vector2i(fs.rng.randi_range(0, 2) - 1, fs.rng.randi_range(0, 2) - 1)
+		if not fs.inb(p) or fs.is_wall(p):
+			continue
+		Audio.sfx(snd)
+		for it in batch:
+			for off in PILE_SPOTS:
+				var q: Vector2i = p + off
+				if fs.inb(q) and not fs.is_wall(q) and q != fs.stairs and not fs.items.has(q):
+					fs.items[q] = it
+					break                                  # no free spot left: Red loses that item
+		dg.obj_layer.queue_redraw()
+		await _wait(10)
+
+## sub_8046CE4 with the floor's moneyUpperBound x 40 (EoS floors store the cap divided by 5)
+func _red_poke() -> int:
+	var raw := PackedByteArray()
+	for b in dg.ddata.floors[dg.floor_i].props:
+		raw.append(int(b))
+	var mult: int = 5 if bool(dg.ddata.get("eos", false)) else 40
+	var cap := int(DungeonGen.props_from_bytes(raw).get("moneyUpperBound", 1)) * mult
+	var r: int = dg.fs.rng.randi_range(0, 99)
+	for i in 200:
+		if int(RED_POKE[r]) <= cap:
+			return int(RED_POKE[r])
+		r /= 2
+	return int(RED_POKE[1])
+
+## GetRandomFloorItem(0), as CreateItemWithStickyChance makes it (thrown items in their spawn amounts)
+func _wish_floor_item() -> Dictionary:
+	var id: String = dg._pick_item(int(dg.ddata.floors[dg.floor_i].items))
+	if id == "":
+		id = "oranberry"
+	if id == "poke":
+		return {"id": id, "n": _red_poke(), "price": 0}
+	var I: Dictionary = DB.items.get(id, {})
+	var n := 1                                         # (the remake's single items count 1)
+	if I.has("amt"):
+		n = dg.fs.rng.randi_range(int(I.amt[0]), int(I.amt[1]))
+	return {"id": id, "n": n, "price": 0}
+
+## JirachiSpinEffect: a full turn every 3 frames, 25 times, then it curls up to sleep.
+func _jirachi_spin(visual: bool) -> void:
+	Audio.sfx("664")
+	var j := _mon_of("BEHAVIOR_JIRACHI")
+	for i in 25:
+		if j:
+			j.facing = i & 7
+			if j.visual:
+				j.visual.queue_redraw()
+		await _wait(3)
+
+## EnableJirachiWishWarpTile: the stairs open on the room's gDungeon->unkE220[7] spot (just above Jirachi).
+func _jirachi_warp() -> void:
+	var fs: FloorState = dg.fs
+	var slots: Dictionary = fs.get_meta("team_slots", {})
+	var pos: Vector2i = slots.get(7, Vector2i(-1, -1))
+	if pos.x < 0:
+		floor_over = true
+		return
+	fs.traps.erase(pos)
+	fs.items.erase(pos)
+	fs.stairs = pos
+	dg.obj_layer.queue_redraw()
+	if dg.get("red_map") and is_instance_valid(dg.red_map) and dg.red_map.has_method("queue_redraw"):
+		dg.red_map.queue_redraw()
+	if Dialog.auto:
+		print("  BOSS Jirachi warp at ", pos)
 
 # ------------------------------------------------------------------ the Regis (dungeon_cutscene_regis.c, written out)
 const REGI_PART := {"CUTSCENE_REGIROCK": "rockpart", "CUTSCENE_REGICE": "icepart", "CUTSCENE_REGISTEEL": "steelpart"}

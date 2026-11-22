@@ -3,6 +3,19 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.42 (22 Nov 2026)
+
+- **Jirachi grants a wish:** with the Wish Stone, Jirachi now asks "What is your wish?" after the fight and grants it, as Red's JirachiWish_Async does. Before, the game played the dialogue but gave nothing.
+  - **Lots of money:** 6 piles of 9 Poké land around Jirachi. The amounts come from Red's Poké table and the floor's money cap.
+  - **Lots of items:** 6 piles of 9 of the floor's items.
+  - **A Friend Area:** a random Friend Area you don't have yet (not the Legendary Request or Wonder Mail ones). If none are left, Jirachi says so and asks again.
+  - **More strength:** 5 piles of 4 from Protein, Calcium, Iron, Zinc, Joy Seed, Ginseng, Life Seed and Sitrus Berry.
+  - **Something good!:** finish the dungeon and the surprise waits at the base. As in Red, the game sets EVENT_S08E01 to 2 instead of 1, and Wish Cave's ground script picks it up.
+  - Red's grant sequence plays ("Nnnnnnnnnn!", "Taaaaaaaah!", the white flash), then Jirachi spins and falls asleep. Red's warp then opens on its spot above Jirachi, so you can collect everything before you leave. Before, the floor ended right away.
+- **Story bosses can join the first time, as in Red:** Red's TryRecruitMonster lets any boss join except a rescue target. Story bosses are kept from joining mid-story by two things: their event flag (set after the recruit roll) and their recruit rate. The remake had only let bosses join in the post-story re-fights, so Lugia (Silver Trench), Kyogre (Stormy Sea), Deoxys (Meteor Cave) and Jirachi's first visit could never join.
+  - Lugia joins at Red's 99.9%, which the leader's level bonus brings to 100%.
+  - Jirachi needs its Friend Area, Mt. Moonview, first. Red's data marks Lugia, Celebi, the legendary birds, Kyogre and a few others as joining without their area, but not Jirachi. Without Mt. Moonview, Jirachi grants the wish instead.
+
 ## v0.8.41 (17 Nov 2026)
 
 - **Attacking out of walls and into walls, as in Red:** CanAttackInDirection goes by the attacker's own terrain. A Pokémon that crosses walls attacks into and out of walls and across their corners; only the dungeon's edge stops it. That means Mobile status, a Mobile Scarf, or one of the wall-walking Ghosts (Gastly, Haunter, Gengar, Misdreavus, Shedinja, Shuppet, Banette, Duskull). Before, no attack could go into a wall tile, so a ghost and a Mobile Scarf holder inside walls couldn't hit each other. Two-tile moves also reach through walls for these Pokémon (sub_806977C), and the partner and wild Pokémon AI use the same rule.
