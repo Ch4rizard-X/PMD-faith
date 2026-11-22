@@ -3,6 +3,10 @@
 Patch notes for every version of the engine, newest first. Version numbers match the Android builds.
 Everything listed here is code; the game's graphics, music and data are built from your own ROMs (see [SETUP.md](SETUP.md)).
 
+## v0.8.43 (22 Nov 2026)
+
+- **The launcher's Recruit rate now counts for joining:** the actual roll left the launcher's boost out and used its own copy of the rate. A Pokémon whose info showed "Recruit 100%" could still roll its unboosted rate and not join. The roll now uses the rate the info shows: Friend Bow, the leader's level bonus, the Explorers of Sky items and IQ, the Inviting Orb, and the launcher's boost.
+
 ## v0.8.42 (22 Nov 2026)
 
 - **Jirachi grants a wish:** with the Wish Stone, Jirachi now asks "What is your wish?" after the fight and grants it, as Red's JirachiWish_Async does. Before, the game played the dialogue but gave nothing.

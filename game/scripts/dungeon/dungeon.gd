@@ -3066,16 +3066,9 @@ func try_recruit(r: Mon, t: Mon) -> bool:
 			body += maxi(1, int(DB.species.get(m.sp, {}).get("size", 1)))
 		if fs.team().size() >= Services.PARTY_MAX or body + maxi(1, int(S.get("size", 1))) > MAX_TEAM_BODY:
 			return false
-	if r.held == "friendbow":
-		rate += 100
-	rate += EosItems.recruit_bonus(r, t)                # Golden Mask, Amber Tear, the EoS instruments
-	rate += IQSky.recruit_bonus(fs.leader)
-	for e in RECRUIT_BY_LEVEL:
-		if r.level >= int(e[0]):
-			rate += int(e[1])
-			break
-	if bool(fs.get_meta("inviting", false)):
-		rate *= 2                                        # Inviting Orb: twice as likely on this floor
+	# the same rate the Pokémon's info shows: Friend Bow, level bonus, EoS items, Inviting Orb and the launcher's
+	# Recruit rate (the roll used to leave the launcher's boost out, so a "100%" Pokémon could still not join)
+	rate = recruit_rate(r, t)
 	var missed := fs.rng.randi_range(0, 999) >= rate
 	if missed and r.held == "friendbow" and not LCFG.red_part("friendbow"):
 		missed = fs.rng.randi_range(0, 999) >= rate     # Game page "Friend Bow: Two rolls" (Red: one)
