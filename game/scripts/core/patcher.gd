@@ -16,7 +16,7 @@ extends Node
 
 const BASE_CODE := 99                 # = export_presets version/code of the build this file ships in
 const BASE_NAME := "0.8.43"
-const BASE_REV := 1                   # APK compatibility revision (data / assets / engine / project settings)
+const BASE_REV := 2                   # APK compatibility revision (data / assets / engine / project settings)
 ## Forks: set "pmd/update_url" in project.godot to your own patch.json ("" turns updates off).
 const DEFAULT_URL := "https://github.com/Ch4rizard-X/PMD-faith/releases/latest/download/patch.json"
 const DIR := "user://patch/"

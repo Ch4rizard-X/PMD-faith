@@ -1,5 +1,5 @@
 {
- "base_rev": 1,
+ "base_rev": 2,
  "classes": [
   "AI",
   "AbilityFx",
@@ -85,6 +85,7 @@
   "TurnRules",
   "UITheme",
   "WonderMail",
+  "WonderMailS",
   "WonderMailUI",
   "WorldMap"
  ]

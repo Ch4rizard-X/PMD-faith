@@ -5,6 +5,7 @@ Everything listed here is code; the game's graphics, music and data are built fr
 
 ## v0.8.43 (22 Nov 2026)
 
+- **New APK needed (updater revision 2):** v0.8.40 added a new script class, which an installed app can't pick up from a patch, so the in-game updater has had nothing newer than v0.8.39 to offer. Install the v0.8.43 APK; later versions come through the updater again. Older APKs skip the new patches instead of loading code they can't run.
 - **The launcher's Recruit rate now counts for joining:** the actual roll left the launcher's boost out and used its own copy of the rate. A Pokémon whose info showed "Recruit 100%" could still roll its unboosted rate and not join. The roll now uses the rate the info shows: Friend Bow, the leader's level bonus, the Explorers of Sky items and IQ, the Inviting Orb, and the launcher's boost.
 
 ## v0.8.42 (22 Nov 2026)
